@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(){Schema::create('workflows',function(Blueprint $t){$t->id();$t->string('name');$t->text('description')->nullable();$t->string('channel')->default('whatsapp');$t->enum('status',['draft','published','archived'])->default('draft');$t->unsignedInteger('version')->default(1);$t->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();$t->timestamp('published_at')->nullable();$t->timestamps();});} public function down(){Schema::dropIfExists('workflows');}};

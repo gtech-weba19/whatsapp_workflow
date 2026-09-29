@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(){Schema::create('workflow_edges',function(Blueprint $t){$t->id();$t->foreignId('workflow_id')->constrained()->cascadeOnDelete();$t->string('edge_id');$t->string('source');$t->string('target');$t->string('source_handle')->nullable();$t->string('label')->nullable();$t->json('configuration')->nullable();$t->timestamps();$t->unique(['workflow_id','edge_id']);});} public function down(){Schema::dropIfExists('workflow_edges');}};

@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(){Schema::create('bot_sessions',function(Blueprint $t){$t->id();$t->foreignId('workflow_id')->nullable()->constrained()->nullOnDelete();$t->string('channel')->default('whatsapp');$t->string('user_identifier');$t->string('current_node_id')->nullable();$t->enum('status',['active','completed','dropped','error'])->default('active');$t->json('variables')->nullable();$t->timestamp('last_message_at')->nullable();$t->timestamps();$t->index(['channel','user_identifier']);});} public function down(){Schema::dropIfExists('bot_sessions');}};

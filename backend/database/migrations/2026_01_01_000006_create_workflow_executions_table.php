@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(){Schema::create('workflow_executions',function(Blueprint $t){$t->id();$t->foreignId('workflow_id')->constrained()->cascadeOnDelete();$t->foreignId('bot_session_id')->nullable()->constrained()->nullOnDelete();$t->string('node_id');$t->enum('status',['running','success','failed'])->default('running');$t->json('input_payload')->nullable();$t->json('output_payload')->nullable();$t->text('error_message')->nullable();$t->timestamp('started_at')->nullable();$t->timestamp('finished_at')->nullable();$t->timestamps();});} public function down(){Schema::dropIfExists('workflow_executions');}};
