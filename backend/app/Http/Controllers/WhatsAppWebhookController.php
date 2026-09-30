@@ -2,20 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BotMessage;
-use App\Models\BotSession;
 use App\Models\Workflow;
+use App\Models\BotSession;
+use App\Models\BotMessage;
 use App\Models\WorkflowExecution;
 use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class WhatsAppWebhookController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | GET PUBLISHED JOURNEYS
-    |--------------------------------------------------------------------------
-    */
 
     public function journeys()
     {
@@ -34,152 +30,286 @@ class WhatsAppWebhookController extends Controller
         return response()->json($journeys);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | HANDLE WHATSAPP MESSAGE
-    |--------------------------------------------------------------------------
-    */
 
     public function handle(
         Request $request,
         WorkflowEngine $engine
     ) {
+
         $payload = $request->all();
 
-        /*
-        |--------------------------------------------------------------------------
-        | WORKFLOW ID
-        |--------------------------------------------------------------------------
-        */
+        $isProviderWebhook = isset(
+            $payload['eventContent']['message']
+        );
 
-        $workflowId = $request->input('workflow_id');
+        $isMetaWebhook = isset(
+            $payload['entry']
+        );
 
-        if (! $workflowId) {
-            return response()->json([
-                'received' => false,
-                'message' => 'workflow_id is required.',
-            ], 422);
+
+        $workflowId =
+            $request->input('workflow_id')
+            ??
+            $request->input('workflowId');
+
+
+        $phoneNumberId = data_get(
+            $payload,
+            'entry.0.changes.0.value.metadata.phone_number_id'
+        );
+
+
+        $whatsappTo =
+            $request->input('to')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.to'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.metadata.display_phone_number'
+            );
+
+
+        if ($whatsappTo) {
+            $whatsappTo = preg_replace(
+                '/\D+/',
+                '',
+                (string) $whatsappTo
+            );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | FROM / MOBILE NUMBER
-        |--------------------------------------------------------------------------
-        */
 
         $from =
-            data_get($payload, 'from')
-            ?? data_get(
+            $request->input('from')
+            ??
+            $request->input('mobile')
+            ??
+            $request->input('phone')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.from'
+            )
+            ??
+            data_get(
                 $payload,
                 'entry.0.changes.0.value.messages.0.from'
             );
 
-        if (! $from) {
+
+        if (!$from) {
+
             return response()->json([
-                'received' => false,
-                'message' => 'No sender/mobile number found.',
+                'success' => false,
+                'error' => true,
+                'error_code' => 'MOBILE_NOT_FOUND',
+                'message' => 'WhatsApp mobile number not found.',
             ], 422);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | NORMALIZE MOBILE
-        |--------------------------------------------------------------------------
-        */
 
-        $from = preg_replace('/\D/', '', (string) $from);
+        $from = preg_replace(
+            '/\D+/',
+            '',
+            (string) $from
+        );
 
-        if (! $from) {
+        if (!$from) {
             return response()->json([
-                'received' => false,
-                'message' => 'Invalid sender/mobile number.',
+                'success' => false,
+                'error' => true,
+                'error_code' => 'INVALID_MOBILE',
+                'message' => 'Invalid WhatsApp mobile number.',
             ], 422);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | TEXT
-        |--------------------------------------------------------------------------
-        */
 
         $text =
-            data_get($payload, 'text.body')
-            ?? data_get(
+            $request->input('text.body')
+            ??
+            $request->input('text')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.text.body'
+            )
+            ??
+            data_get(
                 $payload,
                 'entry.0.changes.0.value.messages.0.text.body'
             )
-            ?? '';
+            ??
+            '';
 
-        /*
-        |--------------------------------------------------------------------------
-        | INTERACTIVE SOURCE HANDLE
-        |--------------------------------------------------------------------------
-        |
-        | Supports:
-        |
-        | interactive.source_handle
-        | interactive.sourceHandle
-        | interactive.button_reply.id
-        | interactive.list_reply.id
-        |
-        */
+        $text = is_string($text)
+            ? trim($text)
+            : '';
+
+        $messageType =
+            $request->input('type')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.messageType'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.type'
+            )
+            ??
+            'text';
+
 
         $sourceHandle =
-            data_get(
-                $payload,
+            $request->input(
                 'interactive.source_handle'
             )
-            ?? data_get(
-                $payload,
+            ??
+            $request->input(
                 'interactive.sourceHandle'
             )
-            ?? data_get(
-                $payload,
+            ??
+            $request->input(
                 'interactive.button_reply.id'
             )
-            ?? data_get(
-                $payload,
+            ??
+            $request->input(
                 'interactive.list_reply.id'
-            );
-
-        /*
-        |--------------------------------------------------------------------------
-        | INTERACTIVE TITLE
-        |--------------------------------------------------------------------------
-        */
-
-        $interactiveTitle =
+            )
+            ??
             data_get(
                 $payload,
-                'interactive.title'
+                'eventContent.message.interactive.button_reply.id'
             )
-            ?? data_get(
+            ??
+            data_get(
                 $payload,
-                'interactive.button_reply.title'
+                'eventContent.message.interactive.list_reply.id'
             )
-            ?? data_get(
+            ??
+            data_get(
                 $payload,
-                'interactive.button_reply.text'
+                'entry.0.changes.0.value.messages.0.interactive.button_reply.id'
             )
-            ?? data_get(
+            ??
+            data_get(
                 $payload,
-                'interactive.list_reply.title'
-            )
-            ?? data_get(
-                $payload,
-                'interactive.list_reply.text'
+                'entry.0.changes.0.value.messages.0.interactive.list_reply.id'
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | FIND SELECTED PUBLISHED WORKFLOW
-        |--------------------------------------------------------------------------
-        */
+
+        $interactiveTitle =
+            $request->input(
+                'interactive.title'
+            )
+            ??
+            $request->input(
+                'interactive.button_reply.title'
+            )
+            ??
+            $request->input(
+                'interactive.button_reply.text'
+            )
+            ??
+            $request->input(
+                'interactive.list_reply.title'
+            )
+            ??
+            $request->input(
+                'interactive.list_reply.text'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.interactive.button_reply.title'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.interactive.list_reply.title'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.interactive.button_reply.title'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.interactive.list_reply.title'
+            );
+
+
+        $externalMessageId =
+            data_get(
+                $payload,
+                'eventContent.message.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.id'
+            )
+            ??
+            $request->input('message_id')
+            ??
+            $request->input('external_message_id');
+
+
+        $normalizedText = strtolower(
+            trim((string) $text)
+        );
+
+        $isStartCommand =
+            $normalizedText === 'hi';
+
+
+        if (empty($workflowId)) {
+
+
+            if (!empty($phoneNumberId)) {
+
+                $workflowId =
+                    $this->resolveWorkflowFromPhoneNumber(
+                        $phoneNumberId
+                    );
+            }
+
+
+            if (
+                empty($workflowId)
+                &&
+                !empty($whatsappTo)
+            ) {
+                $workflowId =
+                    $this->resolveWorkflowFromWhatsAppNumber(
+                        $whatsappTo
+                    );
+            }
+        }
+
+
+        if (empty($workflowId)) {
+
+            return response()->json([
+                'success' => false,
+                'error' => true,
+                'error_code' => 'WORKFLOW_NOT_CONFIGURED',
+                'message' =>
+                    'No WhatsApp workflow configured for this number.',
+                'phone_number_id' => $phoneNumberId,
+                'whatsapp_to' => $whatsappTo,
+            ], 422);
+        }
 
         $workflow = Workflow::where(
-            'channel',
-            'whatsapp'
-        )
+                'channel',
+                'whatsapp'
+            )
             ->where(
                 'status',
                 'published'
@@ -190,40 +320,21 @@ class WhatsAppWebhookController extends Controller
             )
             ->first();
 
-        /*
-        |--------------------------------------------------------------------------
-        | WORKFLOW NOT FOUND
-        |--------------------------------------------------------------------------
-        */
-
-        if (! $workflow) {
+        if (!$workflow) {
             return response()->json([
-                'received' => false,
-                'message' => 'Selected Journey was not found or is not published.',
+                'success' => false,
+                'error' => true,
+                'error_code' => 'WORKFLOW_NOT_FOUND',
+                'message' =>
+                    'Published WhatsApp workflow not found.',
                 'workflow_id' => $workflowId,
-            ], 422);
+            ], 404);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | FIND SESSION FOR THIS EXACT JOURNEY
-        |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | Same mobile number can have multiple journey sessions.
-        |
-        | Example:
-        |
-        | 919876543210 + Workflow 1 = Session A
-        | 919876543210 + Workflow 2 = Session B
-        |
-        */
-
         $session = BotSession::where(
-            'channel',
-            'whatsapp'
-        )
+                'channel',
+                'whatsapp'
+            )
             ->where(
                 'user_identifier',
                 $from
@@ -234,294 +345,479 @@ class WhatsAppWebhookController extends Controller
             )
             ->first();
 
-        /*
-        |--------------------------------------------------------------------------
-        | CREATE SESSION
-        |--------------------------------------------------------------------------
-        */
 
-        if (! $session) {
+        if (!$session) {
+            if (!$isStartCommand) {
 
-            $session = BotSession::create([
-                'channel' => 'whatsapp',
-                'user_identifier' => $from,
-                'workflow_id' => $workflow->id,
-                'variables' => [],
-                'status' => 'active',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
+                return response()->json([
+                    'success' => false,
+                    'received' => true,
+                    'started' => false,
+                    'error' => true,
+                    'error_code' => 'JOURNEY_NOT_STARTED',
+                    'message' =>
+                        'Please type "Hi" to start the journey.',
+                    'workflow' => [
+                        'id' => $workflow->id,
+                        'name' => $workflow->name,
+                    ],
+                    'user_identifier' => $from,
+                    'received_input' => $text,
+                ], 422);
+            }
 
-        } else {
+            /**
+             * Create session.
+             */
+            $session = new BotSession();
 
-            /*
-            |--------------------------------------------------------------------------
-            | EXISTING SESSION
-            |--------------------------------------------------------------------------
-            */
+            $session->channel = 'whatsapp';
+            $session->user_identifier = $from;
+            $session->workflow_id = $workflow->id;
+            $session->status = 'active';
+            $session->current_node_id = null;
+            $session->variables = [];
+            $session->last_message_at = now();
 
-            $session->update([
-                'last_message_at' => now(),
-            ]);
+            $session->save();
+
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | SAVE INBOUND MESSAGE
-        |--------------------------------------------------------------------------
-        */
+        if (
+            $session->status === 'completed'
+            &&
+            !$isStartCommand
+        ) {
 
-        BotMessage::create([
-            'bot_session_id' => $session->id,
+            return response()->json([
+                'success' => false,
+                'received' => true,
+                'started' => false,
+                'error' => true,
+                'error_code' => 'JOURNEY_COMPLETED',
+                'message' =>
+                    'Journey is completed. Please type "Hi" to start again.',
+                'workflow' => [
+                    'id' => $workflow->id,
+                    'name' => $workflow->name,
+                ],
+                'session' => [
+                    'id' => $session->id,
+                    'status' => $session->status,
+                    'current_node_id' =>
+                        $session->current_node_id,
+                    'workflow_id' =>
+                        $session->workflow_id,
+                    'user_identifier' =>
+                        $session->user_identifier,
+                ],
+            ], 422);
+        }
 
-            'direction' => 'inbound',
 
-            'message_type' => $sourceHandle
+        if (
+            !$isStartCommand
+            &&
+            $session->status === 'active'
+            &&
+            empty($session->current_node_id)
+        ) {
+
+            return response()->json([
+                'success' => false,
+                'received' => true,
+                'started' => false,
+                'error' => true,
+                'error_code' => 'JOURNEY_NOT_STARTED',
+                'message' =>
+                    'Journey has not started. Please type "Hi" to start the journey.',
+                'workflow' => [
+                    'id' => $workflow->id,
+                    'name' => $workflow->name,
+                ],
+                'session' => [
+                    'id' => $session->id,
+                    'status' => $session->status,
+                    'current_node_id' =>
+                        $session->current_node_id,
+                    'workflow_id' =>
+                        $session->workflow_id,
+                    'user_identifier' =>
+                        $session->user_identifier,
+                ],
+                'received_input' => $text,
+            ], 422);
+        }
+
+        /**
+         * =====================================================
+         * UPDATE SESSION LAST MESSAGE
+         * =====================================================
+         */
+        $session->last_message_at = now();
+        $session->save();
+
+        /**
+         * =====================================================
+         * SAVE INBOUND BOT MESSAGE
+         * =====================================================
+         */
+        $botMessage = new BotMessage();
+
+        $botMessage->bot_session_id =
+            $session->id;
+
+        $botMessage->direction = 'inbound';
+
+        $botMessage->message_type =
+            $messageType
+            ?:
+            ($sourceHandle
                 ? 'interactive'
-                : 'text',
+                : 'text');
 
-            'text' => $interactiveTitle ?: $text,
+        $botMessage->text =
+            $text
+            ?:
+            $interactiveTitle
+            ?:
+            $sourceHandle
+            ?:
+            '';
 
-            'payload' => $payload,
-        ]);
+        $botMessage->payload = $payload;
 
-        /*
-        |--------------------------------------------------------------------------
-        | ENGINE INPUT
-        |--------------------------------------------------------------------------
-        */
-
-        $input = [
-            'text' => $text,
-        ];
-
-        if ($sourceHandle) {
-            $input['source_handle'] = $sourceHandle;
+        if (!empty($externalMessageId)) {
+            $botMessage->external_message_id =
+                $externalMessageId;
         }
 
-        if ($interactiveTitle) {
-            $input['title'] = $interactiveTitle;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | REFRESH SESSION BEFORE DECISION
-        |--------------------------------------------------------------------------
-        */
-
-        $session->refresh();
-
-        /*
-        |--------------------------------------------------------------------------
-        | START / CONTINUE WORKFLOW
-        |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | 1. New session
-        | 2. current_node_id is null
-        | 3. Previous journey is completed
-        |
-        | In all these cases START se workflow chalega.
-        |
-        */
-
-/*
-|--------------------------------------------------------------------------
-| START COMMAND
-|--------------------------------------------------------------------------
-|
-| Simulator me Hi / Hello / Start bhejne par
-| selected journey ko fresh START se chalao.
-|
-*/
-
-$startCommands = [
-    'hi',
-    'hello',
-    'hey',
-    'start',
-    'restart',
-];
-
-$normalizedText = strtolower(trim((string) $text));
-
-$isStartCommand = in_array(
-    $normalizedText,
-    $startCommands,
-    true
-);
+        $botMessage->save();
 
 
-/*
-|--------------------------------------------------------------------------
-| START / CONTINUE WORKFLOW
-|--------------------------------------------------------------------------
-*/
 
-if (
-    $isStartCommand ||
-    ! $session->current_node_id ||
-    $session->status === 'completed'
-) {
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESET CURRENT JOURNEY SESSION
-    |--------------------------------------------------------------------------
-    */
+$input = [];
 
-    $session->update([
-        'current_node_id' => null,
-        'status' => 'active',
-        'variables' => [],
-        'last_message_at' => now(),
-    ]);
+if (!empty($sourceHandle)) {
 
-    /*
-    |--------------------------------------------------------------------------
-    | START SELECTED JOURNEY
-    |--------------------------------------------------------------------------
-    */
+    $input['source_handle'] = (string) $sourceHandle;
 
-    $engine->start(
-        $workflow,
-        $from,
-        $input
+    $input['title'] = (string) (
+        $interactiveTitle ?? ''
     );
 
 } else {
 
-    /*
-    |--------------------------------------------------------------------------
-    | CONTINUE CURRENT JOURNEY
-    |--------------------------------------------------------------------------
-    */
-
-    $engine->execute(
-        $workflow,
-        $session,
-        $session->current_node_id,
-        $input
-    );
+    $input['text'] = (string) ($text ?? '');
 }
 
-        /*
-        |--------------------------------------------------------------------------
-        | REFRESH SESSION AFTER ENGINE
-        |--------------------------------------------------------------------------
-        */
+        /**
+         * Button/list title.
+         */
+        if (!empty($interactiveTitle)) {
+            $input['title'] =
+                $interactiveTitle;
+        }
 
+        /**
+         * =====================================================
+         * REFRESH SESSION
+         * =====================================================
+         */
         $session->refresh();
 
-        /*
-        |--------------------------------------------------------------------------
-        | GET OUTBOUND MESSAGES
-        |--------------------------------------------------------------------------
-        */
+        if ($isStartCommand) {
 
+            $session->current_node_id = null;
+            $session->status = 'active';
+            $session->variables = [];
+            $session->last_message_at = now();
+
+            $session->save();
+
+            $engine->start(
+                $workflow,
+                $from,
+                $input
+            );
+        }
+
+        else {
+
+            $session->refresh();
+
+            if (empty($session->current_node_id)) {
+
+                return response()->json([
+                    'success' => false,
+                    'received' => true,
+                    'started' => false,
+                    'error' => true,
+                    'error_code' =>
+                        'CURRENT_NODE_NOT_FOUND',
+                    'message' =>
+                        'Journey cannot continue because the current node is missing. Please type "Hi" to start the journey.',
+                    'workflow' => [
+                        'id' => $workflow->id,
+                        'name' => $workflow->name,
+                    ],
+                    'session' => [
+                        'id' => $session->id,
+                        'status' => $session->status,
+                        'current_node_id' =>
+                            $session->current_node_id,
+                        'workflow_id' =>
+                            $session->workflow_id,
+                        'user_identifier' =>
+                            $session->user_identifier,
+                    ],
+                    'received_input' => $text,
+                ], 422);
+            }
+
+            /**
+             * Continue from current node.
+             */
+            $engine->execute(
+                $workflow,
+                $session,
+                (string) $session->current_node_id,
+                $input
+            );
+        }
+
+        /**
+         * =====================================================
+         * REFRESH SESSION AFTER ENGINE
+         * =====================================================
+         */
+        $session->refresh();
+
+        /**
+         * =====================================================
+         * GET RECENT OUTBOUND MESSAGES
+         * =====================================================
+         */
         $messages = BotMessage::where(
-            'bot_session_id',
-            $session->id
-        )
+                'bot_session_id',
+                $session->id
+            )
             ->where(
                 'direction',
                 'outbound'
             )
             ->latest('id')
-            ->take(20)
+            ->limit(20)
             ->get()
             ->reverse()
             ->values();
 
-        /*
-        |--------------------------------------------------------------------------
-        | RESPONSE
-        |--------------------------------------------------------------------------
-        */
 
         return response()->json([
-            'received' => true,
+            'success' => true,
+
+            'source' => $isProviderWebhook
+                ? 'gtech_waba'
+                : (
+                    $isMetaWebhook
+                        ? 'meta'
+                        : 'simulator'
+                ),
 
             'workflow' => [
                 'id' => $workflow->id,
                 'name' => $workflow->name,
             ],
 
+            'whatsapp_to' => $whatsappTo,
+
+            'phone_number_id' =>
+                $phoneNumberId,
+
             'session' => [
                 'id' => $session->id,
                 'status' => $session->status,
-                'current_node_id' => $session->current_node_id,
-                'workflow_id' => $session->workflow_id,
-                'user_identifier' => $session->user_identifier,
+                'current_node_id' =>
+                    $session->current_node_id,
+                'workflow_id' =>
+                    $session->workflow_id,
+                'user_identifier' =>
+                    $session->user_identifier,
             ],
 
             'messages' => $messages,
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESET WHATSAPP SESSION
-    |--------------------------------------------------------------------------
-    */
 
+    private function resolveWorkflowFromWhatsAppNumber(
+        ?string $number
+    ): ?int {
+        if (empty($number)) {
+            return null;
+        }
+
+        /**
+         * Normalize number.
+         */
+        $number = preg_replace(
+            '/\D+/',
+            '',
+            (string) $number
+        );
+
+        if (empty($number)) {
+            return null;
+        }
+
+        /**
+         * Read config mapping.
+         */
+        $map = config(
+            'services.whatsapp.number_workflow_map',
+            []
+        );
+
+        if (!is_array($map)) {
+            return null;
+        }
+
+        /**
+         * Compare normalized numbers.
+         */
+        foreach ($map as $mappedNumber => $workflowId) {
+
+            $mappedNumber = preg_replace(
+                '/\D+/',
+                '',
+                (string) $mappedNumber
+            );
+
+            if ($mappedNumber === $number) {
+                return (int) $workflowId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * =========================================================
+     * RESOLVE WORKFLOW FROM META PHONE NUMBER ID
+     * =========================================================
+     */
+    private function resolveWorkflowFromPhoneNumber(
+        ?string $phoneNumberId
+    ): ?int {
+        if (empty($phoneNumberId)) {
+            return null;
+        }
+
+        $map = config(
+            'services.whatsapp.phone_workflow_map',
+            []
+        );
+
+        if (!is_array($map)) {
+            return null;
+        }
+
+        $workflowId =
+            $map[(string) $phoneNumberId]
+            ?? null;
+
+        return $workflowId
+            ? (int) $workflowId
+            : null;
+    }
+
+    /**
+     * =========================================================
+     * RESET WHATSAPP JOURNEY
+     * =========================================================
+     */
     public function reset(Request $request)
     {
-        $from = $request->input('from');
+        /**
+         * =====================================================
+         * MOBILE
+         * =====================================================
+         */
+        $from =
+            $request->input('from')
+            ??
+            $request->input('mobile')
+            ??
+            $request->input('phone');
 
-        $workflowId = $request->input('workflow_id');
+        /**
+         * =====================================================
+         * WORKFLOW ID
+         * =====================================================
+         */
+        $workflowId =
+            $request->input('workflow_id')
+            ??
+            $request->input('workflowId');
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATE MOBILE
-        |--------------------------------------------------------------------------
-        */
+        /**
+         * =====================================================
+         * MOBILE REQUIRED
+         * =====================================================
+         */
+        if (!$from) {
 
-        if (! $from) {
             return response()->json([
                 'success' => false,
-                'message' => 'Mobile number is required.',
+                'error' => true,
+                'error_code' => 'MOBILE_REQUIRED',
+                'message' =>
+                    'Mobile number is required.',
             ], 422);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | NORMALIZE MOBILE
-        |--------------------------------------------------------------------------
-        */
+        /**
+         * =====================================================
+         * NORMALIZE MOBILE
+         * =====================================================
+         */
+        $from = preg_replace(
+            '/\D+/',
+            '',
+            (string) $from
+        );
 
-        $from = preg_replace('/\D/', '', (string) $from);
+        if (!$from) {
 
-        if (! $from) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid mobile number.',
+                'error' => true,
+                'error_code' => 'INVALID_MOBILE',
+                'message' =>
+                    'Invalid mobile number.',
             ], 422);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | FIND SESSIONS
-        |--------------------------------------------------------------------------
-        */
-
+        /**
+         * =====================================================
+         * FIND SESSIONS
+         * =====================================================
+         */
         $query = BotSession::where(
-            'channel',
-            'whatsapp'
-        )
+                'channel',
+                'whatsapp'
+            )
             ->where(
                 'user_identifier',
                 $from
             );
 
-        /*
-        |--------------------------------------------------------------------------
-        | ONLY SELECTED JOURNEY
-        |--------------------------------------------------------------------------
-        */
+        /**
+         * Optional workflow filter.
+         */
+        if (!empty($workflowId)) {
 
-        if ($workflowId) {
             $query->where(
                 'workflow_id',
                 $workflowId
@@ -530,43 +826,21 @@ if (
 
         $sessions = $query->get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | RESET SESSIONS
-        |--------------------------------------------------------------------------
-        */
 
         foreach ($sessions as $session) {
 
-            /*
-            |--------------------------------------------------------------------------
-            | RESET SESSION STATE
-            |--------------------------------------------------------------------------
-            */
+            $session->current_node_id = null;
+            $session->status = 'active';
+            $session->variables = [];
+            $session->last_message_at = null;
 
-            $session->update([
-                'current_node_id' => null,
-                'status' => 'active',
-                'variables' => [],
-                'last_message_at' => now(),
-            ]);
-
-            /*
-            |--------------------------------------------------------------------------
-            | DELETE BOT MESSAGES
-            |--------------------------------------------------------------------------
-            */
+            $session->save();
 
             BotMessage::where(
                 'bot_session_id',
                 $session->id
             )->delete();
 
-            /*
-            |--------------------------------------------------------------------------
-            | DELETE WORKFLOW EXECUTIONS
-            |--------------------------------------------------------------------------
-            */
 
             WorkflowExecution::where(
                 'bot_session_id',
@@ -574,22 +848,15 @@ if (
             )->delete();
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | RESPONSE
-        |--------------------------------------------------------------------------
-        */
 
         return response()->json([
             'success' => true,
-
-            'message' => $workflowId
-                ? 'Selected Journey session reset successfully.'
-                : 'WhatsApp sessions reset successfully.',
-
+            'message' =>
+                'WhatsApp session reset successfully.',
             'mobile' => $from,
-
             'workflow_id' => $workflowId,
+            'sessions_reset' =>
+                $sessions->count(),
         ]);
     }
 }

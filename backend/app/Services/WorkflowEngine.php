@@ -17,11 +17,7 @@ class WorkflowEngine
     ) {
     }
 
-    /**
-     * =========================================================
-     * START WORKFLOW
-     * =========================================================
-     */
+
     public function start(
         Workflow $workflow,
         string $user,
@@ -52,6 +48,7 @@ class WorkflowEngine
             ->first();
 
         if (! $startNode) {
+
             return;
         }
 
@@ -63,11 +60,11 @@ class WorkflowEngine
         );
     }
 
-    /**
-     * =========================================================
-     * EXECUTE NODE
-     * =========================================================
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | EXECUTE NODE
+    |--------------------------------------------------------------------------
+    */
     public function execute(
         Workflow $workflow,
         BotSession $session,
@@ -80,8 +77,11 @@ class WorkflowEngine
             ->first();
 
         if (! $node) {
+
             return;
         }
+
+
 
         $log = WorkflowExecution::create([
             'workflow_id' => $workflow->id,
@@ -103,11 +103,11 @@ class WorkflowEngine
 
             $output = [];
 
-            /**
-             * =====================================================
-             * START
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | START
+            |--------------------------------------------------------------------------
+            */
             if ($type === 'start') {
 
                 $next = $this->nextNode(
@@ -120,17 +120,16 @@ class WorkflowEngine
                     $this->goToNode(
                         $workflow,
                         $session,
-                        $next,
-                        []
+                        $next
                     );
                 }
             }
 
-            /**
-             * =====================================================
-             * MESSAGE
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | MESSAGE
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'message') {
 
                 $text = $this->resolve(
@@ -167,28 +166,27 @@ class WorkflowEngine
                     $this->goToNode(
                         $workflow,
                         $session,
-                        $next,
-                        []
+                        $next
                     );
                 }
             }
 
-            /**
-             * =====================================================
-             * MENU
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | MENU
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'menu') {
 
-                /**
-                 * -------------------------------------------------
-                 * INTERACTIVE MENU SELECTION
-                 * -------------------------------------------------
-                 */
+                /*
+                |--------------------------------------------------------------------------
+                | WHATSAPP BUTTON / LIST CLICK
+                |--------------------------------------------------------------------------
+                */
+
                 if (! empty($input['source_handle'])) {
 
-                    $sourceHandle =
-                        (string) $input['source_handle'];
+                    $sourceHandle = (string) $input['source_handle'];
 
                     $next = $this->nextNode(
                         $workflow,
@@ -196,158 +194,108 @@ class WorkflowEngine
                         $sourceHandle
                     );
 
-                    $variable =
-                        $cfg['variable']
-                        ?? null;
+
+                    $variable = $cfg['variable'] ?? null;
 
                     if ($variable) {
 
-                        $selectedLabel =
-                            $this->getMenuOptionLabel(
-                                $cfg,
-                                $sourceHandle,
-                                $input
-                            );
-
-                        Log::info(
-                            'MENU SELECTION DEBUG',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'variable' =>
-                                    $variable,
-
-                                'source_handle' =>
-                                    $sourceHandle,
-
-                                'selected_label' =>
-                                    $selectedLabel,
-
-                                'old_variables' =>
-                                    $session->variables ?? [],
-                            ]
+                        $selectedLabel = $this->getMenuOptionLabel(
+                            $cfg,
+                            $sourceHandle,
+                            $input
                         );
 
                         if (
                             $selectedLabel !== null
-                            &&
-                            trim((string) $selectedLabel) !== ''
+                            && trim((string) $selectedLabel) !== ''
                         ) {
 
-                            $variables =
-                                $session->variables ?? [];
+                            $variables = $session->variables ?? [];
 
                             $variables[$variable] =
                                 trim((string) $selectedLabel);
 
                             $session->update([
-                                'variables' =>
-                                    $variables,
-
-                                'status' =>
-                                    'active',
-
-                                'last_message_at' =>
-                                    now(),
+                                'variables' => $variables,
+                                'status' => 'active',
+                                'last_message_at' => now(),
                             ]);
 
                             $session->refresh();
 
-                            Log::info(
-                                'MENU VARIABLES SAVED',
-                                [
-                                    'session_id' =>
-                                        $session->id,
 
-                                    'variables' =>
-                                        $session->variables,
-                                ]
-                            );
                         }
                     }
+
 
                     if ($next) {
 
                         $this->goToNode(
                             $workflow,
                             $session,
-                            $next,
-                            []
+                            $next
                         );
 
-                    } else {
-
-                        $validationMessage =
-                            $cfg['validation_message']
-                            ?? $cfg['validationMessage']
-                            ?? '⚠️ This option is not available right now. Please select another option.';
-
-                        $validationMessage =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
-
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $validationMessage
-                            );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $validationMessage,
-                            $output
-                        );
-
-                        $this->sendMenu(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
-                        ]);
+                        return;
                     }
+
+
+                    $validationMessage =
+                        $cfg['validation_message']
+                        ?? $cfg['validationMessage']
+                        ?? '⚠️ This option is not available right now. Please select another option.';
+
+                    $validationMessage = $this->resolve(
+                        (string) $validationMessage,
+                        $session->variables ?? []
+                    );
+
+                    $output = $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $validationMessage
+                    );
+
+                    $this->saveOutbound(
+                        $session,
+                        'text',
+                        $validationMessage,
+                        $output
+                    );
+
+                    $this->sendMenu(
+                        $session,
+                        $cfg
+                    );
+
+                    $session->update([
+                        'current_node_id' => $nodeId,
+                        'status' => 'waiting',
+                        'last_message_at' => now(),
+                    ]);
+
+                    return;
                 }
 
-                /**
-                 * -------------------------------------------------
-                 * MANUAL TEXT INPUT
-                 * -------------------------------------------------
-                 */
-                elseif (
-                    array_key_exists(
-                        'text',
-                        $input
-                    )
-                ) {
+                /*
+                |--------------------------------------------------------------------------
+                | MANUAL TEXT INPUT
+                |--------------------------------------------------------------------------
+                */
 
-                    $typedText =
-                        trim(
-                            (string) (
-                                $input['text']
-                                ?? ''
-                            )
-                        );
+                if (array_key_exists('text', $input)) {
+
+                    $typedText = trim(
+                        (string) ($input['text'] ?? '')
+                    );
+
 
                     $matchedOption =
                         $this->findMenuOptionByText(
                             $cfg,
                             $typedText
                         );
+
+
 
                     if ($matchedOption !== null) {
 
@@ -358,8 +306,7 @@ class WorkflowEngine
                             $matchedOption['label'];
 
                         $variable =
-                            $cfg['variable']
-                            ?? null;
+                            $cfg['variable'] ?? null;
 
                         if ($variable) {
 
@@ -370,189 +317,97 @@ class WorkflowEngine
                                 $selectedLabel;
 
                             $session->update([
-                                'variables' =>
-                                    $variables,
-
-                                'status' =>
-                                    'active',
-
-                                'last_message_at' =>
-                                    now(),
+                                'variables' => $variables,
+                                'status' => 'active',
+                                'last_message_at' => now(),
                             ]);
-
-                            $session->refresh();
-
-                            Log::info(
-                                'MENU MANUAL TEXT MATCHED',
-                                [
-                                    'session_id' =>
-                                        $session->id,
-
-                                    'node_id' =>
-                                        $nodeId,
-
-                                    'typed_text' =>
-                                        $typedText,
-
-                                    'variable' =>
-                                        $variable,
-
-                                    'selected_label' =>
-                                        $selectedLabel,
-
-                                    'source_handle' =>
-                                        $sourceHandle,
-                                ]
-                            );
                         }
 
-                        $next =
-                            $this->nextNode(
-                                $workflow,
-                                $nodeId,
-                                $sourceHandle
-                            );
+                        $next = $this->nextNode(
+                            $workflow,
+                            $nodeId,
+                            $sourceHandle
+                        );
 
                         if ($next) {
 
                             $this->goToNode(
                                 $workflow,
                                 $session,
-                                $next,
-                                []
+                                $next
                             );
 
-                        } else {
-
-                            $validationMessage =
-                                $cfg['validation_message']
-                                ?? $cfg['validationMessage']
-                                ?? '⚠️ This option is not available right now. Please select another option.';
-
-                            $validationMessage =
-                                $this->resolve(
-                                    (string) $validationMessage,
-                                    $session->variables ?? []
-                                );
-
-                            $output =
-                                $this->whatsapp->sendText(
-                                    $session->user_identifier,
-                                    $validationMessage
-                                );
-
-                            $this->saveOutbound(
-                                $session,
-                                'text',
-                                $validationMessage,
-                                $output
-                            );
-
-                            $this->sendMenu(
-                                $session,
-                                $cfg
-                            );
-
-                            $session->update([
-                                'current_node_id' =>
-                                    $nodeId,
-
-                                'status' =>
-                                    'waiting',
-
-                                'last_message_at' =>
-                                    now(),
-                            ]);
+                            return;
                         }
 
-                    } else {
 
-                        $validationMessage =
-                            $cfg['validation_message']
-                            ?? $cfg['validationMessage']
-                            ?? '⚠️ Please select one of the options above.';
-
-                        $validationMessage =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
-
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $validationMessage
-                            );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $validationMessage,
-                            $output
-                        );
-
-                        $this->sendMenu(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
-                        ]);
-
-                        Log::info(
-                            'MENU INVALID MANUAL INPUT',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'typed_text' =>
-                                    $typedText,
-
-                                'validation_message' =>
-                                    $validationMessage,
-                            ]
-                        );
                     }
 
-                } else {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | INVALID TEXT
+                    |--------------------------------------------------------------------------
+                    */
 
-                    /**
-                     * FIRST VISIT
-                     */
+                    $validationMessage =
+                        $cfg['validation_message']
+                        ?? $cfg['validationMessage']
+                        ?? '⚠️ Please select one of the options above.';
+
+                    $validationMessage = $this->resolve(
+                        (string) $validationMessage,
+                        $session->variables ?? []
+                    );
+
+                    $output = $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $validationMessage
+                    );
+
+                    $this->saveOutbound(
+                        $session,
+                        'text',
+                        $validationMessage,
+                        $output
+                    );
+
                     $this->sendMenu(
                         $session,
                         $cfg
                     );
 
                     $session->update([
-                        'current_node_id' =>
-                            $nodeId,
-
-                        'status' =>
-                            'waiting',
-
-                        'last_message_at' =>
-                            now(),
+                        'current_node_id' => $nodeId,
+                        'status' => 'waiting',
+                        'last_message_at' => now(),
                     ]);
+
+                    return;
                 }
+
+                /*
+                |--------------------------------------------------------------------------
+                | FIRST VISIT
+                |--------------------------------------------------------------------------
+                */
+
+                $this->sendMenu(
+                    $session,
+                    $cfg
+                );
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'waiting',
+                    'last_message_at' => now(),
+                ]);
             }
 
-            /**
-             * =====================================================
-             * BUTTON
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | BUTTON
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'button') {
 
                 if (! empty($input['source_handle'])) {
@@ -560,66 +415,47 @@ class WorkflowEngine
                     $sourceHandle =
                         (string) $input['source_handle'];
 
-                    $next =
-                        $this->nextNode(
-                            $workflow,
-                            $nodeId,
-                            $sourceHandle
-                        );
+
+
+                    $next = $this->nextNode(
+                        $workflow,
+                        $nodeId,
+                        $sourceHandle
+                    );
 
                     if ($next) {
 
                         $this->goToNode(
                             $workflow,
                             $session,
-                            $next,
-                            []
+                            $next
                         );
 
-                    } else {
-
-                        $validationMessage =
-                            $cfg['validation_message']
-                            ?? $cfg['validationMessage']
-                            ?? '⚠️ This button is not available right now.';
-
-                        $validationMessage =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
-
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $validationMessage
-                            );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $validationMessage,
-                            $output
-                        );
-
-                        $this->sendButton(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
-                        ]);
+                        return;
                     }
 
-                } else {
+
+                    $validationMessage =
+                        $cfg['validation_message']
+                        ?? $cfg['validationMessage']
+                        ?? '⚠️ This button is not available right now.';
+
+                    $validationMessage = $this->resolve(
+                        (string) $validationMessage,
+                        $session->variables ?? []
+                    );
+
+                    $output = $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $validationMessage
+                    );
+
+                    $this->saveOutbound(
+                        $session,
+                        'text',
+                        $validationMessage,
+                        $output
+                    );
 
                     $this->sendButton(
                         $session,
@@ -627,102 +463,108 @@ class WorkflowEngine
                     );
 
                     $session->update([
-                        'current_node_id' =>
-                            $nodeId,
-
-                        'status' =>
-                            'waiting',
-
-                        'last_message_at' =>
-                            now(),
+                        'current_node_id' => $nodeId,
+                        'status' => 'waiting',
+                        'last_message_at' => now(),
                     ]);
+
+                    return;
                 }
+
+                /*
+                |--------------------------------------------------------------------------
+                | FIRST VISIT
+                |--------------------------------------------------------------------------
+                */
+
+                $this->sendButton(
+                    $session,
+                    $cfg
+                );
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'waiting',
+                    'last_message_at' => now(),
+                ]);
             }
 
-            /**
-             * =====================================================
-             * USER INPUT
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | USER INPUT
+            |--------------------------------------------------------------------------
+            */
             elseif (
                 $type === 'userInput'
                 ||
                 $type === 'input'
             ) {
 
-                /**
-                 * -------------------------------------------------
-                 * VARIABLE
-                 * -------------------------------------------------
-                 */
                 $variable =
                     $cfg['variable']
                     ?? $cfg['name']
                     ?? 'last_input';
 
-                /**
-                 * -------------------------------------------------
-                 * VALIDATION TYPE
-                 * -------------------------------------------------
-                 */
-                $validationType =
-                    strtolower(
-                        trim(
-                            (string) (
-                                $cfg['validation_type']
-                                ?? $cfg['validationType']
-                                ?? $cfg['validation']
-                                ?? $cfg['input_type']
-                                ?? $cfg['inputType']
-                                ?? ''
-                            )
+                /*
+                |--------------------------------------------------------------------------
+                | VALIDATION TYPE
+                |--------------------------------------------------------------------------
+                */
+
+                $validationType = strtolower(
+                    trim(
+                        (string) (
+                            $cfg['validation_type']
+                            ?? $cfg['validationType']
+                            ?? $cfg['validation']
+                            ?? $cfg['input_type']
+                            ?? $cfg['inputType']
+                            ?? ''
                         )
-                    );
+                    )
+                );
 
-                /**
-                 * Normalize validation names coming from React.
-                 */
-                $validationType =
-                    match ($validationType) {
+                $validationType = match ($validationType) {
 
-                        'mobile number',
-                        'mobile_number',
-                        'phone',
-                        'phone_number',
-                        'contact',
-                        'contact_number'
-                            => 'mobile',
+                    'mobile number',
+                    'mobile_number',
+                    'phone',
+                    'phone_number',
+                    'contact',
+                    'contact_number'
+                        => 'mobile',
 
-                        'email address'
-                            => 'email',
+                    'email address'
+                        => 'email',
 
-                        'numeric'
-                            => 'number',
+                    'numeric'
+                        => 'number',
 
-                        'alphabets',
-                        'alphabets only',
-                        'alphabets_only',
-                        'alphabetsonly'
-                            => 'alpha',
+                    'alphabets',
+                    'alphabets only',
+                    'alphabets_only',
+                    'alphabetsonly'
+                        => 'alpha',
 
-                        'alpha numeric',
-                        'alpha_numeric',
-                        'alpha-numeric'
-                            => 'alphanumeric',
+                    'alpha numeric',
+                    'alpha_numeric',
+                    'alpha-numeric'
+                        => 'alphanumeric',
 
-                        'custom regex',
-                        'custom_regex'
-                            => 'regex',
+                    'custom regex',
+                    'custom_regex'
+                        => 'regex',
 
-                        default
-                            => $validationType,
-                    };
+                    default
+                        => $validationType,
+                };
 
-                /**
-                 * -------------------------------------------------
-                 * ALLOW SKIP
-                 * -------------------------------------------------
-                 */
+                /*
+                |--------------------------------------------------------------------------
+                | ALLOW SKIP
+                |--------------------------------------------------------------------------
+                */
+
                 $rawAllowSkip =
                     $cfg['allow_skip']
                     ?? $cfg['allowSkip']
@@ -733,8 +575,7 @@ class WorkflowEngine
 
                 if (is_bool($rawAllowSkip)) {
 
-                    $allowSkip =
-                        $rawAllowSkip;
+                    $allowSkip = $rawAllowSkip;
 
                 } elseif (is_numeric($rawAllowSkip)) {
 
@@ -743,59 +584,34 @@ class WorkflowEngine
 
                 } else {
 
-                    $allowSkip =
-                        in_array(
-                            strtolower(
-                                trim(
-                                    (string) $rawAllowSkip
-                                )
-                            ),
-                            [
-                                '1',
-                                'true',
-                                'yes',
-                                'on',
-                                'enabled',
-                                'allow',
-                                'allowed',
-                            ],
-                            true
-                        );
-                }
-
-                /**
-                 * -------------------------------------------------
-                 * SKIP TEXT
-                 * -------------------------------------------------
-                 */
-                $skipText =
-                    trim(
-                        (string) (
-                            $cfg['skip_text']
-                            ?? $cfg['skipText']
-                            ?? $cfg['skip_value']
-                            ?? $cfg['skipValue']
-                            ?? 'skip'
-                        )
+                    $allowSkip = in_array(
+                        strtolower(
+                            trim(
+                                (string) $rawAllowSkip
+                            )
+                        ),
+                        [
+                            '1',
+                            'true',
+                            'yes',
+                            'on',
+                            'enabled',
+                            'allow',
+                            'allowed',
+                        ],
+                        true
                     );
-
-                if ($skipText === '') {
-                    $skipText = 'skip';
                 }
 
-                /**
-                 * -------------------------------------------------
-                 * REQUIRED
-                 * -------------------------------------------------
-                 */
+
+
                 $rawRequired =
                     $cfg['required']
                     ?? true;
 
                 if (is_bool($rawRequired)) {
 
-                    $required =
-                        $rawRequired;
+                    $required = $rawRequired;
 
                 } elseif (is_numeric($rawRequired)) {
 
@@ -822,11 +638,12 @@ class WorkflowEngine
                         );
                 }
 
-                /**
-                 * -------------------------------------------------
-                 * VALIDATION MESSAGES
-                 * -------------------------------------------------
-                 */
+                /*
+                |--------------------------------------------------------------------------
+                | VALIDATION MESSAGES
+                |--------------------------------------------------------------------------
+                */
+
                 $validationMessage =
                     $cfg['validation_message']
                     ?? $cfg['validationMessage']
@@ -843,11 +660,12 @@ class WorkflowEngine
                     ?? $cfg['mobileValidationMessage']
                     ?? '⚠️ Please enter a valid 10-digit mobile number.';
 
-                /**
-                 * -------------------------------------------------
-                 * MIN / MAX
-                 * -------------------------------------------------
-                 */
+                /*
+                |--------------------------------------------------------------------------
+                | MIN / MAX
+                |--------------------------------------------------------------------------
+                */
+
                 $minLength =
                     $cfg['minLength']
                     ?? $cfg['min_length']
@@ -868,68 +686,28 @@ class WorkflowEngine
                     ?? $cfg['max_value']
                     ?? null;
 
-                $regex =
-                    trim(
+                $regex = trim(
+                    (string) (
+                        $cfg['regex']
+                        ?? ''
+                    )
+                );
+
+                /*
+                |--------------------------------------------------------------------------
+                | INPUT RECEIVED
+                |--------------------------------------------------------------------------
+                */
+
+                if (array_key_exists('text', $input)) {
+
+                    $value = trim(
                         (string) (
-                            $cfg['regex']
+                            $input['text']
                             ?? ''
                         )
                     );
 
-                /**
-                 * -------------------------------------------------
-                 * DEBUG
-                 * -------------------------------------------------
-                 */
-                Log::info(
-                    'USER INPUT CONFIG',
-                    [
-                        'session_id' =>
-                            $session->id,
-
-                        'node_id' =>
-                            $nodeId,
-
-                        'variable' =>
-                            $variable,
-
-                        'validationType' =>
-                            $validationType,
-
-                        'required' =>
-                            $required,
-
-                        'allowSkip' =>
-                            $allowSkip,
-
-                        'skipText' =>
-                            $skipText,
-
-                        'config' =>
-                            $cfg,
-                    ]
-                );
-
-                /**
-                 * =================================================
-                 * USER SENT TEXT
-                 * =================================================
-                 */
-                if (array_key_exists('text', $input)) {
-
-                    $value =
-                        trim(
-                            (string) (
-                                $input['text']
-                                ?? ''
-                            )
-                        );
-
-                    /**
-                     * -------------------------------------------------
-                     * SKIP
-                     * -------------------------------------------------
-                     */
                     $isSkipText =
                         $value !== ''
                         &&
@@ -938,14 +716,14 @@ class WorkflowEngine
                             trim($skipText)
                         ) === 0;
 
-                    $isEmpty =
-                        $value === '';
+                    $isEmpty = $value === '';
 
-                    /**
-                     * -------------------------------------------------
-                     * ALLOW SKIP
-                     * -------------------------------------------------
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ALLOW SKIP
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $allowSkip
                         &&
@@ -963,99 +741,62 @@ class WorkflowEngine
                         $variables =
                             $session->variables ?? [];
 
-                        $variables[$variable] =
-                            null;
+                        $variables[$variable] = null;
 
                         $session->update([
-                            'variables' =>
-                                $variables,
-
-                            'status' =>
-                                'active',
-
-                            'last_message_at' =>
-                                now(),
+                            'variables' => $variables,
+                            'status' => 'active',
+                            'last_message_at' => now(),
                         ]);
 
                         $session->refresh();
 
-                        Log::info(
-                            'USER INPUT SKIPPED',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'variable' =>
-                                    $variable,
-
-                                'input' =>
-                                    $value,
-
-                                'skipText' =>
-                                    $skipText,
-
-                                'allowSkip' =>
-                                    $allowSkip,
-                            ]
+                        $next = $this->nextNode(
+                            $workflow,
+                            $nodeId
                         );
-
-                        $next =
-                            $this->nextNode(
-                                $workflow,
-                                $nodeId
-                            );
 
                         if ($next) {
 
                             $this->goToNode(
                                 $workflow,
                                 $session,
-                                $next,
-                                []
+                                $next
                             );
 
                         } else {
 
                             $session->update([
-                                'current_node_id' =>
-                                    $nodeId,
-
-                                'status' =>
-                                    'completed',
-
-                                'last_message_at' =>
-                                    now(),
+                                'current_node_id' => $nodeId,
+                                'status' => 'completed',
+                                'last_message_at' => now(),
                             ]);
                         }
 
                         return;
                     }
 
-                    /**
-                     * -------------------------------------------------
-                     * SKIP NOT ALLOWED
-                     * -------------------------------------------------
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | SKIP NOT ALLOWED
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $isSkipText
                         &&
                         ! $allowSkip
                     ) {
 
-                        $message =
-                            $this->resolve(
-                                (string) $requiredMessage,
-                                $session->variables ?? []
-                            );
+                        $message = $this->resolve(
+                            (string) $requiredMessage,
+                            $session->variables ?? []
+                        );
 
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $message
-                            );
+                        $output = $this->whatsapp->sendText(
+                            $session->user_identifier,
+                            $message
+                        );
 
                         $this->saveOutbound(
                             $session,
@@ -1070,47 +811,20 @@ class WorkflowEngine
                         );
 
                         $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
+                            'current_node_id' => $nodeId,
+                            'status' => 'waiting',
+                            'last_message_at' => now(),
                         ]);
-
-                        Log::info(
-                            'USER INPUT SKIP NOT ALLOWED',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'variable' =>
-                                    $variable,
-
-                                'input' =>
-                                    $value,
-
-                                'allowSkip' =>
-                                    $allowSkip,
-
-                                'skipText' =>
-                                    $skipText,
-                            ]
-                        );
 
                         return;
                     }
 
-                    /**
-                     * -------------------------------------------------
-                     * EMPTY INPUT
-                     * -------------------------------------------------
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | EMPTY INPUT
+                    |--------------------------------------------------------------------------
+                    */
+
                     if ($isEmpty) {
 
                         $message =
@@ -1118,17 +832,15 @@ class WorkflowEngine
                                 ? $requiredMessage
                                 : $validationMessage;
 
-                        $message =
-                            $this->resolve(
-                                (string) $message,
-                                $session->variables ?? []
-                            );
+                        $message = $this->resolve(
+                            (string) $message,
+                            $session->variables ?? []
+                        );
 
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $message
-                            );
+                        $output = $this->whatsapp->sendText(
+                            $session->user_identifier,
+                            $message
+                        );
 
                         $this->saveOutbound(
                             $session,
@@ -1143,46 +855,26 @@ class WorkflowEngine
                         );
 
                         $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
+                            'current_node_id' => $nodeId,
+                            'status' => 'waiting',
+                            'last_message_at' => now(),
                         ]);
-
-                        Log::info(
-                            'USER INPUT EMPTY',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'variable' =>
-                                    $variable,
-
-                                'required' =>
-                                    $required,
-                            ]
-                        );
 
                         return;
                     }
 
-                    /**
-                     * =================================================
-                     * VALIDATION
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | VALIDATION
+                    |--------------------------------------------------------------------------
+                    */
+
                     $isValid = true;
 
-                    /**
-                     * TEXT
-                     */
+                    /*
+                    | TEXT
+                    */
+
                     if (
                         $validationType === ''
                         ||
@@ -1191,16 +883,14 @@ class WorkflowEngine
                         $validationType === 'string'
                     ) {
 
-                        $isValid =
-                            $value !== '';
+                        $isValid = $value !== '';
                     }
 
-                    /**
-                     * ALPHA
-                     */
-                    elseif (
-                        $validationType === 'alpha'
-                    ) {
+                    /*
+                    | ALPHA
+                    */
+
+                    elseif ($validationType === 'alpha') {
 
                         $isValid =
                             preg_match(
@@ -1209,12 +899,11 @@ class WorkflowEngine
                             ) === 1;
                     }
 
-                    /**
-                     * ALPHANUMERIC
-                     */
-                    elseif (
-                        $validationType === 'alphanumeric'
-                    ) {
+                    /*
+                    | ALPHANUMERIC
+                    */
+
+                    elseif ($validationType === 'alphanumeric') {
 
                         $isValid =
                             preg_match(
@@ -1223,19 +912,17 @@ class WorkflowEngine
                             ) === 1;
                     }
 
-                    /**
-                     * MOBILE
-                     */
-                    elseif (
-                        $validationType === 'mobile'
-                    ) {
+                    /*
+                    | MOBILE
+                    */
 
-                        $digits =
-                            preg_replace(
-                                '/\D+/',
-                                '',
-                                $value
-                            );
+                    elseif ($validationType === 'mobile') {
+
+                        $digits = preg_replace(
+                            '/\D+/',
+                            '',
+                            $value
+                        );
 
                         if (
                             strlen($digits) === 12
@@ -1246,11 +933,10 @@ class WorkflowEngine
                             )
                         ) {
 
-                            $digits =
-                                substr(
-                                    $digits,
-                                    2
-                                );
+                            $digits = substr(
+                                $digits,
+                                2
+                            );
                         }
 
                         $isValid =
@@ -1264,12 +950,11 @@ class WorkflowEngine
                         }
                     }
 
-                    /**
-                     * EMAIL
-                     */
-                    elseif (
-                        $validationType === 'email'
-                    ) {
+                    /*
+                    | EMAIL
+                    */
+
+                    elseif ($validationType === 'email') {
 
                         $isValid =
                             filter_var(
@@ -1278,23 +963,20 @@ class WorkflowEngine
                             ) !== false;
                     }
 
-                    /**
-                     * NUMBER
-                     */
-                    elseif (
-                        $validationType === 'number'
-                    ) {
+                    /*
+                    | NUMBER
+                    */
 
-                        $isValid =
-                            is_numeric($value);
+                    elseif ($validationType === 'number') {
+
+                        $isValid = is_numeric($value);
                     }
 
-                    /**
-                     * INTEGER
-                     */
-                    elseif (
-                        $validationType === 'integer'
-                    ) {
+                    /*
+                    | INTEGER
+                    */
+
+                    elseif ($validationType === 'integer') {
 
                         $isValid =
                             filter_var(
@@ -1303,26 +985,23 @@ class WorkflowEngine
                             ) !== false;
                     }
 
-                    /**
-                     * DATE
-                     */
-                    elseif (
-                        $validationType === 'date'
-                    ) {
+                    /*
+                    | DATE
+                    */
 
-                        $timestamp =
-                            strtotime($value);
+                    elseif ($validationType === 'date') {
+
+                        $timestamp = strtotime($value);
 
                         $isValid =
                             $timestamp !== false;
                     }
 
-                    /**
-                     * URL
-                     */
-                    elseif (
-                        $validationType === 'url'
-                    ) {
+                    /*
+                    | URL
+                    */
+
+                    elseif ($validationType === 'url') {
 
                         $isValid =
                             filter_var(
@@ -1331,12 +1010,11 @@ class WorkflowEngine
                             ) !== false;
                     }
 
-                    /**
-                     * CUSTOM REGEX
-                     */
-                    elseif (
-                        $validationType === 'regex'
-                    ) {
+                    /*
+                    | REGEX
+                    */
+
+                    elseif ($validationType === 'regex') {
 
                         if ($regex === '') {
 
@@ -1355,36 +1033,21 @@ class WorkflowEngine
                         }
                     }
 
-                    /**
-                     * UNKNOWN VALIDATION
-                     */
+                    /*
+                    | UNKNOWN
+                    */
+
                     else {
-
-                        Log::warning(
-                            'UNKNOWN USER INPUT VALIDATION TYPE',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'validationType' =>
-                                    $validationType,
-
-                                'value' =>
-                                    $value,
-                            ]
-                        );
 
                         $isValid = false;
                     }
 
-                    /**
-                     * =================================================
-                     * MIN LENGTH
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MIN LENGTH
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $isValid
                         &&
@@ -1401,11 +1064,12 @@ class WorkflowEngine
                             (int) $minLength;
                     }
 
-                    /**
-                     * =================================================
-                     * MAX LENGTH
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MAX LENGTH
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $isValid
                         &&
@@ -1422,11 +1086,12 @@ class WorkflowEngine
                             (int) $maxLength;
                     }
 
-                    /**
-                     * =================================================
-                     * MIN VALUE
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MIN VALUE
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $isValid
                         &&
@@ -1450,11 +1115,12 @@ class WorkflowEngine
                         }
                     }
 
-                    /**
-                     * =================================================
-                     * MAX VALUE
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MAX VALUE
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (
                         $isValid
                         &&
@@ -1478,47 +1144,37 @@ class WorkflowEngine
                         }
                     }
 
-                    /**
-                     * =================================================
-                     * VALIDATION FAILED
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | VALIDATION FAILED
+                    |--------------------------------------------------------------------------
+                    */
+
                     if (! $isValid) {
 
-                        $message =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
+                        $message = $this->resolve(
+                            (string) $validationMessage,
+                            $session->variables ?? []
+                        );
 
-                        /*
-                         * Mobile ke liye agar separate message hai
-                         * to usko use karo.
-                         */
                         if (
                             $validationType === 'mobile'
                             &&
-                            ! empty(
-                                trim(
-                                    (string)
-                                    $mobileValidationMessage
-                                )
-                            )
+                            trim(
+                                (string) $mobileValidationMessage
+                            ) !== ''
                         ) {
 
-                            $message =
-                                $this->resolve(
-                                    (string)
-                                    $mobileValidationMessage,
-                                    $session->variables ?? []
-                                );
+                            $message = $this->resolve(
+                                (string) $mobileValidationMessage,
+                                $session->variables ?? []
+                            );
                         }
 
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $message
-                            );
+                        $output = $this->whatsapp->sendText(
+                            $session->user_identifier,
+                            $message
+                        );
 
                         $this->saveOutbound(
                             $session,
@@ -1527,74 +1183,26 @@ class WorkflowEngine
                             $output
                         );
 
-                        /*
-                         * Same prompt again.
-                         */
                         $this->sendInputPrompt(
                             $session,
                             $cfg
                         );
 
-                        /*
-                         * SAME NODE par raho.
-                         */
                         $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
+                            'current_node_id' => $nodeId,
+                            'status' => 'waiting',
+                            'last_message_at' => now(),
                         ]);
-
-                        Log::info(
-                            'USER INPUT VALIDATION FAILED',
-                            [
-                                'session_id' =>
-                                    $session->id,
-
-                                'node_id' =>
-                                    $nodeId,
-
-                                'variable' =>
-                                    $variable,
-
-                                'value' =>
-                                    $value,
-
-                                'validationType' =>
-                                    $validationType,
-
-                                'message' =>
-                                    $message,
-
-                                'minLength' =>
-                                    $minLength,
-
-                                'maxLength' =>
-                                    $maxLength,
-
-                                'minValue' =>
-                                    $minValue,
-
-                                'maxValue' =>
-                                    $maxValue,
-
-                                'regex' =>
-                                    $regex,
-                            ]
-                        );
 
                         return;
                     }
 
-                    /**
-                     * =================================================
-                     * SAVE VALID INPUT
-                     * =================================================
-                     */
+                    /*
+                    |--------------------------------------------------------------------------
+                    | SAVE INPUT
+                    |--------------------------------------------------------------------------
+                    */
+
                     $variables =
                         $session->variables ?? [];
 
@@ -1602,112 +1210,73 @@ class WorkflowEngine
                         $value;
 
                     $session->update([
-                        'variables' =>
-                            $variables,
-
-                        'status' =>
-                            'active',
-
-                        'last_message_at' =>
-                            now(),
+                        'variables' => $variables,
+                        'status' => 'active',
+                        'last_message_at' => now(),
                     ]);
 
                     $session->refresh();
 
-                    Log::info(
-                        'USER INPUT SAVED',
-                        [
-                            'session_id' =>
-                                $session->id,
+                    /*
+                    |--------------------------------------------------------------------------
+                    | NEXT NODE
+                    |--------------------------------------------------------------------------
+                    */
 
-                            'node_id' =>
-                                $nodeId,
-
-                            'variable' =>
-                                $variable,
-
-                            'value' =>
-                                $value,
-
-                            'validationType' =>
-                                $validationType,
-
-                            'variables' =>
-                                $session->variables,
-                        ]
+                    $next = $this->nextNode(
+                        $workflow,
+                        $nodeId
                     );
-
-                    /**
-                     * -------------------------------------------------
-                     * NEXT NODE
-                     * -------------------------------------------------
-                     */
-                    $next =
-                        $this->nextNode(
-                            $workflow,
-                            $nodeId
-                        );
 
                     if ($next) {
 
                         $this->goToNode(
                             $workflow,
                             $session,
-                            $next,
-                            []
+                            $next
                         );
 
                     } else {
 
                         $session->update([
-                            'current_node_id' =>
-                                $nodeId,
-
-                            'status' =>
-                                'waiting',
-
-                            'last_message_at' =>
-                                now(),
+                            'current_node_id' => $nodeId,
+                            'status' => 'waiting',
+                            'last_message_at' => now(),
                         ]);
                     }
 
                     return;
-
-                } else {
-
-                    /**
-                     * FIRST VISIT
-                     */
-                    $this->sendInputPrompt(
-                        $session,
-                        $cfg
-                    );
-
-                    $session->update([
-                        'current_node_id' =>
-                            $nodeId,
-
-                        'status' =>
-                            'waiting',
-
-                        'last_message_at' =>
-                            now(),
-                    ]);
                 }
+
+                /*
+                |--------------------------------------------------------------------------
+                | FIRST VISIT
+                |--------------------------------------------------------------------------
+                */
+
+                $this->sendInputPrompt(
+                    $session,
+                    $cfg
+                );
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'waiting',
+                    'last_message_at' => now(),
+                ]);
             }
 
-            /**
-             * =====================================================
-             * API
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | API
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'api') {
 
-                $apiResult =
-                    $this->executeApi(
-                        $cfg,
-                        $session
-                    );
+                $apiResult = $this->executeApi(
+                    $cfg,
+                    $session
+                );
 
                 $variables =
                     $session->variables ?? [];
@@ -1715,99 +1284,73 @@ class WorkflowEngine
                 $variables['api_response'] =
                     $apiResult;
 
-                if (
-                    isset(
-                        $apiResult['order_status']
-                    )
-                ) {
-
+                if (isset($apiResult['order_status'])) {
                     $variables['order_status'] =
                         $apiResult['order_status'];
                 }
 
-                if (
-                    isset(
-                        $apiResult['status']
-                    )
-                ) {
-
+                if (isset($apiResult['status'])) {
                     $variables['status'] =
                         $apiResult['status'];
                 }
 
                 $session->update([
-                    'variables' =>
-                        $variables,
-
-                    'status' =>
-                        'active',
-
-                    'last_message_at' =>
-                        now(),
+                    'variables' => $variables,
+                    'status' => 'active',
+                    'last_message_at' => now(),
                 ]);
 
-                $output =
-                    $apiResult;
+                $output = $apiResult;
 
-                $next =
-                    $this->nextNode(
-                        $workflow,
-                        $nodeId
-                    );
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId
+                );
 
                 if ($next) {
 
                     $this->goToNode(
                         $workflow,
                         $session,
-                        $next,
-                        []
+                        $next
                     );
                 }
             }
 
-            /**
-             * =====================================================
-             * CONDITION
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | CONDITION
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'condition') {
 
-                $condition =
-                    trim(
-                        (string) (
-                            $cfg['condition']
-                            ?? ''
-                        )
-                    );
+                $condition = trim(
+                    (string) (
+                        $cfg['condition']
+                        ?? ''
+                    )
+                );
 
-                $result =
-                    $this->evaluateCondition(
-                        $condition,
-                        $session->variables ?? []
-                    );
+                $result = $this->evaluateCondition(
+                    $condition,
+                    $session->variables ?? []
+                );
 
                 $handle =
                     $result
                         ? 'source-yes'
                         : 'source-no';
 
-                $next =
-                    $this->nextNode(
-                        $workflow,
-                        $nodeId,
-                        $handle
-                    );
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId,
+                    $handle
+                );
 
                 $output = [
-                    'condition' =>
-                        $condition,
-
-                    'result' =>
-                        $result,
-
-                    'source_handle' =>
-                        $handle,
+                    'condition' => $condition,
+                    'result' => $result,
+                    'source_handle' => $handle,
                 ];
 
                 if ($next) {
@@ -1815,17 +1358,16 @@ class WorkflowEngine
                     $this->goToNode(
                         $workflow,
                         $session,
-                        $next,
-                        []
+                        $next
                     );
                 }
             }
 
-            /**
-             * =====================================================
-             * END
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | END
+            |--------------------------------------------------------------------------
+            */
             elseif ($type === 'end') {
 
                 $this->saveCustomerLead(
@@ -1834,97 +1376,74 @@ class WorkflowEngine
                 );
 
                 $session->update([
-                    'current_node_id' =>
-                        $nodeId,
-
-                    'status' =>
-                        'completed',
-
-                    'last_message_at' =>
-                        now(),
+                    'current_node_id' => $nodeId,
+                    'status' => 'completed',
+                    'last_message_at' => now(),
                 ]);
 
                 $output = [
-                    'status' =>
-                        'completed',
-
-                    'customer_lead_saved' =>
-                        true,
+                    'status' => 'completed',
+                    'customer_lead_saved' => true,
                 ];
             }
 
-            /**
-             * =====================================================
-             * UNKNOWN NODE
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | UNKNOWN NODE
+            |--------------------------------------------------------------------------
+            */
             else {
 
-                $next =
-                    $this->nextNode(
-                        $workflow,
-                        $nodeId
-                    );
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId
+                );
 
                 if ($next) {
 
                     $this->goToNode(
                         $workflow,
                         $session,
-                        $next,
-                        []
+                        $next
                     );
                 }
             }
 
-            /**
-             * =====================================================
-             * EXECUTION SUCCESS
-             * =====================================================
-             */
+            /*
+            |--------------------------------------------------------------------------
+            | EXECUTION SUCCESS
+            |--------------------------------------------------------------------------
+            */
+
             $log->update([
-                'status' =>
-                    'success',
-
-                'output_payload' =>
-                    $output,
-
-                'finished_at' =>
-                    now(),
+                'status' => 'success',
+                'output_payload' => $output,
+                'finished_at' => now(),
             ]);
 
         } catch (\Throwable $e) {
 
-            /**
-             * =====================================================
-             * EXECUTION FAILED
-             * =====================================================
-             */
             $log->update([
-                'status' =>
-                    'failed',
-
-                'error_message' =>
-                    $e->getMessage(),
-
-                'finished_at' =>
-                    now(),
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+                'finished_at' => now(),
             ]);
 
             $session->update([
-                'status' =>
-                    'error',
+                'status' => 'error',
             ]);
+
+
 
             throw $e;
         }
     }
 
-    /**
-     * =========================================================
-     * GO TO NODE
-     * =========================================================
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | GO TO NODE
+    |--------------------------------------------------------------------------
+    */
     private function goToNode(
         Workflow $workflow,
         BotSession $session,
@@ -1933,11 +1452,8 @@ class WorkflowEngine
     ): void {
 
         $session->update([
-            'current_node_id' =>
-                $nodeId,
-
-            'last_message_at' =>
-                now(),
+            'current_node_id' => $nodeId,
+            'last_message_at' => now(),
         ]);
 
         $this->execute(
@@ -1948,84 +1464,51 @@ class WorkflowEngine
         );
     }
 
-    /**
-     * =========================================================
-     * NEXT NODE
-     * =========================================================
-     */
-    private function nextNode(
-        Workflow $workflow,
-        string $source,
-        ?string $sourceHandle = null
-    ): ?string {
+    /*
+    |--------------------------------------------------------------------------
+    | NEXT NODE
+    |--------------------------------------------------------------------------
+    */
+/*
+|--------------------------------------------------------------------------
+| NEXT NODE
+|--------------------------------------------------------------------------
+*/
+private function nextNode(
+    Workflow $workflow,
+    string $source,
+    ?string $sourceHandle = null
+): ?string {
 
-        $query =
-            $workflow->edges()
-                ->where(
-                    'source',
-                    $source
-                );
+    $query = $workflow->edges()
+        ->where('source', $source);
 
-        if ($sourceHandle !== null) {
 
-            $query->where(
-                'source_handle',
-                $sourceHandle
-            );
-        }
-
-        $edge =
-            $query
-                ->orderBy('id')
-                ->first();
-
-        $targetNode =
-            $edge?->target
-                ? $workflow->nodes()
-                    ->where(
-                        'node_id',
-                        $edge->target
-                    )
-                    ->first()
-                : null;
-
-        Log::info(
-            'NEXT NODE DEBUG',
-            [
-                'source' =>
-                    $source,
-
-                'source_handle' =>
-                    $sourceHandle,
-
-                'edge_id' =>
-                    $edge?->id,
-
-                'target' =>
-                    $edge?->target,
-
-                'db_source_handle' =>
-                    $edge?->source_handle,
-
-                'target_node_type' =>
-                    $targetNode?->node_type,
-
-                'target_node_label' =>
-                    $targetNode?->label,
-
-                'target_configuration' =>
-                    $targetNode?->configuration,
-            ]
+    if ($sourceHandle !== null) {
+        $query->where(
+            'source_handle',
+            $sourceHandle
         );
-
-        return $edge?->target;
     }
 
-    /**
-     * =========================================================
-     * RESOLVE VARIABLES
-     * =========================================================
-     */
+    $edge = $query
+        ->orderBy('id')
+        ->first();
+
+    if (! $edge) {
+        return null;
+    }
+
+    return $edge->target
+        ? (string) $edge->target
+        : null;
+}
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE VARIABLES
+    |--------------------------------------------------------------------------
+    */
     private function resolve(
         string $text,
         array $vars
@@ -2035,12 +1518,11 @@ class WorkflowEngine
             '/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/',
             function ($match) use ($vars) {
 
-                $value =
-                    data_get(
-                        $vars,
-                        $match[1],
-                        $match[0]
-                    );
+                $value = data_get(
+                    $vars,
+                    $match[1],
+                    $match[0]
+                );
 
                 return $value === null
                     ? ''
@@ -2050,154 +1532,70 @@ class WorkflowEngine
         );
     }
 
-    /**
-     * =========================================================
-     * FIND MENU OPTION BY MANUAL TEXT
-     * =========================================================
-     */
-    private function findMenuOptionByText(
-        array $cfg,
-        string $typedText
-    ): ?array {
 
-        $typedText =
-            trim($typedText);
+  private function findMenuOptionByText(
+    array $cfg,
+    string $typedText
+): ?array {
 
-        if ($typedText === '') {
-            return null;
-        }
+    $typedText = trim($typedText);
 
-        $options =
-            $cfg['menuOptions']
-            ?? $cfg['options']
-            ?? $cfg['menu_options']
-            ?? [];
-
-        if (! is_array($options)) {
-            return null;
-        }
-
-        foreach (
-            $options
-            as $index => $option
-        ) {
-
-            if (! is_array($option)) {
-                continue;
-            }
-
-            $label =
-                trim(
-                    (string) (
-                        $option['label']
-                        ?? $option['title']
-                        ?? $option['text']
-                        ?? ''
-                    )
-                );
-
-            if ($label === '') {
-                continue;
-            }
-
-            if (
-                strcasecmp(
-                    $typedText,
-                    $label
-                ) !== 0
-            ) {
-                continue;
-            }
-
-            $sourceHandle =
-                $option['source_handle']
-                ?? $option['sourceHandle']
-                ?? null;
-
-            if (
-                $sourceHandle === null
-                ||
-                $sourceHandle === ''
-            ) {
-
-                $sourceHandle =
-                    $option['id']
-                    ?? null;
-            }
-
-            if (
-                $sourceHandle === null
-                ||
-                $sourceHandle === ''
-            ) {
-
-                $sourceHandle =
-                    "source-option-{$index}";
-            }
-
-            return [
-                'source_handle' =>
-                    (string) $sourceHandle,
-
-                'label' =>
-                    $label,
-
-                'index' =>
-                    $index,
-            ];
-        }
-
+    if ($typedText === '') {
         return null;
     }
 
-    /**
-     * =========================================================
-     * SEND USER INPUT PROMPT
-     * =========================================================
-     */
-    private function sendInputPrompt(
-        BotSession $session,
-        array $cfg
-    ): void {
+    $options =
+        $cfg['menuOptions']
+        ?? $cfg['options']
+        ?? $cfg['menu_options']
+        ?? [];
 
-        $prompt =
-            $cfg['prompt']
-            ?? $cfg['message']
-            ?? '';
-
-        if (
-            trim(
-                (string) $prompt
-            ) === ''
-        ) {
-            return;
-        }
-
-        $prompt =
-            $this->resolve(
-                (string) $prompt,
-                $session->variables ?? []
-            );
-
-        $output =
-            $this->whatsapp->sendText(
-                $session->user_identifier,
-                $prompt
-            );
-
-        $this->saveOutbound(
-            $session,
-            'text',
-            $prompt,
-            $output
-        );
+    if (!is_array($options)) {
+        return null;
     }
 
-    /**
-     * =========================================================
-     * GET MENU OPTION LABEL
-     * =========================================================
-     */
+    foreach ($options as $index => $option) {
+
+        if (!is_array($option)) {
+            continue;
+        }
+
+        $label = trim(
+            (string) (
+                $option['label']
+                ?? $option['title']
+                ?? $option['text']
+                ?? ''
+            )
+        );
+
+        if ($label === '') {
+            continue;
+        }
+
+        if (
+            strcasecmp(
+                $typedText,
+                $label
+            ) !== 0
+        ) {
+            continue;
+        }
+
+
+        $sourceHandle = "source-option-{$index}";
+
+        return [
+            'source_handle' => $sourceHandle,
+            'label' => $label,
+            'index' => $index,
+        ];
+    }
+
+    return null;
+}
+
+
     private function getMenuOptionLabel(
         array $cfg,
         string $sourceHandle,
@@ -2211,13 +1609,10 @@ class WorkflowEngine
             ?? [];
 
         if (! is_array($options)) {
-            return null;
+            return $input['title'] ?? null;
         }
 
-        foreach (
-            $options
-            as $index => $option
-        ) {
+        foreach ($options as $index => $option) {
 
             if (! is_array($option)) {
                 continue;
@@ -2237,8 +1632,7 @@ class WorkflowEngine
                 (string) $sourceHandle
             ) {
 
-                return
-                    $option['label']
+                return $option['label']
                     ?? $option['title']
                     ?? $option['text']
                     ?? null;
@@ -2249,8 +1643,7 @@ class WorkflowEngine
                 (string) $sourceHandle
             ) {
 
-                return
-                    $option['label']
+                return $option['label']
                     ?? $option['title']
                     ?? $option['text']
                     ?? null;
@@ -2265,8 +1658,7 @@ class WorkflowEngine
             )
         ) {
 
-            $index =
-                (int) $matches[1];
+            $index = (int) $matches[1];
 
             if (
                 isset($options[$index])
@@ -2274,24 +1666,50 @@ class WorkflowEngine
                 is_array($options[$index])
             ) {
 
-                return
-                    $options[$index]['label']
+                return $options[$index]['label']
                     ?? $options[$index]['title']
                     ?? $options[$index]['text']
                     ?? null;
             }
         }
 
-        return
-            $input['title']
-            ?? null;
+        return $input['title'] ?? null;
     }
 
-    /**
-     * =========================================================
-     * SAVE OUTBOUND MESSAGE
-     * =========================================================
-     */
+
+    private function sendInputPrompt(
+        BotSession $session,
+        array $cfg
+    ): void {
+
+        $prompt =
+            $cfg['prompt']
+            ?? $cfg['message']
+            ?? '';
+
+        if (trim((string) $prompt) === '') {
+            return;
+        }
+
+        $prompt = $this->resolve(
+            (string) $prompt,
+            $session->variables ?? []
+        );
+
+        $output = $this->whatsapp->sendText(
+            $session->user_identifier,
+            $prompt
+        );
+
+        $this->saveOutbound(
+            $session,
+            'text',
+            $prompt,
+            $output
+        );
+    }
+
+
     private function saveOutbound(
         BotSession $session,
         string $type,
@@ -2300,125 +1718,111 @@ class WorkflowEngine
     ): void {
 
         BotMessage::create([
-            'bot_session_id' =>
-                $session->id,
-
-            'direction' =>
-                'outbound',
-
-            'message_type' =>
-                $type,
-
-            'text' =>
-                $text,
-
-            'payload' =>
-                $payload,
+            'bot_session_id' => $session->id,
+            'direction' => 'outbound',
+            'message_type' => $type,
+            'text' => $text,
+            'payload' => $payload,
         ]);
     }
 
-    /**
-     * =========================================================
-     * SEND MENU
-     * =========================================================
-     */
-    private function sendMenu(
-        BotSession $session,
-        array $cfg
-    ): void {
 
-        $message =
-            $cfg['message']
-            ?? $cfg['text']
-            ?? 'Please select an option.';
+ private function sendMenu(
+    BotSession $session,
+    array $cfg
+): void {
 
-        $message =
-            $this->resolve(
-                (string) $message,
-                $session->variables ?? []
-            );
+    $message =
+        $cfg['message']
+        ?? $cfg['text']
+        ?? 'Please select an option.';
 
-        $options =
-            $cfg['menuOptions']
-            ?? $cfg['options']
-            ?? $cfg['menu_options']
-            ?? [];
+    $message = $this->resolve(
+        (string) $message,
+        $session->variables ?? []
+    );
 
-        if (! is_array($options)) {
-            $options = [];
+    $options =
+        $cfg['menuOptions']
+        ?? $cfg['options']
+        ?? $cfg['menu_options']
+        ?? [];
+
+    if (!is_array($options)) {
+        $options = [];
+    }
+
+    $normalizedOptions = [];
+
+    foreach ($options as $index => $option) {
+
+        if (!is_array($option)) {
+            continue;
         }
 
-        $normalizedOptions = [];
 
-        foreach (
-            $options
-            as $index => $option
-        ) {
+        $sourceHandle = "source-option-{$index}";
 
-            if (! is_array($option)) {
-                continue;
-            }
+        $label =
+            $option['label']
+            ?? $option['title']
+            ?? $option['text']
+            ?? 'Option ' . ($index + 1);
 
-            $sourceHandle =
-                $option['source_handle']
-                ?? $option['sourceHandle']
-                ?? "source-option-{$index}";
+        $label = trim((string) $label);
 
-            $label =
-                $option['label']
-                ?? $option['title']
-                ?? $option['text']
-                ?? 'Option ' . ($index + 1);
-
-            $normalizedOptions[] = [
-                'id' =>
-                    $sourceHandle,
-
-                'label' =>
-                    $label,
-
-                'title' =>
-                    $label,
-
-                'source_handle' =>
-                    $sourceHandle,
-            ];
+        if ($label === '') {
+            continue;
         }
 
-        $payload = [
-            'type' =>
-                'menu',
+        $normalizedOptions[] = [
+            'id' => $sourceHandle,
 
-            'message' =>
-                $message,
+            'label' => $label,
 
-            'options' =>
-                $normalizedOptions,
+            'title' => $label,
+
+            'source_handle' => $sourceHandle,
         ];
-
-        BotMessage::create([
-            'bot_session_id' =>
-                $session->id,
-
-            'direction' =>
-                'outbound',
-
-            'message_type' =>
-                'menu',
-
-            'text' =>
-                $message,
-
-            'payload' =>
-                $payload,
-        ]);
     }
 
-    /**
-     * =========================================================
-     * SEND BUTTON
-     * =========================================================
-     */
+
+    $whatsappResponse =
+        $this->whatsapp->sendMenuButtons(
+            $session->user_identifier,
+            $message,
+            $normalizedOptions
+        );
+
+    $payload = [
+        'type' => 'menu',
+        'message' => $message,
+        'options' => $normalizedOptions,
+        'whatsapp_response' => $whatsappResponse,
+    ];
+
+    BotMessage::create([
+        'bot_session_id' =>
+            $session->id,
+
+        'direction' =>
+            'outbound',
+
+        'message_type' =>
+            'menu',
+
+        'text' =>
+            $message,
+
+        'payload' =>
+            $payload,
+    ]);
+}
+    /*
+    |--------------------------------------------------------------------------
+    | SEND BUTTON
+    |--------------------------------------------------------------------------
+    */
     private function sendButton(
         BotSession $session,
         array $cfg
@@ -2429,11 +1833,10 @@ class WorkflowEngine
             ?? $cfg['text']
             ?? '';
 
-        $message =
-            $this->resolve(
-                (string) $message,
-                $session->variables ?? []
-            );
+        $message = $this->resolve(
+            (string) $message,
+            $session->variables ?? []
+        );
 
         $buttonText =
             $cfg['buttonText']
@@ -2447,23 +1850,40 @@ class WorkflowEngine
             ?? $cfg['sourceHandle']
             ?? 'source-bottom';
 
+        $whatsappResponse =
+            $this->whatsapp->sendInteractive(
+                $session->user_identifier,
+                $message,
+                [
+                    [
+                        'id' =>
+                            (string) $sourceHandle,
+
+                        'title' =>
+                            (string) $buttonText,
+                    ],
+                ]
+            );
+
         $payload = [
-            'type' =>
-                'button',
+            'type' => 'button',
 
             'message' =>
                 $message,
 
             'button' => [
                 'id' =>
-                    $sourceHandle,
+                    (string) $sourceHandle,
 
                 'title' =>
-                    $buttonText,
+                    (string) $buttonText,
 
                 'source_handle' =>
-                    $sourceHandle,
+                    (string) $sourceHandle,
             ],
+
+            'whatsapp_response' =>
+                $whatsappResponse,
         ];
 
         BotMessage::create([
@@ -2484,20 +1904,19 @@ class WorkflowEngine
         ]);
     }
 
-    /**
-     * =========================================================
-     * EXECUTE API NODE
-     * =========================================================
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | EXECUTE API
+    |--------------------------------------------------------------------------
+    */
     private function executeApi(
         array $cfg,
         BotSession $session
     ): array {
 
-        $method =
-            strtoupper(
-                $cfg['method'] ?? 'GET'
-            );
+        $method = strtoupper(
+            $cfg['method'] ?? 'GET'
+        );
 
         $url =
             $cfg['api_url']
@@ -2505,74 +1924,53 @@ class WorkflowEngine
             ?? $cfg['url']
             ?? '';
 
-        $url =
-            $this->resolve(
-                (string) $url,
-                $session->variables ?? []
-            );
+        $url = $this->resolve(
+            (string) $url,
+            $session->variables ?? []
+        );
 
         if ($url === '') {
 
             return [
-                'success' =>
-                    false,
-
-                'message' =>
-                    'API URL is empty.',
+                'success' => false,
+                'message' => 'API URL is empty.',
             ];
         }
 
-        if (
-            str_starts_with(
-                $url,
-                '/'
-            )
-        ) {
-
-            $url =
-                url($url);
+        if (str_starts_with($url, '/')) {
+            $url = url($url);
         }
 
-        $response =
-            Http::timeout(15)
-                ->send(
-                    $method,
-                    $url
-                );
+        $response = Http::timeout(15)
+            ->send(
+                $method,
+                $url
+            );
 
         if (! $response->successful()) {
 
             return [
-                'success' =>
-                    false,
-
-                'status_code' =>
-                    $response->status(),
-
-                'message' =>
-                    $response->body(),
+                'success' => false,
+                'status_code' => $response->status(),
+                'message' => $response->body(),
             ];
         }
 
-        $json =
-            $response->json();
+        $json = $response->json();
 
         return is_array($json)
             ? $json
             : [
-                'success' =>
-                    true,
-
-                'data' =>
-                    $json,
+                'success' => true,
+                'data' => $json,
             ];
     }
 
-    /**
-     * =========================================================
-     * EVALUATE CONDITION
-     * =========================================================
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | EVALUATE CONDITION
+    |--------------------------------------------------------------------------
+    */
     private function evaluateCondition(
         string $condition,
         array $variables
@@ -2582,11 +1980,10 @@ class WorkflowEngine
             return false;
         }
 
-        $condition =
-            $this->resolve(
-                $condition,
-                $variables
-            );
+        $condition = $this->resolve(
+            $condition,
+            $variables
+        );
 
         if (
             ! preg_match(
@@ -2599,28 +1996,22 @@ class WorkflowEngine
             return false;
         }
 
-        $leftKey =
-            $matches[1];
+        $leftKey = $matches[1];
+        $operator = $matches[2];
 
-        $operator =
-            $matches[2];
+        $right = trim(
+            $matches[3]
+        );
 
-        $right =
-            trim(
-                $matches[3]
-            );
+        $left = data_get(
+            $variables,
+            $leftKey
+        );
 
-        $left =
-            data_get(
-                $variables,
-                $leftKey
-            );
-
-        $right =
-            trim(
-                $right,
-                "\"'"
-            );
+        $right = trim(
+            $right,
+            "\"'"
+        );
 
         if (
             is_numeric($left)
@@ -2676,11 +2067,11 @@ class WorkflowEngine
         };
     }
 
-    /**
-     * =========================================================
-     * SAVE CUSTOMER LEAD
-     * =========================================================
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | SAVE CUSTOMER LEAD
+    |--------------------------------------------------------------------------
+    */
     private function saveCustomerLead(
         Workflow $workflow,
         BotSession $session
@@ -2691,23 +2082,6 @@ class WorkflowEngine
         $variables =
             $session->variables ?? [];
 
-        Log::info(
-            'CUSTOMER LEAD SAVE',
-            [
-                'session_id' =>
-                    $session->id,
-
-                'workflow_id' =>
-                    $workflow->id,
-
-                'user_identifier' =>
-                    $session->user_identifier,
-
-                'variables' =>
-                    $variables,
-            ]
-        );
-
         $mobile =
             $variables['mobile']
             ?? $variables['phone']
@@ -2716,41 +2090,20 @@ class WorkflowEngine
             ?? $session->user_identifier
             ?? null;
 
-        $lead =
-            CustomerLead::updateOrCreate(
-                [
-                    'session_id' =>
-                        $session->id,
-                ],
-                [
-                    'workflow_id' =>
-                        $workflow->id,
-
-                    'mobile' =>
-                        $mobile,
-
-                    'status' =>
-                        'new',
-
-                    'details' =>
-                        $variables,
-                ]
-            );
-
-        Log::info(
-            'CUSTOMER LEAD SAVED SUCCESSFULLY',
+        CustomerLead::updateOrCreate(
             [
-                'lead_id' =>
-                    $lead->id,
-
                 'session_id' =>
                     $session->id,
-
+            ],
+            [
                 'workflow_id' =>
                     $workflow->id,
 
                 'mobile' =>
                     $mobile,
+
+                'status' =>
+                    'new',
 
                 'details' =>
                     $variables,

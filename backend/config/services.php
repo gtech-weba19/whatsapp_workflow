@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
     */
 
     'postmark' => [
@@ -34,5 +28,38 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+
+
+'whatsapp' => [
+
+    'api_url' => env(
+        'WHATSAPP_API_URL'
+    ),
+
+    'token' => env(
+        'WHATSAPP_TOKEN'
+    ),
+
+    'sender_number' => env(
+        'WHATSAPP_SENDER_NUMBER'
+    ),
+
+    'sender_name' => env(
+        'WHATSAPP_SENDER_NAME',
+        'Whatsappdemo'
+    ),
+
+    'webhook_dn_id' => env(
+        'WHATSAPP_WEBHOOK_DN_ID',
+        '1001'
+    ),
+
+    'number_workflow_map' => [
+        '919810120907' => 7,
+    ],
+
+    'phone_workflow_map' => [],
+
+],
 
 ];

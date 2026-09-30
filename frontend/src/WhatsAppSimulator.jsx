@@ -276,9 +276,6 @@ export default function WhatsAppSimulator() {
     const [loading, setLoading] =
         useState(false);
 
-    
-        const requestLockRef = useRef(false);
-
     /* =========================================================
        SESSION
     ========================================================== */
@@ -639,318 +636,266 @@ export default function WhatsAppSimulator() {
        SEND WEBHOOK
     ========================================================== */
 
- /* =========================================================
-   SEND WEBHOOK
-========================================================== */
+    const sendWebhook =
+        useCallback(
+            async (payload) => {
+                if (loading) {
+                    return;
+                }
 
-const sendWebhook = useCallback(
-    async (payload) => {
-        /*
-        |--------------------------------------------------------------------------
-        | HARD REQUEST LOCK
-        |--------------------------------------------------------------------------
-        | React state "loading" async hota hai.
-        | requestLockRef turant duplicate request ko rokta hai.
-        */
+                if (!selectedJourney) {
+                    addBotMessage(
+                        "⚠️ Please select a Journey first."
+                    );
 
-        if (requestLockRef.current) {
-            return;
-        }
+                    return;
+                }
 
-        /*
-        |--------------------------------------------------------------------------
-        | JOURNEY CHECK
-        |--------------------------------------------------------------------------
-        */
+                try {
+                    setLoading(true);
 
-        if (!selectedJourney) {
-            addBotMessage(
-                "⚠️ Please select a Journey first."
-            );
+                    /* -----------------------------------------------------
+                       USER MESSAGE
+                    ------------------------------------------------------ */
 
-            return;
-        }
+                    let outgoingText = "";
 
-        /*
-        |--------------------------------------------------------------------------
-        | MOBILE CHECK
-        |--------------------------------------------------------------------------
-        */
-
-        if (!cleanMobile) {
-            addBotMessage(
-                "⚠️ Please enter a valid customer mobile number."
-            );
-
-            return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | LOCK
-        |--------------------------------------------------------------------------
-        */
-
-        requestLockRef.current = true;
-        setLoading(true);
-
-        try {
-            /*
-            |--------------------------------------------------------------------------
-            | USER MESSAGE
-            |--------------------------------------------------------------------------
-            */
-
-            let outgoingText = "";
-
-            if (payload.type === "text") {
-                outgoingText =
-                    payload.text?.body || "";
-            }
-
-            if (payload.type === "interactive") {
-                outgoingText =
-                    payload.interactive?.title ||
-                    payload.interactive?.button_reply?.title ||
-                    "";
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | SHOW USER MESSAGE
-            |--------------------------------------------------------------------------
-            */
-
-            if (outgoingText) {
-                addUserMessage(outgoingText);
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | FINAL PAYLOAD
-            |--------------------------------------------------------------------------
-            */
-
-            const finalPayload = {
-                ...payload,
-
-                workflow_id:
-                    Number(selectedJourney),
-
-                from:
-                    cleanMobile ||
-                    payload.from ||
-                    mobile,
-            };
-
-            console.log(
-                "WEBHOOK REQUEST:",
-                finalPayload
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | LARAVEL WEBHOOK
-            |--------------------------------------------------------------------------
-            */
-
-            const response =
-                await axios.post(
-                    `${API}/webhooks/whatsapp`,
-                    finalPayload,
-                    {
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            Accept:
-                                "application/json",
-                        },
+                    if (
+                        payload.type ===
+                        "text"
+                    ) {
+                        outgoingText =
+                            payload.text
+                                ?.body ||
+                            "";
                     }
-                );
 
-            console.log(
-                "WEBHOOK RESPONSE:",
-                response.data
-            );
+                    if (
+                        payload.type ===
+                        "interactive"
+                    ) {
+                        outgoingText =
+                            payload
+                                .interactive
+                                ?.title ||
+                            payload
+                                .interactive
+                                ?.button_reply
+                                ?.title ||
+                            "";
+                    }
 
-            /*
-            |--------------------------------------------------------------------------
-            | SESSION
-            |--------------------------------------------------------------------------
-            */
+                    if (outgoingText) {
+                        addUserMessage(
+                            outgoingText
+                        );
+                    }
 
-            if (response.data?.session) {
-                setSession(
-                    response.data.session
-                );
-            }
+                    /* -----------------------------------------------------
+                       FINAL PAYLOAD
+                    ------------------------------------------------------ */
 
-            /*
-            |--------------------------------------------------------------------------
-            | BOT MESSAGES
-            |--------------------------------------------------------------------------
-            */
+                    const finalPayload = {
+                        ...payload,
 
-            const botMessages =
-                Array.isArray(
-                    response.data?.messages
-                )
-                    ? response.data.messages
-                    : [];
+                        workflow_id:
+                            Number(
+                                selectedJourney
+                            ),
 
-            console.log(
-                "BOT MESSAGES:",
-                botMessages
-            );
+                        from:
+                            cleanMobile ||
+                            payload.from ||
+                            mobile,
+                    };
 
-            appendBotMessages(
-                botMessages
-            );
+                    console.log(
+                        "WEBHOOK REQUEST:",
+                        finalPayload
+                    );
 
-            /*
-            |--------------------------------------------------------------------------
-            | BACKEND SIMPLE MESSAGE
-            |--------------------------------------------------------------------------
-            */
+                    /* -----------------------------------------------------
+                       LARAVEL WEBHOOK
+                    ------------------------------------------------------ */
 
-            if (
-                botMessages.length === 0 &&
-                response.data?.message
-            ) {
-                addBotMessage(
-                    response.data.message
-                );
-            }
-        } catch (error) {
-            console.error(
-                "WHATSAPP SIMULATOR ERROR:",
-                error
-            );
+                    const response =
+                        await axios.post(
+                            `${API}/webhooks/whatsapp`,
+                            finalPayload,
+                            {
+                                headers: {
+                                    "Content-Type":
+                                        "application/json",
 
-            console.error(
-                "ERROR RESPONSE:",
-                error.response?.data
-            );
+                                    Accept:
+                                        "application/json",
+                                },
+                            }
+                        );
 
-            const errorMessage =
-                error.response?.data?.message ||
-                error.response?.data?.error ||
-                "⚠️ Unable to connect to Laravel webhook.";
+                    console.log(
+                        "WEBHOOK RESPONSE:",
+                        response.data
+                    );
 
-            addBotMessage(
-                errorMessage
-            );
-        } finally {
-            /*
-            |--------------------------------------------------------------------------
-            | UNLOCK
-            |--------------------------------------------------------------------------
-            */
+                    /* -----------------------------------------------------
+                       SESSION
+                    ------------------------------------------------------ */
 
-            requestLockRef.current = false;
-            setLoading(false);
-        }
-    },
-    [
-        selectedJourney,
-        cleanMobile,
-        mobile,
-        addUserMessage,
-        addBotMessage,
-        appendBotMessages,
-    ]
-);
+                    if (
+                        response.data
+                            ?.session
+                    ) {
+                        setSession(
+                            response.data
+                                .session
+                        );
+                    }
+
+                    /* -----------------------------------------------------
+                       BOT MESSAGES
+                    ------------------------------------------------------ */
+
+                    const botMessages =
+                        response.data
+                            ?.messages ||
+                        [];
+
+                    console.log(
+                        "BOT MESSAGES:",
+                        botMessages
+                    );
+
+                    appendBotMessages(
+                        botMessages
+                    );
+
+                    /* -----------------------------------------------------
+                       BACKEND SIMPLE MESSAGE
+                    ------------------------------------------------------ */
+
+                    if (
+                        botMessages.length ===
+                            0 &&
+                        response.data?.message
+                    ) {
+                        addBotMessage(
+                            response.data
+                                .message
+                        );
+                    }
+                } catch (error) {
+                    console.error(
+                        "WHATSAPP SIMULATOR ERROR:",
+                        error
+                    );
+
+                    console.error(
+                        "ERROR RESPONSE:",
+                        error.response
+                            ?.data
+                    );
+
+                    const errorMessage =
+                        error.response
+                            ?.data
+                            ?.message ||
+                        error.response
+                            ?.data
+                            ?.error ||
+                        "⚠️ Unable to connect to Laravel webhook.";
+
+                    addBotMessage(
+                        errorMessage
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            },
+            [
+                loading,
+                selectedJourney,
+                cleanMobile,
+                mobile,
+                addUserMessage,
+                addBotMessage,
+                appendBotMessages,
+            ]
+        );
 
     /* =========================================================
        SEND TEXT
     ========================================================== */
 
- /* =========================================================
-   SEND TEXT
-========================================================== */
+    const sendText = async () => {
+        const text =
+            input.trim();
 
-const sendText = async () => {
-    const text = input.trim();
+        if (
+            !text ||
+            loading ||
+            !selectedJourney ||
+            !cleanMobile
+        ) {
+            return;
+        }
 
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION
-    |--------------------------------------------------------------------------
-    */
+        setInput("");
 
-    if (
-        !text ||
-        requestLockRef.current ||
-        !selectedJourney ||
-        !cleanMobile
-    ) {
-        return;
-    }
+        await sendWebhook({
+            workflow_id:
+                Number(
+                    selectedJourney
+                ),
 
-    /*
-    |--------------------------------------------------------------------------
-    | CLEAR INPUT IMMEDIATELY
-    |--------------------------------------------------------------------------
-    */
+            from: cleanMobile,
 
-    setInput("");
+            type: "text",
 
-    /*
-    |--------------------------------------------------------------------------
-    | SEND TO LARAVEL
-    |--------------------------------------------------------------------------
-    */
+            text: {
+                body: text,
+            },
+        });
+    };
 
-    await sendWebhook({
-        workflow_id:
-            Number(selectedJourney),
+    /* =========================================================
+       SEND INTERACTIVE
+    ========================================================== */
 
-        from: cleanMobile,
+    const sendInteractive =
+        async (
+            sourceHandle,
+            title
+        ) => {
+            if (
+                loading ||
+                !selectedJourney ||
+                !cleanMobile
+            ) {
+                return;
+            }
 
-        type: "text",
+            await sendWebhook({
+                workflow_id:
+                    Number(
+                        selectedJourney
+                    ),
 
-        text: {
-            body: text,
-        },
-    });
-};
+                from: cleanMobile,
 
+                type: "interactive",
 
-/* =========================================================
-   SEND INTERACTIVE
-========================================================== */
+                interactive: {
+                    type: "menu",
 
-const sendInteractive = async (
-    sourceHandle,
-    title
-) => {
-    if (
-        requestLockRef.current ||
-        !selectedJourney ||
-        !cleanMobile
-    ) {
-        return;
-    }
+                    source_handle:
+                        sourceHandle,
 
-    await sendWebhook({
-        workflow_id:
-            Number(selectedJourney),
+                    title,
+                },
+            });
+        };
 
-        from: cleanMobile,
-
-        type: "interactive",
-
-        interactive: {
-            type: "menu",
-
-            source_handle:
-                sourceHandle,
-
-            title,
-        },
-    });
-};
     /* =========================================================
        MENU OPTION
     ========================================================== */
@@ -998,149 +943,127 @@ const sendInteractive = async (
             );
         };
 
+    /* =========================================================
+       SIMULATE QR SCAN
+    ========================================================== */
 
+    const simulateQrScan =
+        async () => {
+            if (
+                loading ||
+                !cleanMobile ||
+                !qrMessage.trim() ||
+                !selectedJourney
+            ) {
+                return;
+            }
 
-  /* =========================================================
-   SIMULATE QR SCAN
-========================================================== */
+            /*
+            |--------------------------------------------------------------------------
+            | CLEAR CURRENT CHAT
+            |--------------------------------------------------------------------------
+            */
 
-const simulateQrScan = async () => {
-    if (
-        requestLockRef.current ||
-        !cleanMobile ||
-        !qrMessage.trim() ||
-        !selectedJourney
-    ) {
-        return;
-    }
+            setMessages([]);
+            setSession(null);
+            setInput("");
 
-    /*
-    |--------------------------------------------------------------------------
-    | CLEAR CURRENT CHAT
-    |--------------------------------------------------------------------------
-    */
+            try {
+                await axios.post(
+                    `${API}/webhooks/whatsapp/reset`,
+                    {
+                        from: cleanMobile,
 
-    setMessages([]);
-    setSession(null);
-    setInput("");
+                        workflow_id:
+                            Number(
+                                selectedJourney
+                            ),
+                    }
+                );
+            } catch (error) {
+                console.warn(
+                    "QR RESET WARNING:",
+                    error.response
+                        ?.data ||
+                        error.message
+                );
+            }
 
-    /*
-    |--------------------------------------------------------------------------
-    | RESET BACKEND SESSION
-    |--------------------------------------------------------------------------
-    */
+            await new Promise(
+                (resolve) =>
+                    setTimeout(
+                        resolve,
+                        250
+                    )
+            );
 
-    try {
-        await axios.post(
-            `${API}/webhooks/whatsapp/reset`,
-            {
+            /*
+            |--------------------------------------------------------------------------
+            | START NEW JOURNEY
+            |--------------------------------------------------------------------------
+            */
+
+            await sendWebhook({
+                workflow_id:
+                    Number(
+                        selectedJourney
+                    ),
+
                 from: cleanMobile,
 
-                workflow_id:
-                    Number(selectedJourney),
-            }
-        );
-    } catch (error) {
-        console.warn(
-            "QR RESET WARNING:",
-            error.response?.data ||
-                error.message
-        );
-    }
+                type: "text",
 
-    /*
-    |--------------------------------------------------------------------------
-    | SMALL DELAY
-    |--------------------------------------------------------------------------
-    */
+                text: {
+                    body:
+                        qrMessage.trim(),
+                },
+            });
+        };
 
-    await new Promise(
-        (resolve) =>
-            setTimeout(resolve, 250)
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | START JOURNEY
-    |--------------------------------------------------------------------------
-    */
-
-    await sendWebhook({
-        workflow_id:
-            Number(selectedJourney),
-
-        from: cleanMobile,
-
-        type: "text",
-
-        text: {
-            body: qrMessage.trim(),
-        },
-    });
-};
     /* =========================================================
        RESET CHAT
     ========================================================== */
 
- /* =========================================================
-   RESET CHAT
-========================================================== */
+    const resetChat = async () => {
+        if (loading) {
+            return;
+        }
 
-const resetChat = async () => {
-    /*
-    |--------------------------------------------------------------------------
-    | HARD LOCK
-    |--------------------------------------------------------------------------
-    */
+        try {
+            setLoading(true);
 
-    if (requestLockRef.current) {
-        return;
-    }
+            await axios.post(
+                `${API}/webhooks/whatsapp/reset`,
+                {
+                    from: cleanMobile,
 
-    requestLockRef.current = true;
+                    workflow_id:
+                        selectedJourney
+                            ? Number(
+                                  selectedJourney
+                              )
+                            : null,
+                }
+            );
+        } catch (error) {
+            console.error(
+                "SESSION RESET ERROR:",
+                error
+            );
+        } finally {
+            /*
+            |--------------------------------------------------------------------------
+            | CLEAR UI STATE
+            |--------------------------------------------------------------------------
+            */
 
-    try {
-        setLoading(true);
+            setMessages([]);
+            setSession(null);
+            setInput("");
 
-        await axios.post(
-            `${API}/webhooks/whatsapp/reset`,
-            {
-                from: cleanMobile,
-
-                workflow_id:
-                    selectedJourney
-                        ? Number(
-                              selectedJourney
-                          )
-                        : null,
-            }
-        );
-    } catch (error) {
-        console.error(
-            "SESSION RESET ERROR:",
-            error
-        );
-    } finally {
-        /*
-        |--------------------------------------------------------------------------
-        | CLEAR UI
-        |--------------------------------------------------------------------------
-        */
-
-        setMessages([]);
-        setSession(null);
-        setInput("");
-
-        /*
-        |--------------------------------------------------------------------------
-        | UNLOCK
-        |--------------------------------------------------------------------------
-        */
-
-        requestLockRef.current = false;
-        setLoading(false);
-    }
-};
+            setLoading(false);
+        }
+    };
 
     /* =========================================================
        COPY QR LINK
@@ -1630,92 +1553,91 @@ const resetChat = async () => {
                                     value={
                                         selectedJourney
                                     }
-                                   onChange={async (e) => {
-                                            const workflowId =
-                                                e.target.value;
+                                    onChange={async (
+                                        e
+                                    ) => {
+                                        const workflowId =
+                                            e.target
+                                                .value;
 
-                                            /*
-                                            |--------------------------------------------------------------------------
-                                            | PREVENT JOURNEY CHANGE DURING REQUEST
-                                            |--------------------------------------------------------------------------
-                                            */
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | CHANGE JOURNEY
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                            if (requestLockRef.current) {
-                                                return;
-                                            }
+                                        setSelectedJourney(
+                                            workflowId
+                                        );
 
-                                            /*
-                                            |--------------------------------------------------------------------------
-                                            | CHANGE JOURNEY
-                                            |--------------------------------------------------------------------------
-                                            */
+                                        setMessages(
+                                            []
+                                        );
 
-                                            setSelectedJourney(
-                                                workflowId
-                                            );
+                                        setSession(
+                                            null
+                                        );
 
-                                            /*
-                                            |--------------------------------------------------------------------------
-                                            | CLEAR UI
-                                            |--------------------------------------------------------------------------
-                                            */
+                                        setInput(
+                                            ""
+                                        );
 
-                                            setMessages([]);
-                                            setSession(null);
-                                            setInput("");
-                                            setQrMessage(
-                                                DEFAULT_QR_MESSAGE
-                                            );
+                                        setQrMessage(
+                                            DEFAULT_QR_MESSAGE
+                                        );
 
-                                            /*
-                                            |--------------------------------------------------------------------------
-                                            | NO JOURNEY
-                                            |--------------------------------------------------------------------------
-                                            */
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | NO JOURNEY
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                            if (!workflowId) {
-                                                return;
-                                            }
+                                        if (
+                                            !workflowId
+                                        ) {
+                                            return;
+                                        }
 
-                                            /*
-                                            |--------------------------------------------------------------------------
-                                            | LOCK
-                                            |--------------------------------------------------------------------------
-                                            */
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | RESET ONLY SELECTED JOURNEY
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                            requestLockRef.current = true;
-
-                                            try {
-                                                const cleanMobileValue =
-                                                    String(mobile).replace(
-                                                        /\D/g,
-                                                        ""
-                                                    );
-
-                                                if (cleanMobileValue) {
-                                                    await axios.post(
-                                                        `${API}/webhooks/whatsapp/reset`,
-                                                        {
-                                                            from:
-                                                                cleanMobileValue,
-
-                                                            workflow_id:
-                                                                Number(
-                                                                    workflowId
-                                                                ),
-                                                        }
-                                                    );
-                                                }
-                                            } catch (error) {
-                                                console.error(
-                                                    "JOURNEY CHANGE RESET ERROR:",
-                                                    error
+                                        try {
+                                            const cleanMobileValue =
+                                                String(
+                                                    mobile
+                                                ).replace(
+                                                    /\D/g,
+                                                    ""
                                                 );
-                                            } finally {
-                                                requestLockRef.current =
-                                                    false;
+
+                                            if (
+                                                cleanMobileValue
+                                            ) {
+                                                await axios.post(
+                                                    `${API}/webhooks/whatsapp/reset`,
+                                                    {
+                                                        from:
+                                                            cleanMobileValue,
+
+                                                        workflow_id:
+                                                            Number(
+                                                                workflowId
+                                                            ),
+                                                    }
+                                                );
                                             }
-                                        }}
+                                        } catch (
+                                            error
+                                        ) {
+                                            console.error(
+                                                "JOURNEY CHANGE RESET ERROR:",
+                                                error
+                                            );
+                                        }
+                                    }}
                                     disabled={
                                         journeysLoading
                                     }

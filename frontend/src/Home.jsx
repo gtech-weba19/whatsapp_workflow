@@ -22,6 +22,9 @@ import {
   Image as ImageIcon,
   Clock3,
   Square,
+  Video,
+  FileText,
+  Volume2,
 } from "lucide-react";
 
 import ReactFlow, {
@@ -263,20 +266,20 @@ function Node({
           TARGET LEFT
       ====================================================== */}
 
-{type !== "start" && type !== "menu" && (
-  <Handle
-    type="target"
-    position={Position.Left}
-    id="target-left"
-    className="
-      !h-3
-      !w-3
-      !border-2
-      !border-white
-      !bg-slate-400
-    "
-  />
-)}
+      {type !== "start" && type !== "menu" && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="target-left"
+          className="
+            !h-3
+            !w-3
+            !border-2
+            !border-white
+            !bg-slate-400
+          "
+        />
+      )}
 
       {/* =====================================================
           HEADER
@@ -363,93 +366,96 @@ function Node({
         {data.message || "Please select an option"}
       </p>
 
-      <div className="mt-3 space-y-2">
-        {menuOptions.length > 0 ? (
-          menuOptions.map((option, index) => (
-            <div
-              key={option.id || `option-${index}`}
-              className="
-                relative
-                flex
-                min-h-[34px]
-                items-center
-                rounded-lg
-                border
-                border-purple-100
-                bg-white
-                px-3
-                py-2
-                pl-7
-              "
-            >
+   <div className="mt-3 space-y-2">
+  {menuOptions.length > 0 ? (
+    menuOptions.map((option, index) => {
+      const sourceHandle = `source-option-${index}`;
 
-              {/* =================================================
-                  OPTION SOURCE HANDLE - LEFT
-              ================================================== */}
-              <Handle
-                type="source"
-                position={Position.Left}
-                id={`source-option-${index}`}
-                className="
-                  !absolute
-                  !left-[-7px]
-                  !top-1/2
-                  !z-50
-                  !h-3
-                  !w-3
-                  !-translate-y-1/2
-                  !cursor-crosshair
-                  !border-2
-                  !border-white
-                  !bg-purple-500
-                  hover:!bg-purple-700
-                "
-              />
+      return (
+        <div
+          key={sourceHandle}
+          className="
+            relative
+            flex
+            min-h-[34px]
+            items-center
+            rounded-lg
+            border
+            border-purple-100
+            bg-white
+            px-3
+            py-2
+            pl-7
+          "
+        >
+          {/* =================================================
+              OPTION SOURCE HANDLE - LEFT
+          ================================================== */}
+          <Handle
+            type="source"
+            position={Position.Left}
+            id={sourceHandle}
+            className="
+              !absolute
+              !left-[-7px]
+              !top-1/2
+              !z-50
+              !h-3
+              !w-3
+              !-translate-y-1/2
+              !cursor-crosshair
+              !border-2
+              !border-white
+              !bg-purple-500
+              hover:!bg-purple-700
+            "
+          />
 
-              {/* NUMBER */}
-              <span
-                className="
-                  mr-2
-                  flex
-                  h-5
-                  w-5
-                  shrink-0
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-purple-100
-                  text-[9px]
-                  font-bold
-                  text-purple-600
-                "
-              >
-                {index + 1}
-              </span>
+          {/* NUMBER */}
+          <span
+            className="
+              mr-2
+              flex
+              h-5
+              w-5
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-purple-100
+              text-[9px]
+              font-bold
+              text-purple-600
+            "
+          >
+            {index + 1}
+          </span>
 
-              {/* OPTION LABEL */}
-              <span
-                className="
-                  min-w-0
-                  flex-1
-                  truncate
-                  text-[11px]
-                  font-semibold
-                  text-slate-700
-                "
-              >
-                {option.label ||
-                  option.title ||
-                  `Option ${index + 1}`}
-              </span>
-
-            </div>
-          ))
-        ) : (
-          <p className="text-[10px] italic text-slate-400">
-            No menu options
-          </p>
-        )}
-      </div>
+          {/* OPTION LABEL */}
+          <span
+            className="
+              min-w-0
+              flex-1
+              truncate
+              text-[11px]
+              font-semibold
+              text-slate-700
+            "
+          >
+            {option.label ||
+              option.title ||
+              option.text ||
+              `Option ${index + 1}`}
+          </span>
+        </div>
+      );
+    })
+  ) : (
+    <p className="text-[10px] italic text-slate-400">
+      No menu options
+    </p>
+  )}
+</div>
 
     </div>
   </div>
@@ -626,7 +632,23 @@ const ApiNode = (props) => (
 );
 
 const ImageNode = (props) => (
-  <Node {...props} type="image" />
+    <Node {...props} type="image" />
+);
+
+const VideoNode = (props) => (
+    <Node {...props} type="video" />
+);
+
+const DocumentNode = (props) => (
+    <Node {...props} type="document" />
+);
+
+const PdfNode = (props) => (
+    <Node {...props} type="pdf" />
+);
+
+const AudioNode = (props) => (
+    <Node {...props} type="audio" />
 );
 
 const DelayNode = (props) => (
@@ -643,16 +665,22 @@ const EndNode = (props) => (
 ========================================================= */
 
 const nodeTypes = {
-  start: StartNode,
-  message: MessageNode,
-  button: ButtonNode,
-  menu: MenuNode,
-  userInput: UserInputNode,
-  condition: ConditionNode,
-  api: ApiNode,
-  image: ImageNode,
-  delay: DelayNode,
-  end: EndNode,
+    start: StartNode,
+    message: MessageNode,
+    button: ButtonNode,
+    menu: MenuNode,
+    userInput: UserInputNode,
+    condition: ConditionNode,
+    api: ApiNode,
+
+    image: ImageNode,
+    video: VideoNode,
+    document: DocumentNode,
+    pdf: PdfNode,
+    audio: AudioNode,
+
+    delay: DelayNode,
+    end: EndNode,
 };
 
 /* =========================================================
@@ -668,6 +696,10 @@ const palette = [
   ["condition", "Condition"],
   ["api", "API"],
   ["image", "Image"],
+  ["video", "Video"],
+  ["document", "Document"],
+  ["pdf", "PDF"],
+  ["audio", "Audio"],
   ["delay", "Delay"],
   ["end", "End"],
 ];
@@ -682,6 +714,10 @@ const paletteIcons = {
   condition: GitBranch,
   api: Globe,
   image: ImageIcon,
+  video: Video,
+  document: FileText,
+  pdf: FileText,
+  audio: Volume2,
   delay: Clock3,
   end: Square,
 };
@@ -701,162 +737,225 @@ function Config({
   pushHistory,
   onDelete,
 }) {
- const [form, setForm] = useState({
-  label: "",
-  message: "",
-  variable: "",
-  buttonText: "",
-  condition: "",
-  apiUrl: "",
-  method: "GET",
-  imageUrl: "",
-  caption: "",
-  delay: "5",
-  delayUnit: "seconds",
-  menuOptions: defaultMenuOptions,
-
-  // =====================================================
-  // USER INPUT
-  // =====================================================
-  required: true,
-  allowSkip: false,
-  skipText: "skip",
-
-  validationType: "text",
-  validationMessage: "⚠️ Please enter a valid response.",
-  requiredMessage:
-    "⚠️ This field is required. Please enter a valid response.",
-
-  minLength: "",
-  maxLength: "",
-  minValue: "",
-  maxValue: "",
-  regex: "",
-});
-  /* =======================================================
-     LOAD NODE
-  ======================================================= */
-useEffect(() => {
-  if (!node) {
-    return;
-  }
-
-  let menuOptions = node.data?.menuOptions;
-
-  if (!Array.isArray(menuOptions)) {
-    menuOptions = defaultMenuOptions;
-  }
-
-  setForm({
-    label:
-      node.data?.label || "",
-
-    message:
-      node.data?.message || "",
-
-    variable:
-      node.data?.variable || "",
-
-    buttonText:
-      node.data?.buttonText || "",
-
-    condition:
-      node.data?.condition || "",
-
-    apiUrl:
-      node.data?.apiUrl || "",
-
-    method:
-      node.data?.method || "GET",
-
-    imageUrl:
-      node.data?.imageUrl || "",
-
-    caption:
-      node.data?.caption || "",
-
-    delay:
-      node.data?.delay || "5",
-
-    delayUnit:
-      node.data?.delayUnit || "seconds",
-
-    menuOptions:
-      menuOptions.map(
-        (option, index) => ({
-          id:
-            option.id ||
-            `option-${index + 1}`,
-
-          label:
-            option.label || "",
-        })
-      ),
+  const [form, setForm] = useState({
+    label: "",
+    message: "",
+    variable: "",
+    buttonText: "",
+    condition: "",
+    apiUrl: "",
+    method: "GET",
 
     // =====================================================
-    // USER INPUT CONFIG
+    // MEDIA
     // =====================================================
+    mediaId: "",
+    imageUrl: "",
+    videoUrl: "",
+    documentUrl: "",
+    audioUrl: "",
+    mediaUrl: "",
+    fileName: "",
+    caption: "",
+    mediaType: "",
 
-    required:
-      node.data?.required !== undefined
-        ? Boolean(node.data.required)
-        : true,
+    delay: "5",
+    delayUnit: "seconds",
 
-    allowSkip:
-      node.data?.allowSkip !== undefined
-        ? Boolean(node.data.allowSkip)
-        : node.data?.allow_skip !== undefined
-        ? Boolean(node.data.allow_skip)
-        : false,
+    menuOptions: defaultMenuOptions,
 
-    skipText:
-      node.data?.skipText ||
-      node.data?.skip_text ||
-      "skip",
+    // =====================================================
+    // USER INPUT
+    // =====================================================
+    required: true,
+    allowSkip: false,
+    skipText: "skip",
 
-    validationType:
-      node.data?.validationType ||
-      node.data?.validation_type ||
-      "text",
+    validationType: "text",
 
     validationMessage:
-      node.data?.validationMessage ||
-      node.data?.validation_message ||
       "⚠️ Please enter a valid response.",
 
     requiredMessage:
-      node.data?.requiredMessage ||
-      node.data?.required_message ||
       "⚠️ This field is required. Please enter a valid response.",
 
-    minLength:
-      node.data?.minLength ??
-      node.data?.min_length ??
-      "",
-
-    maxLength:
-      node.data?.maxLength ??
-      node.data?.max_length ??
-      "",
-
-    minValue:
-      node.data?.minValue ??
-      node.data?.min_value ??
-      "",
-
-    maxValue:
-      node.data?.maxValue ??
-      node.data?.max_value ??
-      "",
-
-    regex:
-      node.data?.regex || "",
+    minLength: "",
+    maxLength: "",
+    minValue: "",
+    maxValue: "",
+    regex: "",
   });
-}, [node]);
 
-  /* =======================================================
-     UPDATE FIELD
-  ======================================================= */
+  // =======================================================
+  // UPLOAD STATE
+  // =======================================================
+
+  const [uploadingMedia, setUploadingMedia] =
+    useState("");
+
+  // =======================================================
+  // LOAD NODE
+  // =======================================================
+
+  useEffect(() => {
+    if (!node) {
+      return;
+    }
+
+    let menuOptions = node.data?.menuOptions;
+
+    if (!Array.isArray(menuOptions)) {
+      menuOptions = defaultMenuOptions;
+    }
+
+    setForm({
+      label:
+        node.data?.label || "",
+
+      message:
+        node.data?.message || "",
+
+      variable:
+        node.data?.variable || "",
+
+      buttonText:
+        node.data?.buttonText || "",
+
+      condition:
+        node.data?.condition || "",
+
+      apiUrl:
+        node.data?.apiUrl || "",
+
+      method:
+        node.data?.method || "GET",
+
+      // ===================================================
+      // MEDIA
+      // ===================================================
+
+      mediaId:
+        node.data?.mediaId || "",
+
+      imageUrl:
+        node.data?.imageUrl || "",
+
+      videoUrl:
+        node.data?.videoUrl || "",
+
+      documentUrl:
+        node.data?.documentUrl || "",
+
+      audioUrl:
+        node.data?.audioUrl || "",
+
+      mediaUrl:
+        node.data?.mediaUrl || "",
+
+      fileName:
+        node.data?.fileName || "",
+
+      caption:
+        node.data?.caption || "",
+
+      mediaType:
+        node.data?.mediaType || "",
+
+      // ===================================================
+      // DELAY
+      // ===================================================
+
+      delay:
+        node.data?.delay || "5",
+
+      delayUnit:
+        node.data?.delayUnit || "seconds",
+
+      // ===================================================
+      // MENU
+      // ===================================================
+
+    menuOptions: 
+  menuOptions.map(
+    (option, index) => ({
+      id:
+        `source-option-${index}`,
+
+      source_handle:
+        `source-option-${index}`,
+
+      label:
+        option.label ||
+        option.title ||
+        option.text ||
+        "",
+    })
+  ),
+
+      // ===================================================
+      // USER INPUT CONFIG
+      // ===================================================
+
+      required:
+        node.data?.required !== undefined
+          ? Boolean(node.data.required)
+          : true,
+
+      allowSkip:
+        node.data?.allowSkip !== undefined
+          ? Boolean(node.data.allowSkip)
+          : node.data?.allow_skip !== undefined
+          ? Boolean(node.data.allow_skip)
+          : false,
+
+      skipText:
+        node.data?.skipText ||
+        node.data?.skip_text ||
+        "skip",
+
+      validationType:
+        node.data?.validationType ||
+        node.data?.validation_type ||
+        "text",
+
+      validationMessage:
+        node.data?.validationMessage ||
+        node.data?.validation_message ||
+        "⚠️ Please enter a valid response.",
+
+      requiredMessage:
+        node.data?.requiredMessage ||
+        node.data?.required_message ||
+        "⚠️ This field is required. Please enter a valid response.",
+
+      minLength:
+        node.data?.minLength ??
+        node.data?.min_length ??
+        "",
+
+      maxLength:
+        node.data?.maxLength ??
+        node.data?.max_length ??
+        "",
+
+      minValue:
+        node.data?.minValue ??
+        node.data?.min_value ??
+        "",
+
+      maxValue:
+        node.data?.maxValue ??
+        node.data?.max_value ??
+        "",
+
+      regex:
+        node.data?.regex || "",
+    });
+  }, [node]);
+
+  // =======================================================
+  // UPDATE FIELD
+  // =======================================================
 
   const updateField = (
     field,
@@ -868,9 +967,289 @@ useEffect(() => {
     }));
   };
 
-  /* =======================================================
-     MENU OPTION UPDATE
-  ======================================================= */
+  // =======================================================
+  // MEDIA URL UPDATE
+  // =======================================================
+
+  const updateMediaUrl = (
+    field,
+    value,
+    mediaType
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+
+      [field]: value,
+
+      mediaUrl:
+        value,
+
+      mediaType:
+        mediaType,
+    }));
+  };
+
+  // =======================================================
+  // MEDIA UPLOAD
+  // =======================================================
+
+  const uploadMedia = async (
+    file,
+    mediaType
+  ) => {
+    if (!file) {
+      return;
+    }
+
+    // =====================================================
+    // MAX 50 MB
+    // =====================================================
+
+    const maxSize =
+      50 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      toast.error(
+        "Maximum file size is 50 MB."
+      );
+
+      return;
+    }
+
+    try {
+      setUploadingMedia(
+        mediaType
+      );
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "media",
+        file
+      );
+
+      formData.append(
+        "media_type",
+        mediaType
+      );
+
+      // ===================================================
+      // WORKFLOW ID
+      // ===================================================
+
+      const workflowId =
+        node?.data?.workflow_id ||
+        node?.data?.workflowId ||
+        null;
+
+      if (workflowId) {
+        formData.append(
+          "workflow_id",
+          workflowId
+        );
+      }
+
+      // ===================================================
+      // API CALL
+      // ===================================================
+
+  const response = await axios.post(
+  `${API}/upload/media`,
+  formData,
+  {
+    headers: {
+      Accept: "application/json",
+
+      ...(localStorage.getItem("token")
+        ? {
+            Authorization:
+              `Bearer ${localStorage.getItem("token")}`,
+          }
+        : {}),
+    },
+  }
+);
+      const media =
+        response?.data?.media;
+
+      if (!media?.url) {
+        throw new Error(
+          "Upload response URL missing."
+        );
+      }
+
+      // ===================================================
+      // COMMON MEDIA DATA
+      // ===================================================
+
+      const uploadedUrl =
+        media.url;
+
+      const uploadedFileName =
+        media.original_name ||
+        media.file_name ||
+        file.name;
+
+      setForm((previous) => ({
+        ...previous,
+
+        mediaId:
+          media.id || "",
+
+        mediaUrl:
+          uploadedUrl,
+
+        mediaType:
+          media.media_type ||
+          mediaType,
+
+        fileName:
+          uploadedFileName,
+
+        // ===============================================
+        // MEDIA SPECIFIC URL
+        // ===============================================
+
+        imageUrl:
+          mediaType === "image"
+            ? uploadedUrl
+            : previous.imageUrl,
+
+        videoUrl:
+          mediaType === "video"
+            ? uploadedUrl
+            : previous.videoUrl,
+
+        documentUrl:
+          mediaType === "document" ||
+          mediaType === "pdf"
+            ? uploadedUrl
+            : previous.documentUrl,
+
+        audioUrl:
+          mediaType === "audio"
+            ? uploadedUrl
+            : previous.audioUrl,
+      }));
+
+      toast.success(
+        `${mediaType.toUpperCase()} uploaded successfully.`
+      );
+    } catch (error) {
+      console.error(
+        "MEDIA UPLOAD ERROR:",
+        error
+      );
+
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Media upload failed."
+      );
+    } finally {
+      setUploadingMedia("");
+    }
+  };
+
+  // =======================================================
+  // MEDIA UPLOAD BOX
+  // =======================================================
+
+  const renderUploadBox = (
+    mediaType,
+    accept,
+    title
+  ) => {
+    const isUploading =
+      uploadingMedia === mediaType;
+
+    return (
+      <div
+        className="
+          rounded-xl
+          border
+          border-dashed
+          border-indigo-300
+          bg-indigo-50
+          p-4
+        "
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-indigo-700">
+              {title}
+            </p>
+
+            <p className="mt-1 text-[11px] text-indigo-500">
+              Maximum file size: 50 MB
+            </p>
+          </div>
+
+          <label
+            className={`
+              cursor-pointer
+              rounded-lg
+              bg-indigo-600
+              px-3
+              py-2
+              text-xs
+              font-bold
+              text-white
+              transition
+              hover:bg-indigo-700
+              ${
+                isUploading
+                  ? "pointer-events-none opacity-60"
+                  : ""
+              }
+            `}
+          >
+            {isUploading
+              ? "Uploading..."
+              : "Choose File"}
+
+            <input
+              type="file"
+              accept={accept}
+              className="hidden"
+              disabled={isUploading}
+              onChange={(e) => {
+                const file =
+                  e.target.files?.[0];
+
+                if (file) {
+                  uploadMedia(
+                    file,
+                    mediaType
+                  );
+                }
+
+                // Allow selecting same file again
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+
+        {isUploading && (
+          <div className="mt-3">
+            <div className="h-1.5 overflow-hidden rounded-full bg-indigo-100">
+              <div className="h-full w-full animate-pulse rounded-full bg-indigo-500" />
+            </div>
+
+            <p className="mt-2 text-[11px] font-semibold text-indigo-600">
+              Uploading {mediaType}...
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // =======================================================
+  // MENU OPTION UPDATE
+  // =======================================================
 
   const updateMenuOption = (
     index,
@@ -893,9 +1272,9 @@ useEffect(() => {
     });
   };
 
-  /* =======================================================
-     ADD MENU OPTION
-  ======================================================= */
+  // =======================================================
+  // ADD MENU OPTION
+  // =======================================================
 
   const addMenuOption = () => {
     setForm((previous) => {
@@ -929,9 +1308,9 @@ useEffect(() => {
     });
   };
 
-  /* =======================================================
-     REMOVE MENU OPTION
-  ======================================================= */
+  // =======================================================
+  // REMOVE MENU OPTION
+  // =======================================================
 
   const removeMenuOption = (
     index
@@ -958,9 +1337,9 @@ useEffect(() => {
     });
   };
 
-  /* =======================================================
-     APPLY CHANGES
-  ======================================================= */
+  // =======================================================
+  // APPLY CHANGES
+  // =======================================================
 
   const update = () => {
     if (!node) {
@@ -972,75 +1351,94 @@ useEffect(() => {
       edges
     );
 
-   const updatedNode = {
-  ...node,
+    const updatedNode = {
+      ...node,
 
-  data: {
-    ...node.data,
+      data: {
+        ...node.data,
 
-    ...form,
+        ...form,
+
+        // =================================================
+        // USER INPUT CONFIG
+        // =================================================
+
+        required:
+          Boolean(
+            form.required
+          ),
+
+        allowSkip:
+          Boolean(
+            form.allowSkip
+          ),
+
+        skipText:
+          String(
+            form.skipText ||
+              "skip"
+          ).trim() ||
+          "skip",
+
+        validationType:
+          String(
+            form.validationType ||
+              "text"
+          )
+            .trim()
+            .toLowerCase(),
+
+        validationMessage:
+          form.validationMessage ||
+          "⚠️ Please enter a valid response.",
+
+        requiredMessage:
+          form.requiredMessage ||
+          "⚠️ This field is required. Please enter a valid response.",
+
+        minLength:
+          form.minLength === ""
+            ? ""
+            : Number(
+                form.minLength
+              ),
+
+        maxLength:
+          form.maxLength === ""
+            ? ""
+            : Number(
+                form.maxLength
+              ),
+
+        minValue:
+          form.minValue === ""
+            ? ""
+            : Number(
+                form.minValue
+              ),
+
+        maxValue:
+          form.maxValue === ""
+            ? ""
+            : Number(
+                form.maxValue
+              ),
+
+        regex:
+          form.regex || "",
+
+        menuOptions:
+          Array.isArray(
+            form.menuOptions
+          )
+            ? form.menuOptions
+            : [],
+      },
+    };
 
     // =====================================================
-    // USER INPUT CONFIG
+    // UPDATE NODE
     // =====================================================
-
-    required:
-      Boolean(form.required),
-
-    allowSkip:
-      Boolean(form.allowSkip),
-
-    skipText:
-      String(
-        form.skipText || "skip"
-      ).trim() || "skip",
-
-    validationType:
-      String(
-        form.validationType || "text"
-      ).trim().toLowerCase(),
-
-    validationMessage:
-      form.validationMessage ||
-      "⚠️ Please enter a valid response.",
-
-    requiredMessage:
-      form.requiredMessage ||
-      "⚠️ This field is required. Please enter a valid response.",
-
-    minLength:
-      form.minLength === ""
-        ? ""
-        : Number(form.minLength),
-
-    maxLength:
-      form.maxLength === ""
-        ? ""
-        : Number(form.maxLength),
-
-    minValue:
-      form.minValue === ""
-        ? ""
-        : Number(form.minValue),
-
-    maxValue:
-      form.maxValue === ""
-        ? ""
-        : Number(form.maxValue),
-
-    regex:
-      form.regex || "",
-
-    menuOptions:
-      Array.isArray(form.menuOptions)
-        ? form.menuOptions
-        : [],
-  },
-};
-
-    /* =====================================================
-       UPDATE NODE
-    ===================================================== */
 
     setNodes(
       (currentNodes) =>
@@ -1052,11 +1450,13 @@ useEffect(() => {
         )
     );
 
-    /* =====================================================
-       UPDATE MENU EDGE LABELS
-    ===================================================== */
+    // =====================================================
+    // UPDATE MENU EDGE LABELS
+    // =====================================================
 
-    if (node.type === "menu") {
+    if (
+      node.type === "menu"
+    ) {
       setEdges(
         (currentEdges) =>
           currentEdges.map(
@@ -1110,9 +1510,9 @@ useEffect(() => {
     );
   };
 
-  /* =======================================================
-     STYLES
-  ======================================================= */
+  // =======================================================
+  // STYLES
+  // =======================================================
 
   const labelClass =
     "mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500";
@@ -1125,6 +1525,7 @@ useEffect(() => {
 
   return (
     <div className="space-y-5">
+
       {/* =====================================================
           NODE LABEL
       ====================================================== */}
@@ -1268,850 +1669,847 @@ useEffect(() => {
       {/* =====================================================
           MAIN MENU
       ====================================================== */}
-{/* =====================================================
-    MAIN MENU
-====================================================== */}
 
-{node?.type === "menu" && (
-  <>
-    {/* MESSAGE */}
+      {node?.type === "menu" && (
+        <>
+          <div>
+            <label className={labelClass}>
+              Main Menu Message
+            </label>
 
-    <div>
-      <label className={labelClass}>
-        Main Menu Message
-      </label>
+            <textarea
+              value={form.message}
+              onChange={(e) =>
+                updateField(
+                  "message",
+                  e.target.value
+                )
+              }
+              rows={5}
+              placeholder="Please select an option:"
+              className={
+                textareaClass
+              }
+            />
 
-      <textarea
-        value={form.message}
-        onChange={(e) =>
-          updateField(
-            "message",
-            e.target.value
-          )
-        }
-        rows={5}
-        placeholder="Please select an option:"
-        className={textareaClass}
-      />
+            <p className="mt-2 text-[11px] text-slate-400">
+              This message will be shown
+              above the menu options.
+            </p>
+          </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">
-        This message will be shown
-        above the menu options.
-      </p>
-    </div>
+          {/* VARIABLE */}
 
-    {/* =================================================
-        VARIABLE
-    ================================================== */}
+          <div>
+            <label className={labelClass}>
+              Variable
+            </label>
 
-    <div>
-      <label className={labelClass}>
-        Variable
-      </label>
+            <input
+              type="text"
+              value={form.variable}
+              onChange={(e) =>
+                updateField(
+                  "variable",
+                  e.target.value
+                )
+              }
+              placeholder="requirement"
+              className={inputClass}
+            />
 
-      <input
-        type="text"
-        value={form.variable}
-        onChange={(e) =>
-          updateField(
-            "variable",
-            e.target.value
-          )
-        }
-        placeholder="requirement"
-        className={inputClass}
-      />
+            <p className="mt-2 text-[11px] text-slate-400">
+              Selected menu option will be
+              stored in this variable.
+            </p>
+          </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">
-        Selected menu option will be
-        stored in this variable.
-      </p>
-    </div>
+          {/* OPTIONS */}
 
-    {/* OPTIONS */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Menu Options
+              </label>
 
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
-          Menu Options
-        </label>
+              <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-600">
+                {form.menuOptions?.length ||
+                  0}
+                /10
+              </span>
+            </div>
 
-        <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-600">
-          {form.menuOptions?.length || 0}/10
-        </span>
-      </div>
+            <div className="space-y-2">
+              {(form.menuOptions || []).map(
+                (option, index) => (
+                  <div
+                    key={
+                      option.id ||
+                      index
+                    }
+                    className="
+                      flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      p-2
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        h-9
+                        w-9
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-purple-100
+                        text-xs
+                        font-bold
+                        text-purple-600
+                      "
+                    >
+                      {index + 1}
+                    </div>
 
-      <div className="space-y-2">
-        {(form.menuOptions || []).map(
-          (option, index) => (
-            <div
-              key={
-                option.id || index
+                    <input
+                      type="text"
+                      value={
+                        option.label ||
+                        ""
+                      }
+                      onChange={(e) =>
+                        updateMenuOption(
+                          index,
+                          e.target.value
+                        )
+                      }
+                      placeholder={`Option ${
+                        index + 1
+                      }`}
+                      className="
+                        min-w-0
+                        flex-1
+                        rounded-lg
+                        border
+                        border-slate-200
+                        bg-white
+                        px-3
+                        py-2.5
+                        text-sm
+                        text-slate-800
+                        outline-none
+                        focus:border-purple-500
+                        focus:ring-4
+                        focus:ring-purple-500/10
+                      "
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeMenuOption(
+                          index
+                        )
+                      }
+                      className="
+                        flex
+                        h-9
+                        w-9
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-lg
+                        text-slate-400
+                        transition
+                        hover:bg-red-50
+                        hover:text-red-500
+                      "
+                      title="Remove option"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                addMenuOption
+              }
+              disabled={
+                (form.menuOptions || [])
+                  .length >= 10
               }
               className="
+                mt-3
                 flex
+                w-full
                 items-center
+                justify-center
                 gap-2
                 rounded-xl
                 border
-                border-slate-200
-                bg-slate-50
-                p-2
+                border-dashed
+                border-purple-300
+                bg-purple-50
+                px-4
+                py-3
+                text-xs
+                font-bold
+                text-purple-700
+                transition
+                hover:bg-purple-100
+                disabled:cursor-not-allowed
+                disabled:opacity-50
               "
             >
-              <div
-                className="
-                  flex
-                  h-9
-                  w-9
-                  shrink-0
-                  items-center
-                  justify-center
-                  rounded-lg
-                  bg-purple-100
-                  text-xs
-                  font-bold
-                  text-purple-600
-                "
-              >
-                {index + 1}
-              </div>
+              <Plus className="h-4 w-4" />
 
-              <input
-                type="text"
-                value={
-                  option.label || ""
-                }
-                onChange={(e) =>
-                  updateMenuOption(
-                    index,
-                    e.target.value
-                  )
-                }
-                placeholder={`Option ${
-                  index + 1
-                }`}
-                className="
-                  min-w-0
-                  flex-1
-                  rounded-lg
-                  border
-                  border-slate-200
-                  bg-white
-                  px-3
-                  py-2.5
-                  text-sm
-                  text-slate-800
-                  outline-none
-                  focus:border-purple-500
-                  focus:ring-4
-                  focus:ring-purple-500/10
-                "
-              />
+              Add Menu Option
+            </button>
+          </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  removeMenuOption(
-                    index
-                  )
-                }
-                className="
-                  flex
-                  h-9
-                  w-9
-                  shrink-0
-                  items-center
-                  justify-center
-                  rounded-lg
-                  text-slate-400
-                  transition
-                  hover:bg-red-50
-                  hover:text-red-500
-                "
-                title="Remove option"
-              >
-                <X className="h-4 w-4" />
-              </button>
+          {/* PREVIEW */}
+
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <div className="flex items-center gap-2">
+              <MenuIcon className="h-4 w-4 text-purple-600" />
+
+              <p className="text-[10px] font-bold uppercase text-purple-500">
+                Main Menu Preview
+              </p>
             </div>
-          )
-        )}
-      </div>
 
-      <button
-        type="button"
-        onClick={addMenuOption}
-        disabled={
-          (form.menuOptions || [])
-            .length >= 10
-        }
-        className="
-          mt-3
-          flex
-          w-full
-          items-center
-          justify-center
-          gap-2
-          rounded-xl
-          border
-          border-dashed
-          border-purple-300
-          bg-purple-50
-          px-4
-          py-3
-          text-xs
-          font-bold
-          text-purple-700
-          transition
-          hover:bg-purple-100
-          disabled:cursor-not-allowed
-          disabled:opacity-50
-        "
-      >
-        <Plus className="h-4 w-4" />
+            <div className="mt-3 rounded-xl bg-white p-3 shadow-sm">
+              <p className="text-sm leading-5 text-slate-700">
+                {form.message ||
+                  "Please select an option:"}
+              </p>
 
-        Add Menu Option
-      </button>
-    </div>
+              <div className="mt-3 space-y-1.5">
+                {(form.menuOptions || []).map(
+                  (option, index) => (
+                    <div
+                      key={
+                        option.id ||
+                        index
+                      }
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        rounded-lg
+                        border
+                        border-purple-100
+                        px-3
+                        py-2
+                      "
+                    >
+                      <span
+                        className="
+                          flex
+                          h-5
+                          w-5
+                          items-center
+                          justify-center
+                          rounded-full
+                          bg-purple-100
+                          text-[9px]
+                          font-bold
+                          text-purple-600
+                        "
+                      >
+                        {index + 1}
+                      </span>
 
-    {/* PREVIEW */}
-
-    <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-      <div className="flex items-center gap-2">
-        <MenuIcon className="h-4 w-4 text-purple-600" />
-
-        <p className="text-[10px] font-bold uppercase text-purple-500">
-          Main Menu Preview
-        </p>
-      </div>
-
-      <div className="mt-3 rounded-xl bg-white p-3 shadow-sm">
-        <p className="text-sm leading-5 text-slate-700">
-          {form.message ||
-            "Please select an option:"}
-        </p>
-
-        <div className="mt-3 space-y-1.5">
-          {(form.menuOptions || []).map(
-            (option, index) => (
-              <div
-                key={
-                  option.id || index
-                }
-                className="
-                  flex
-                  items-center
-                  gap-2
-                  rounded-lg
-                  border
-                  border-purple-100
-                  px-3
-                  py-2
-                "
-              >
-                <span
-                  className="
-                    flex
-                    h-5
-                    w-5
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-purple-100
-                    text-[9px]
-                    font-bold
-                    text-purple-600
-                  "
-                >
-                  {index + 1}
-                </span>
-
-                <span className="text-xs font-semibold text-slate-700">
-                  {option.label ||
-                    `Option ${
-                      index + 1
-                    }`}
-                </span>
+                      <span className="text-xs font-semibold text-slate-700">
+                        {option.label ||
+                          `Option ${
+                            index + 1
+                          }`}
+                      </span>
+                    </div>
+                  )
+                )}
               </div>
-            )
-          )}
-        </div>
-      </div>
-    </div>
+            </div>
+          </div>
 
-    {/* CONNECTION INFO */}
+          {/* CONNECTION INFO */}
 
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-      <p className="text-[10px] font-bold uppercase text-blue-500">
-        Canvas Connections
-      </p>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <p className="text-[10px] font-bold uppercase text-blue-500">
+              Canvas Connections
+            </p>
 
-      <p className="mt-2 text-xs leading-5 text-blue-700">
-        Each menu option has its own
-        connection point on the left side
-        of the option. Connect each option
-        to a different workflow node.
-      </p>
-    </div>
-  </>
-)}
+            <p className="mt-2 text-xs leading-5 text-blue-700">
+              Each menu option has its own
+              connection point on the left side
+              of the option. Connect each option
+              to a different workflow node.
+            </p>
+          </div>
+        </>
+      )}
 
       {/* =====================================================
           USER INPUT
       ====================================================== */}
 
-    {/* =====================================================
-    USER INPUT
-====================================================== */}
+      {node?.type === "userInput" && (
+        <>
+          {/* ASK MESSAGE */}
 
-{node?.type === "userInput" && (
-  <>
-    {/* =================================================
-        ASK MESSAGE
-    ================================================== */}
+          <div>
+            <label className={labelClass}>
+              Ask Message
+            </label>
 
-    <div>
-      <label className={labelClass}>
-        Ask Message
-      </label>
-
-      <textarea
-        value={form.message}
-        onChange={(e) =>
-          updateField(
-            "message",
-            e.target.value
-          )
-        }
-        rows={5}
-         placeholder="Please enter your Company Name. Type &quot;Skip&quot; if you don't want to provide it."
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Question that will be sent to
-        the customer.
-      </p>
-    </div>
-
-    {/* =================================================
-        VARIABLE
-    ================================================== */}
-
-    <div>
-      <label className={labelClass}>
-        Variable
-      </label>
-
-      <input
-        type="text"
-        value={form.variable}
-        onChange={(e) =>
-          updateField(
-            "variable",
-            e.target.value
-          )
-        }
-        placeholder="company_name"
-        className={inputClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Customer response will be
-        stored in this variable.
-      </p>
-    </div>
-
-    {/* =================================================
-        REQUIRED
-    ================================================== */}
-
-    <div
-      className="
-        rounded-xl
-        border
-        border-slate-200
-        bg-slate-50
-        p-4
-      "
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-bold text-slate-700">
-            Required Field
-          </p>
-
-          <p className="mt-1 text-[11px] leading-5 text-slate-400">
-            Customer must provide a valid
-            value.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            updateField(
-              "required",
-              !form.required
-            )
-          }
-          className={`
-            relative
-            h-6
-            w-11
-            rounded-full
-            transition
-            ${
-              form.required
-                ? "bg-indigo-600"
-                : "bg-slate-300"
-            }
-          `}
-        >
-          <span
-            className={`
-              absolute
-              top-1
-              h-4
-              w-4
-              rounded-full
-              bg-white
-              shadow
-              transition
-              ${
-                form.required
-                  ? "left-6"
-                  : "left-1"
+            <textarea
+              value={form.message}
+              onChange={(e) =>
+                updateField(
+                  "message",
+                  e.target.value
+                )
               }
-            `}
-          />
-        </button>
-      </div>
-    </div>
-
-    {/* =================================================
-        ALLOW SKIP
-    ================================================== */}
-
-    <div
-      className="
-        rounded-xl
-        border
-        border-cyan-200
-        bg-cyan-50
-        p-4
-      "
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-bold text-cyan-700">
-            Allow Skip
-          </p>
-
-          <p className="mt-1 text-[11px] leading-5 text-cyan-600">
-            Customer can skip this field.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            updateField(
-              "allowSkip",
-              !form.allowSkip
-            )
-          }
-          className={`
-            relative
-            h-6
-            w-11
-            rounded-full
-            transition
-            ${
-              form.allowSkip
-                ? "bg-cyan-600"
-                : "bg-slate-300"
-            }
-          `}
-        >
-          <span
-            className={`
-              absolute
-              top-1
-              h-4
-              w-4
-              rounded-full
-              bg-white
-              shadow
-              transition
-              ${
-                form.allowSkip
-                  ? "left-6"
-                  : "left-1"
+              rows={5}
+              placeholder={`Please enter your Company Name. Type "Skip" if you don't want to provide it.`}
+              className={
+                textareaClass
               }
-            `}
-          />
-        </button>
-      </div>
+            />
 
-      {/* =================================================
-          SKIP TEXT
-      ================================================== */}
+            <p className="mt-2 text-[11px] text-slate-400">
+              Question that will be sent to
+              the customer.
+            </p>
+          </div>
 
-      {form.allowSkip && (
-        <div className="mt-4">
-          <label className={labelClass}>
-            Skip Text
-          </label>
+          {/* VARIABLE */}
 
-          <input
-            type="text"
-            value={form.skipText}
-            onChange={(e) =>
-              updateField(
-                "skipText",
-                e.target.value
-              )
-            }
-            placeholder="skip"
-            className={inputClass}
-          />
+          <div>
+            <label className={labelClass}>
+              Variable
+            </label>
 
-          <p className="mt-2 text-[11px] text-cyan-600">
-            Example: skip, Skip, SKIP —
-            matching is case-insensitive.
-          </p>
-        </div>
+            <input
+              type="text"
+              value={form.variable}
+              onChange={(e) =>
+                updateField(
+                  "variable",
+                  e.target.value
+                )
+              }
+              placeholder="company_name"
+              className={inputClass}
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Customer response will be
+              stored in this variable.
+            </p>
+          </div>
+
+          {/* REQUIRED */}
+
+          <div
+            className="
+              rounded-xl
+              border
+              border-slate-200
+              bg-slate-50
+              p-4
+            "
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-700">
+                  Required Field
+                </p>
+
+                <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                  Customer must provide a valid
+                  value.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateField(
+                    "required",
+                    !form.required
+                  )
+                }
+                className={`
+                  relative
+                  h-6
+                  w-11
+                  rounded-full
+                  transition
+                  ${
+                    form.required
+                      ? "bg-indigo-600"
+                      : "bg-slate-300"
+                  }
+                `}
+              >
+                <span
+                  className={`
+                    absolute
+                    top-1
+                    h-4
+                    w-4
+                    rounded-full
+                    bg-white
+                    shadow
+                    transition
+                    ${
+                      form.required
+                        ? "left-6"
+                        : "left-1"
+                    }
+                  `}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* ALLOW SKIP */}
+
+          <div
+            className="
+              rounded-xl
+              border
+              border-cyan-200
+              bg-cyan-50
+              p-4
+            "
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-cyan-700">
+                  Allow Skip
+                </p>
+
+                <p className="mt-1 text-[11px] leading-5 text-cyan-600">
+                  Customer can skip this field.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateField(
+                    "allowSkip",
+                    !form.allowSkip
+                  )
+                }
+                className={`
+                  relative
+                  h-6
+                  w-11
+                  rounded-full
+                  transition
+                  ${
+                    form.allowSkip
+                      ? "bg-cyan-600"
+                      : "bg-slate-300"
+                  }
+                `}
+              >
+                <span
+                  className={`
+                    absolute
+                    top-1
+                    h-4
+                    w-4
+                    rounded-full
+                    bg-white
+                    shadow
+                    transition
+                    ${
+                      form.allowSkip
+                        ? "left-6"
+                        : "left-1"
+                    }
+                  `}
+                />
+              </button>
+            </div>
+
+            {form.allowSkip && (
+              <div className="mt-4">
+                <label className={labelClass}>
+                  Skip Text
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    form.skipText
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "skipText",
+                      e.target.value
+                    )
+                  }
+                  placeholder="skip"
+                  className={inputClass}
+                />
+
+                <p className="mt-2 text-[11px] text-cyan-600">
+                  Example: skip, Skip, SKIP —
+                  matching is case-insensitive.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* VALIDATION TYPE */}
+
+          <div>
+            <label className={labelClass}>
+              Validation Type
+            </label>
+
+            <select
+              value={
+                form.validationType
+              }
+              onChange={(e) =>
+                updateField(
+                  "validationType",
+                  e.target.value
+                )
+              }
+              className={inputClass}
+            >
+              <option value="text">
+                Text
+              </option>
+
+              <option value="mobile">
+                Mobile Number
+              </option>
+
+              <option value="email">
+                Email
+              </option>
+
+              <option value="number">
+                Number
+              </option>
+
+              <option value="integer">
+                Integer
+              </option>
+
+              <option value="date">
+                Date
+              </option>
+
+              <option value="url">
+                URL
+              </option>
+
+              <option value="alpha">
+                Alphabets Only
+              </option>
+
+              <option value="alphanumeric">
+                Alphanumeric
+              </option>
+
+              <option value="regex">
+                Custom Regex
+              </option>
+            </select>
+          </div>
+
+          {/* VALIDATION MESSAGE */}
+
+          <div>
+            <label className={labelClass}>
+              Validation Message
+            </label>
+
+            <textarea
+              value={
+                form.validationMessage
+              }
+              onChange={(e) =>
+                updateField(
+                  "validationMessage",
+                  e.target.value
+                )
+              }
+              rows={3}
+              placeholder="⚠️ Please enter a valid response."
+              className={
+                textareaClass
+              }
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Message shown when the customer's
+              response does not match validation.
+            </p>
+          </div>
+
+          {/* REQUIRED MESSAGE */}
+
+          <div>
+            <label className={labelClass}>
+              Required Message
+            </label>
+
+            <textarea
+              value={
+                form.requiredMessage
+              }
+              onChange={(e) =>
+                updateField(
+                  "requiredMessage",
+                  e.target.value
+                )
+              }
+              rows={3}
+              placeholder="⚠️ This field is required."
+              className={
+                textareaClass
+              }
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Message shown when an empty response
+              is not allowed.
+            </p>
+          </div>
+
+          {/* LENGTH VALIDATION */}
+
+          {[
+            "text",
+            "alpha",
+            "alphanumeric",
+            "mobile",
+          ].includes(
+            form.validationType
+          ) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>
+                  Min Length
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    form.minLength
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "minLength",
+                      e.target.value
+                    )
+                  }
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  Max Length
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={
+                    form.maxLength
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "maxLength",
+                      e.target.value
+                    )
+                  }
+                  placeholder="100"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* NUMBER RANGE */}
+
+          {[
+            "number",
+            "integer",
+          ].includes(
+            form.validationType
+          ) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>
+                  Min Value
+                </label>
+
+                <input
+                  type="number"
+                  value={
+                    form.minValue
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "minValue",
+                      e.target.value
+                    )
+                  }
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  Max Value
+                </label>
+
+                <input
+                  type="number"
+                  value={
+                    form.maxValue
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "maxValue",
+                      e.target.value
+                    )
+                  }
+                  placeholder="100000"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* REGEX */}
+
+          {form.validationType ===
+            "regex" && (
+            <div>
+              <label className={labelClass}>
+                Custom Regex
+              </label>
+
+              <input
+                type="text"
+                value={form.regex}
+                onChange={(e) =>
+                  updateField(
+                    "regex",
+                    e.target.value
+                  )
+                }
+                placeholder="^[A-Za-z ]+$"
+                className={inputClass}
+              />
+
+              <p className="mt-2 text-[11px] text-slate-400">
+                Example:
+                <span className="ml-1 font-mono">
+                  ^[A-Za-z ]+$
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* CONFIG PREVIEW */}
+
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-600">
+              User Input Configuration
+            </p>
+
+            <div className="mt-3 space-y-2 text-xs">
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">
+                  Variable
+                </span>
+
+                <span className="font-bold text-slate-700">
+                  {form.variable ||
+                    "customer_input"}
+                </span>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">
+                  Required
+                </span>
+
+                <span
+                  className={
+                    form.required
+                      ? "font-bold text-green-600"
+                      : "font-bold text-slate-500"
+                  }
+                >
+                  {form.required
+                    ? "Yes"
+                    : "No"}
+                </span>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">
+                  Skip
+                </span>
+
+                <span
+                  className={
+                    form.allowSkip
+                      ? "font-bold text-cyan-600"
+                      : "font-bold text-slate-500"
+                  }
+                >
+                  {form.allowSkip
+                    ? `Allowed (${
+                        form.skipText ||
+                        "skip"
+                      })`
+                    : "Not Allowed"}
+                </span>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">
+                  Validation
+                </span>
+
+                <span className="font-bold uppercase text-slate-700">
+                  {form.validationType ||
+                    "text"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </>
       )}
-    </div>
-
-    {/* =================================================
-        VALIDATION TYPE
-    ================================================== */}
-
-    <div>
-      <label className={labelClass}>
-        Validation Type
-      </label>
-
-      <select
-        value={form.validationType}
-        onChange={(e) =>
-          updateField(
-            "validationType",
-            e.target.value
-          )
-        }
-        className={inputClass}
-      >
-        <option value="text">
-          Text
-        </option>
-
-        <option value="mobile">
-          Mobile Number
-        </option>
-
-        <option value="email">
-          Email
-        </option>
-
-        <option value="number">
-          Number
-        </option>
-
-        <option value="integer">
-          Integer
-        </option>
-
-        <option value="date">
-          Date
-        </option>
-
-        <option value="url">
-          URL
-        </option>
-
-        <option value="alpha">
-          Alphabets Only
-        </option>
-
-        <option value="alphanumeric">
-          Alphanumeric
-        </option>
-
-        <option value="regex">
-          Custom Regex
-        </option>
-      </select>
-    </div>
-
-    {/* =================================================
-        VALIDATION MESSAGE
-    ================================================== */}
-
-    <div>
-      <label className={labelClass}>
-        Validation Message
-      </label>
-
-      <textarea
-        value={form.validationMessage}
-        onChange={(e) =>
-          updateField(
-            "validationMessage",
-            e.target.value
-          )
-        }
-        rows={3}
-        placeholder="⚠️ Please enter a valid response."
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Message shown when the customer's
-        response does not match validation.
-      </p>
-    </div>
-
-    {/* =================================================
-        REQUIRED MESSAGE
-    ================================================== */}
-
-    <div>
-      <label className={labelClass}>
-        Required Message
-      </label>
-
-      <textarea
-        value={form.requiredMessage}
-        onChange={(e) =>
-          updateField(
-            "requiredMessage",
-            e.target.value
-          )
-        }
-        rows={3}
-        placeholder="⚠️ This field is required."
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Message shown when an empty response
-        is not allowed.
-      </p>
-    </div>
-
-    {/* =================================================
-        LENGTH VALIDATION
-    ================================================== */}
-
-    {[
-      "text",
-      "alpha",
-      "alphanumeric",
-      "mobile",
-    ].includes(
-      form.validationType
-    ) && (
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelClass}>
-            Min Length
-          </label>
-
-          <input
-            type="number"
-            min="0"
-            value={form.minLength}
-            onChange={(e) =>
-              updateField(
-                "minLength",
-                e.target.value
-              )
-            }
-            placeholder="0"
-            className={inputClass}
-          />
-        </div>
-
-        <div>
-          <label className={labelClass}>
-            Max Length
-          </label>
-
-          <input
-            type="number"
-            min="0"
-            value={form.maxLength}
-            onChange={(e) =>
-              updateField(
-                "maxLength",
-                e.target.value
-              )
-            }
-            placeholder="100"
-            className={inputClass}
-          />
-        </div>
-      </div>
-    )}
-
-    {/* =================================================
-        NUMBER RANGE
-    ================================================== */}
-
-    {[
-      "number",
-      "integer",
-    ].includes(
-      form.validationType
-    ) && (
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelClass}>
-            Min Value
-          </label>
-
-          <input
-            type="number"
-            value={form.minValue}
-            onChange={(e) =>
-              updateField(
-                "minValue",
-                e.target.value
-              )
-            }
-            placeholder="0"
-            className={inputClass}
-          />
-        </div>
-
-        <div>
-          <label className={labelClass}>
-            Max Value
-          </label>
-
-          <input
-            type="number"
-            value={form.maxValue}
-            onChange={(e) =>
-              updateField(
-                "maxValue",
-                e.target.value
-              )
-            }
-            placeholder="100000"
-            className={inputClass}
-          />
-        </div>
-      </div>
-    )}
-
-    {/* =================================================
-        REGEX
-    ================================================== */}
-
-    {form.validationType ===
-      "regex" && (
-      <div>
-        <label className={labelClass}>
-          Custom Regex
-        </label>
-
-        <input
-          type="text"
-          value={form.regex}
-          onChange={(e) =>
-            updateField(
-              "regex",
-              e.target.value
-            )
-          }
-          placeholder="^[A-Za-z ]+$"
-          className={inputClass}
-        />
-
-        <p className="mt-2 text-[11px] text-slate-400">
-          Example:
-          <span className="ml-1 font-mono">
-            ^[A-Za-z ]+$
-          </span>
-        </p>
-      </div>
-    )}
-
-    {/* =================================================
-        CONFIG PREVIEW
-    ================================================== */}
-
-    <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-600">
-        User Input Configuration
-      </p>
-
-      <div className="mt-3 space-y-2 text-xs">
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">
-            Variable
-          </span>
-
-          <span className="font-bold text-slate-700">
-            {form.variable ||
-              "customer_input"}
-          </span>
-        </div>
-
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">
-            Required
-          </span>
-
-          <span
-            className={
-              form.required
-                ? "font-bold text-green-600"
-                : "font-bold text-slate-500"
-            }
-          >
-            {form.required
-              ? "Yes"
-              : "No"}
-          </span>
-        </div>
-
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">
-            Skip
-          </span>
-
-          <span
-            className={
-              form.allowSkip
-                ? "font-bold text-cyan-600"
-                : "font-bold text-slate-500"
-            }
-          >
-            {form.allowSkip
-              ? `Allowed (${form.skipText || "skip"})`
-              : "Not Allowed"}
-          </span>
-        </div>
-
-        <div className="flex justify-between gap-3">
-          <span className="text-slate-500">
-            Validation
-          </span>
-
-          <span className="font-bold uppercase text-slate-700">
-            {form.validationType ||
-              "text"}
-          </span>
-        </div>
-      </div>
-    </div>
-  </>
-)}
 
       {/* =====================================================
           CONDITION
@@ -2248,6 +2646,12 @@ useEffect(() => {
 
       {node?.type === "image" && (
         <>
+          {renderUploadBox(
+            "image",
+            "image/jpeg,image/png,image/webp,image/gif",
+            "Upload Image"
+          )}
+
           <div>
             <label className={labelClass}>
               Image URL
@@ -2255,16 +2659,23 @@ useEffect(() => {
 
             <input
               type="url"
-              value={form.imageUrl}
+              value={
+                form.imageUrl
+              }
               onChange={(e) =>
-                updateField(
+                updateMediaUrl(
                   "imageUrl",
-                  e.target.value
+                  e.target.value,
+                  "image"
                 )
               }
               placeholder="https://example.com/image.jpg"
               className={inputClass}
             />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Upload a file above or enter a public HTTPS URL.
+            </p>
           </div>
 
           <div>
@@ -2297,6 +2708,341 @@ useEffect(() => {
               {form.imageUrl ||
                 "No image configured"}
             </p>
+
+            {form.fileName && (
+              <p className="mt-1 truncate text-xs font-semibold text-pink-700">
+                {form.fileName}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* =====================================================
+          VIDEO
+      ====================================================== */}
+
+      {node?.type === "video" && (
+        <>
+          {renderUploadBox(
+            "video",
+            "video/mp4,video/3gpp,video/quicktime,video/webm",
+            "Upload Video"
+          )}
+
+          <div>
+            <label className={labelClass}>
+              Video URL
+            </label>
+
+            <input
+              type="url"
+              value={
+                form.videoUrl
+              }
+              onChange={(e) =>
+                updateMediaUrl(
+                  "videoUrl",
+                  e.target.value,
+                  "video"
+                )
+              }
+              placeholder="https://example.com/video.mp4"
+              className={inputClass}
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Upload a video above or enter a public HTTPS URL.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>
+              Caption
+            </label>
+
+            <textarea
+              value={form.caption}
+              onChange={(e) =>
+                updateField(
+                  "caption",
+                  e.target.value
+                )
+              }
+              rows={4}
+              placeholder="Enter video caption..."
+              className={
+                textareaClass
+              }
+            />
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <p className="text-[10px] font-bold uppercase text-blue-500">
+              Video
+            </p>
+
+            <p className="mt-2 truncate text-xs text-slate-600">
+              {form.videoUrl ||
+                "No video configured"}
+            </p>
+
+            {form.fileName && (
+              <p className="mt-1 truncate text-xs font-semibold text-blue-700">
+                {form.fileName}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* =====================================================
+          DOCUMENT
+      ====================================================== */}
+
+      {node?.type === "document" && (
+        <>
+          {renderUploadBox(
+            "document",
+            ".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv",
+            "Upload Document"
+          )}
+
+          <div>
+            <label className={labelClass}>
+              Document URL
+            </label>
+
+            <input
+              type="url"
+              value={
+                form.documentUrl
+              }
+              onChange={(e) =>
+                updateMediaUrl(
+                  "documentUrl",
+                  e.target.value,
+                  "document"
+                )
+              }
+              placeholder="https://example.com/document.pdf"
+              className={inputClass}
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Upload a document above or enter a public HTTPS URL.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>
+              File Name
+            </label>
+
+            <input
+              type="text"
+              value={form.fileName}
+              onChange={(e) =>
+                updateField(
+                  "fileName",
+                  e.target.value
+                )
+              }
+              placeholder="brochure.pdf"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>
+              Caption
+            </label>
+
+            <textarea
+              value={form.caption}
+              onChange={(e) =>
+                updateField(
+                  "caption",
+                  e.target.value
+                )
+              }
+              rows={4}
+              placeholder="Enter document caption..."
+              className={
+                textareaClass
+              }
+            />
+          </div>
+
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+            <p className="text-[10px] font-bold uppercase text-indigo-500">
+              Document
+            </p>
+
+            <p className="mt-2 truncate text-xs text-slate-600">
+              {form.documentUrl ||
+                "No document configured"}
+            </p>
+
+            {form.fileName && (
+              <p className="mt-1 truncate text-xs font-semibold text-indigo-700">
+                {form.fileName}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* =====================================================
+          PDF
+      ====================================================== */}
+
+      {node?.type === "pdf" && (
+        <>
+          {renderUploadBox(
+            "pdf",
+            "application/pdf",
+            "Upload PDF"
+          )}
+
+          <div>
+            <label className={labelClass}>
+              PDF URL
+            </label>
+
+            <input
+              type="url"
+              value={
+                form.documentUrl
+              }
+              onChange={(e) =>
+                updateMediaUrl(
+                  "documentUrl",
+                  e.target.value,
+                  "pdf"
+                )
+              }
+              placeholder="https://example.com/brochure.pdf"
+              className={inputClass}
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Upload a PDF above or enter a public HTTPS URL.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>
+              File Name
+            </label>
+
+            <input
+              type="text"
+              value={form.fileName}
+              onChange={(e) =>
+                updateField(
+                  "fileName",
+                  e.target.value
+                )
+              }
+              placeholder="brochure.pdf"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>
+              Caption
+            </label>
+
+            <textarea
+              value={form.caption}
+              onChange={(e) =>
+                updateField(
+                  "caption",
+                  e.target.value
+                )
+              }
+              rows={4}
+              placeholder="Enter PDF caption..."
+              className={
+                textareaClass
+              }
+            />
+          </div>
+
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="text-[10px] font-bold uppercase text-red-500">
+              PDF Document
+            </p>
+
+            <p className="mt-2 truncate text-xs text-slate-600">
+              {form.documentUrl ||
+                "No PDF configured"}
+            </p>
+
+            {form.fileName && (
+              <p className="mt-1 truncate text-xs font-semibold text-red-700">
+                {form.fileName}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* =====================================================
+          AUDIO
+      ====================================================== */}
+
+      {node?.type === "audio" && (
+        <>
+          {renderUploadBox(
+            "audio",
+            ".mp3,.wav,.ogg,.aac,.m4a,.mp4",
+            "Upload Audio"
+          )}
+
+          <div>
+            <label className={labelClass}>
+              Audio URL
+            </label>
+
+            <input
+              type="url"
+              value={
+                form.audioUrl
+              }
+              onChange={(e) =>
+                updateMediaUrl(
+                  "audioUrl",
+                  e.target.value,
+                  "audio"
+                )
+              }
+              placeholder="https://example.com/audio.mp3"
+              className={inputClass}
+            />
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Upload an audio file above or enter a public HTTPS URL.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-[10px] font-bold uppercase text-amber-500">
+              Audio
+            </p>
+
+            <p className="mt-2 truncate text-xs text-slate-600">
+              {form.audioUrl ||
+                "No audio configured"}
+            </p>
+
+            {form.fileName && (
+              <p className="mt-1 truncate text-xs font-semibold text-amber-700">
+                {form.fileName}
+              </p>
+            )}
           </div>
         </>
       )}
@@ -2624,18 +3370,9 @@ const onDragOver = useCallback((event) => {
 }, []);
 
 
-/* =======================================================
-   DROP NODE
-   EXACT MOUSE POSITION
-======================================================= */
-
 const onDrop = useCallback(
     (event) => {
         event.preventDefault();
-
-        /* =================================================
-           CHECK REACT FLOW INSTANCE
-        ================================================= */
 
         if (!reactFlowInstance) {
             console.warn(
@@ -2644,10 +3381,6 @@ const onDrop = useCallback(
 
             return;
         }
-
-        /* =================================================
-           GET NODE TYPE
-        ================================================= */
 
         const type =
             event.dataTransfer.getData(
@@ -2658,32 +3391,12 @@ const onDrop = useCallback(
             return;
         }
 
-        /* =================================================
-           GET CANVAS POSITION
-        ================================================= */
-
         const bounds =
             reactFlowWrapper.current?.getBoundingClientRect();
 
         if (!bounds) {
             return;
         }
-
-        /* =================================================
-           IMPORTANT
-
-           React Flow automatically converts:
-
-           Browser screen position
-                    ↓
-           Canvas / Flow position
-
-           This automatically respects:
-           - zoom
-           - pan
-           - viewport
-           - canvas position
-        ================================================= */
 
         const position =
             reactFlowInstance.project({
@@ -2715,6 +3428,23 @@ const onDrop = useCallback(
                 : [];
 
         /* =================================================
+           MEDIA TYPE
+        ================================================= */
+
+        const mediaType =
+            type === "image"
+                ? "image"
+                : type === "video"
+                ? "video"
+                : type === "document"
+                ? "document"
+                : type === "pdf"
+                ? "document"
+                : type === "audio"
+                ? "audio"
+                : "";
+
+        /* =================================================
            CREATE NEW NODE
         ================================================= */
 
@@ -2734,6 +3464,10 @@ const onDrop = useCallback(
             },
 
             data: {
+                /* =============================================
+                   BASIC
+                ============================================== */
+
                 label:
                     palette.find(
                         (item) =>
@@ -2751,74 +3485,112 @@ const onDrop = useCallback(
                         ? "What is your name?"
                         : "",
 
+                /* =============================================
+                   USER INPUT
+                ============================================== */
+
                 variable:
                     type === "userInput"
                         ? "customer_name"
                         : "",
-                        required:
-                        type === "userInput"
-                          ? true
-                          : true,
 
-                      allowSkip:
-                        type === "userInput"
-                          ? false
-                          : false,
+                required:
+                    type === "userInput"
+                        ? true
+                        : true,
 
-                      skipText:
-                        type === "userInput"
-                          ? "skip"
-                          : "skip",
+                allowSkip:
+                    type === "userInput"
+                        ? false
+                        : false,
 
-                      validationType:
-                        type === "userInput"
-                          ? "text"
-                          : "text",
+                skipText:
+                    type === "userInput"
+                        ? "skip"
+                        : "skip",
 
-                      validationMessage:
-                        type === "userInput"
-                          ? "⚠️ Please enter a valid response."
-                          : "⚠️ Please enter a valid response.",
+                validationType:
+                    type === "userInput"
+                        ? "text"
+                        : "text",
 
-                      requiredMessage:
-                        type === "userInput"
-                          ? "⚠️ This field is required. Please enter a valid response."
-                          : "⚠️ This field is required. Please enter a valid response.",
+                validationMessage:
+                    type === "userInput"
+                        ? "⚠️ Please enter a valid response."
+                        : "⚠️ Please enter a valid response.",
 
-                      minLength:
-                        "",
+                requiredMessage:
+                    type === "userInput"
+                        ? "⚠️ This field is required. Please enter a valid response."
+                        : "⚠️ This field is required. Please enter a valid response.",
 
-                      maxLength:
-                        "",
+                minLength: "",
 
-                      minValue:
-                        "",
+                maxLength: "",
 
-                      maxValue:
-                        "",
+                minValue: "",
 
-                      regex:
-  "",
+                maxValue: "",
+
+                regex: "",
+
+                /* =============================================
+                   BUTTON
+                ============================================== */
 
                 buttonText:
                     type === "button"
                         ? "Continue"
                         : "",
 
+                /* =============================================
+                   MENU
+                ============================================== */
+
                 menuOptions,
+
+                /* =============================================
+                   CONDITION
+                ============================================== */
 
                 condition:
                     type === "condition"
                         ? "customer.points > 100"
                         : "",
 
+                /* =============================================
+                   API
+                ============================================== */
+
                 method: "GET",
 
                 apiUrl: "",
 
-                imageUrl: "",
+                /* =============================================
+                   MEDIA
+                ============================================== */
 
+                // image / video / document / pdf / audio
+                mediaType,
+
+                // Generic media URL
+                mediaUrl: "",
+
+                // Individual media URLs
+                imageUrl: "",
+                videoUrl: "",
+                documentUrl: "",
+                audioUrl: "",
+
+                // File name for document/pdf
+                fileName: "",
+
+                // Media caption
                 caption: "",
+
+                /* =============================================
+                   DELAY
+                ============================================== */
 
                 delay: "5",
 
@@ -2863,7 +3635,6 @@ const onDrop = useCallback(
         setSelected,
     ]
 );
-
 
 
   /* =======================================================
@@ -3837,20 +4608,27 @@ const onDrop = useCallback(
       );
     };
 
-  /* =======================================================
-     DELETE NODE
-  ======================================================= */
+
+/* =======================================================
+   DELETE NODE
+======================================================= */
 
 const deleteNode = useCallback(
   (nodeId) => {
-    const node = nodes.find(
-      (item) => item.id === nodeId
-    );
-
-    if (!node) {
+    if (!nodeId) {
       return;
     }
 
+    const node = nodes.find(
+      (item) => String(item.id) === String(nodeId)
+    );
+
+    if (!node) {
+      console.warn("Node not found:", nodeId);
+      return;
+    }
+
+    // Start / End cannot be deleted
     if (
       node.type === "start" ||
       node.type === "end"
@@ -3862,32 +4640,36 @@ const deleteNode = useCallback(
       return;
     }
 
+    // Save current state for undo
     pushHistory(
       nodes,
       edges
     );
 
+    // Delete node
     setNodes(
       (currentNodes) =>
         currentNodes.filter(
           (item) =>
-            item.id !== nodeId
+            String(item.id) !== String(nodeId)
         )
     );
 
+    // Delete connected edges
     setEdges(
       (currentEdges) =>
         currentEdges.filter(
           (edge) =>
-            edge.source !== nodeId &&
-            edge.target !== nodeId
+            String(edge.source) !== String(nodeId) &&
+            String(edge.target) !== String(nodeId)
         )
     );
 
+    // Clear selection
     setSelected(null);
 
-    toast.info(
-      "Node deleted. Click Undo to restore."
+    toast.success(
+      "Node deleted successfully."
     );
   },
   [
@@ -3896,9 +4678,9 @@ const deleteNode = useCallback(
     pushHistory,
     setNodes,
     setEdges,
+    setSelected,
   ]
 );
-
   /* =======================================================
      SAVE
   ======================================================= */
@@ -4963,124 +5745,123 @@ const save = async (publish = false) => {
             "
           >
             
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2.5 left-sidebar-scroll">
               <div className="flex flex-col gap-1.5">
               {palette.map(
-  ([type, label]) => {
-    const Icon =
-      paletteIcons[type];
+                ([type, label]) => {
+                  const Icon =
+                    paletteIcons[type];
 
-    return (
-      <button
-    key={type}
-    type="button"
-    draggable
-    onDragStart={(event) => {
-        event.dataTransfer.setData(
-            "application/reactflow",
-            type
-        );
-        event.dataTransfer.effectAllowed = "move";
-    }}
-    onClick={() => addNode(type)}
-        className="
-          group
-          flex
-          w-full
-          min-w-0
-          items-center
-          gap-2.5
-          rounded-lg
-          border
-          border-slate-200
-          bg-white
-          px-2.5
-          py-2
-          text-left
-          transition-all
-          hover:border-indigo-200
-          hover:bg-indigo-50
-          hover:shadow-sm
-          active:scale-[0.98]
-        "
-      >
-        {/* =================================================
-            NODE ICON
-        ================================================== */}
+                  return (
+                    <button
+                  key={type}
+                  type="button"
+                  draggable
+                  onDragStart={(event) => {
+                      event.dataTransfer.setData(
+                          "application/reactflow",
+                          type
+                      );
+                      event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onClick={() => addNode(type)}
+                      className="
+                        group
+                        flex
+                        w-full
+                        min-w-0
+                        items-center
+                        gap-2.5
+                        rounded-lg
+                        border
+                        border-slate-200
+                        bg-white
+                        px-2.5
+                        py-2
+                        text-left
+                        transition-all
+                        hover:border-indigo-200
+                        hover:bg-indigo-50
+                        hover:shadow-sm
+                        active:scale-[0.98]
+                      "
+                    >
+                      {/* =================================================
+                          NODE ICON
+                      ================================================== */}
 
-        <span
-          className="
-            flex
-            h-8
-            w-8
-            shrink-0
-            items-center
-            justify-center
-            rounded-lg
-            bg-slate-50
-            text-slate-500
-            transition-all
-            group-hover:bg-indigo-100
-            group-hover:text-indigo-600
-          "
-        >
-          {Icon && (
-            <Icon
-              className="
-                h-4
-                w-4
-              "
-              strokeWidth={2}
-            />
-          )}
-        </span>
+                      <span
+                        className="
+                          flex
+                          h-8
+                          w-8
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-lg
+                          bg-slate-50
+                          text-slate-500
+                          transition-all
+                          group-hover:bg-indigo-100
+                          group-hover:text-indigo-600
+                        "
+                      >
+                        {Icon && (
+                          <Icon
+                            className="
+                              h-4
+                              w-4
+                            "
+                            strokeWidth={2}
+                          />
+                        )}
+                      </span>
 
-        {/* =================================================
-            LABEL
-        ================================================== */}
+                      {/* =================================================
+                          LABEL
+                      ================================================== */}
 
-        <span
-          className="
-            min-w-0
-            flex-1
-            truncate
-            text-[12px]
-            font-semibold
-            text-slate-700
-            group-hover:text-indigo-700
-          "
-        >
-          {label}
-        </span>
+                      <span
+                        className="
+                          min-w-0
+                          flex-1
+                          truncate
+                          text-[12px]
+                          font-semibold
+                          text-slate-700
+                          group-hover:text-indigo-700
+                        "
+                      >
+                        {label}
+                      </span>
 
-        {/* =================================================
-            ADD ICON
-        ================================================== */}
+                      {/* =================================================
+                          ADD ICON
+                      ================================================== */}
 
-        <span
-          className="
-            flex
-            h-6
-            w-6
-            shrink-0
-            items-center
-            justify-center
-            rounded-md
-            text-slate-300
-            transition-all
-            group-hover:bg-indigo-100
-            group-hover:text-indigo-600
-          "
-        >
-          <Plus
-            className="h-3.5 w-3.5"
-          />
-        </span>
-      </button>
-    );
-  }
-)}
+                      <span
+                        className="
+                          flex
+                          h-6
+                          w-6
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-md
+                          text-slate-300
+                          transition-all
+                          group-hover:bg-indigo-100
+                          group-hover:text-indigo-600
+                        "
+                      >
+                        <Plus
+                          className="h-3.5 w-3.5"
+                        />
+                      </span>
+                    </button>
+                  );
+                }
+              )}
               </div>
             </div>
           </aside>
@@ -5108,6 +5889,14 @@ const save = async (publish = false) => {
 
                     selected:
                         selected?.id === node.id,
+
+                  data: {
+                ...node.data,
+
+                onDelete: () => {
+                    deleteNode(node.id);
+                },
+            },
                 }))}
 
                 edges={edges}
