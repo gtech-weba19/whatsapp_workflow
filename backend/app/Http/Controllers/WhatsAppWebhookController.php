@@ -50,14 +50,7 @@ class WhatsAppWebhookController extends Controller
 
             $trigger = $this->getTriggerFromConfig($config);
 
-            Log::info('WHATSAPP JOURNEY TRIGGER', [
-                'workflow_id' => $workflow->id,
-                'workflow_name' => $workflow->name,
-                'start_node_id' => $startNode?->id,
-                'configuration' => $config,
-                'triggerText' => $config['triggerText'] ?? null,
-                'trigger' => $trigger,
-            ]);
+
 
             return [
                 'id' => $workflow->id,
@@ -73,43 +66,14 @@ class WhatsAppWebhookController extends Controller
         return response()->json($journeys);
     }
 
-    /**
-     * ==========================================================================
-     * WHATSAPP WEBHOOK
-     * ==========================================================================
-     *
-     * IMPORTANT:
-     *
-     * Controller sirf payload parse karega.
-     *
-     * Journey selection / active session / trigger / current node
-     * ka decision WorkflowEngine karega.
-     *
-     * Isliye:
-     *
-     * Journey A active hai
-     * User Journey B ka keyword bhejta hai
-     *
-     * => B start nahi hogi.
-     * => A hi continue hogi.
-     *
-     * ==========================================================================
-     */
+
     public function handle(
         Request $request,
         WorkflowEngine $engine
     ) {
         $payload = $request->all();
 
-        Log::info('WHATSAPP WEBHOOK PAYLOAD', [
-            'payload' => $payload,
-        ]);
 
-        /**
-         * ==========================================================================
-         * DELIVERY EVENTS
-         * ==========================================================================
-         */
         $eventType = strtolower(
             trim(
                 (string) data_get(
@@ -120,37 +84,13 @@ class WhatsAppWebhookController extends Controller
         );
 
         if ($eventType === 'delivery events') {
-
-            Log::info('WHATSAPP DELIVERY EVENT IGNORED', [
-                'status' => data_get(
-                    $payload,
-                    'notificationAttributes.status'
-                ),
-                'reason' => data_get(
-                    $payload,
-                    'notificationAttributes.reason'
-                ),
-                'code' => data_get(
-                    $payload,
-                    'notificationAttributes.code'
-                ),
-                'mid' => data_get(
-                    $payload,
-                    'events.mid'
-                ),
-            ]);
-
             return response()->json([
                 'success' => true,
                 'message' => 'Delivery event received.',
             ], 200);
         }
 
-        /**
-         * ==========================================================================
-         * PROVIDER / META DETECTION
-         * ==========================================================================
-         */
+
         $isProviderWebhook = isset(
             $payload['eventContent']['message']
         );
@@ -159,11 +99,7 @@ class WhatsAppWebhookController extends Controller
             $payload['entry']
         );
 
-        /**
-         * ==========================================================================
-         * REQUEST DATA
-         * ==========================================================================
-         */
+
         $requestedWorkflowId =
             $request->input('workflow_id')
             ??
@@ -174,11 +110,7 @@ class WhatsAppWebhookController extends Controller
             'entry.0.changes.0.value.metadata.phone_number_id'
         );
 
-        /**
-         * ==========================================================================
-         * WHATSAPP TO
-         * ==========================================================================
-         */
+
         $whatsappTo =
             $request->input('to')
             ??
@@ -205,11 +137,7 @@ class WhatsAppWebhookController extends Controller
             );
         }
 
-        /**
-         * ==========================================================================
-         * FROM / MOBILE
-         * ==========================================================================
-         */
+
         $from =
             $request->input('from')
             ??
@@ -285,11 +213,7 @@ class WhatsAppWebhookController extends Controller
             ], 422);
         }
 
-        /**
-         * ==========================================================================
-         * MESSAGE TYPE
-         * ==========================================================================
-         */
+
         $messageType =
             $request->input('type')
             ??
@@ -320,11 +244,7 @@ class WhatsAppWebhookController extends Controller
             ??
             'text';
 
-        /**
-         * ==========================================================================
-         * TEXT
-         * ==========================================================================
-         */
+
         $text =
             $request->input('text.body')
             ??
@@ -400,11 +320,7 @@ class WhatsAppWebhookController extends Controller
 
         $text = trim((string) $text);
 
-        /**
-         * ==========================================================================
-         * INTERACTIVE SOURCE HANDLE
-         * ==========================================================================
-         */
+
         $sourceHandle =
             $request->input(
                 'interactive.source_handle'
@@ -442,11 +358,7 @@ class WhatsAppWebhookController extends Controller
                 'entry.0.changes.0.value.messages.0.interactive.list_reply.id'
             );
 
-        /**
-         * ==========================================================================
-         * INTERACTIVE TITLE
-         * ==========================================================================
-         */
+
         $interactiveTitle =
             $request->input(
                 'interactive.title'
@@ -488,11 +400,7 @@ class WhatsAppWebhookController extends Controller
                 'entry.0.changes.0.value.messages.0.interactive.list_reply.title'
             );
 
-        /**
-         * ==========================================================================
-         * EXTERNAL MESSAGE ID
-         * ==========================================================================
-         */
+
         $externalMessageId =
             data_get(
                 $payload,
@@ -508,11 +416,7 @@ class WhatsAppWebhookController extends Controller
             ??
             $request->input('external_message_id');
 
-        /**
-         * ==========================================================================
-         * SOURCE
-         * ==========================================================================
-         */
+
         $source = $isProviderWebhook
             ? 'gtech_waba'
             : (
@@ -521,52 +425,13 @@ class WhatsAppWebhookController extends Controller
                     : 'simulator'
             );
 
-        /**
-         * ==========================================================================
-         * DEBUG
-         * ==========================================================================
-         */
+
         $normalizedText = strtolower(
             trim((string) $text)
         );
 
-        Log::info(
-            'WHATSAPP INCOMING MESSAGE',
-            [
-                'source' => $source,
-                'event_type' => $eventType,
-                'mobile' => $from,
-                'type' => $messageType,
-                'content_type' => data_get(
-                    $payload,
-                    'contentType'
-                ),
-                'text' => $text,
-                'normalized_text' => $normalizedText,
-                'source_handle' => $sourceHandle,
-                'interactive_title' => $interactiveTitle,
-                'message_id' => $externalMessageId,
-                'requested_workflow_id' => $requestedWorkflowId,
-            ]
-        );
 
-        /**
-         * ==========================================================================
-         * IMPORTANT:
-         *
-         * YAHAN PAR:
-         *
-         * findWorkflowByTrigger()
-         * Workflow::...
-         * BotSession selection
-         * start()
-         * execute()
-         *
-         * DIRECTLY MAT KARO.
-         *
-         * WorkflowEngine decide karega ki kaunsi journey active hai.
-         * ==========================================================================
-         */
+
 
         $input = [
             'text' => $text,
@@ -592,34 +457,16 @@ class WhatsAppWebhookController extends Controller
             'source' => $source,
         ];
 
-        /**
-         * ==========================================================================
-         * HANDLE MESSAGE THROUGH ENGINE
-         * ==========================================================================
-         */
+
         $session = $engine->handleIncoming(
             $from,
             $text,
             $input
         );
 
-        /**
-         * ==========================================================================
-         * NO JOURNEY FOUND
-         * ==========================================================================
-         */
+
         if (!$session) {
 
-            Log::warning(
-                'WHATSAPP NO JOURNEY FOUND',
-                [
-                    'mobile' => $from,
-                    'text' => $text,
-                    'normalized_text' => $normalizedText,
-                    'phone_number_id' => $phoneNumberId,
-                    'whatsapp_to' => $whatsappTo,
-                ]
-            );
 
             return response()->json([
                 'success' => false,
@@ -636,36 +483,16 @@ class WhatsAppWebhookController extends Controller
             ], 422);
         }
 
-        /**
-         * ==========================================================================
-         * REFRESH SESSION
-         * ==========================================================================
-         */
+
         $session->refresh();
 
-        /**
-         * ==========================================================================
-         * GET WORKFLOW FROM ACTUAL SESSION
-         *
-         * IMPORTANT:
-         * Response mein bhi trigger/request se workflow mat nikalo.
-         *
-         * Actual session ka workflow hi use hoga.
-         * ==========================================================================
-         */
+
         $workflow = Workflow::query()
             ->where('id', $session->workflow_id)
             ->where('channel', 'whatsapp')
             ->first();
 
-        /**
-         * ==========================================================================
-         * SAVE INBOUND MESSAGE
-         *
-         * Engine journey decide kar chuka hai.
-         * Isliye BotMessage bhi actual session ke against save hoga.
-         * ==========================================================================
-         */
+
         $botMessage = new BotMessage();
 
         $botMessage->bot_session_id = $session->id;
@@ -699,11 +526,7 @@ class WhatsAppWebhookController extends Controller
 
         $botMessage->save();
 
-        /**
-         * ==========================================================================
-         * OUTBOUND MESSAGES
-         * ==========================================================================
-         */
+
         $messages = BotMessage::query()
             ->where(
                 'bot_session_id',
@@ -719,11 +542,7 @@ class WhatsAppWebhookController extends Controller
             ->reverse()
             ->values();
 
-        /**
-         * ==========================================================================
-         * RESPONSE
-         * ==========================================================================
-         */
+
         return response()->json([
             'success' => true,
 
@@ -753,11 +572,7 @@ class WhatsAppWebhookController extends Controller
         ]);
     }
 
-    /**
-     * ==========================================================================
-     * GET TRIGGER FROM START NODE CONFIGURATION
-     * ==========================================================================
-     */
+
     private function getTriggerFromConfig(
         array $config
     ): ?string {
@@ -812,17 +627,7 @@ class WhatsAppWebhookController extends Controller
         return null;
     }
 
-    /**
-     * ==========================================================================
-     * RESET WHATSAPP JOURNEY
-     * ==========================================================================
-     *
-     * Simulator mein explicit "Change Journey" / "Reset Journey"
-     * ke liye use kar sakte ho.
-     *
-     * Normal WhatsApp incoming message is method ko use nahi karega.
-     * ==========================================================================
-     */
+
     public function reset(
         Request $request
     ) {

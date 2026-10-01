@@ -17,18 +17,6 @@ class WorkflowEngine
     ) {
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | FIND WORKFLOW BY TRIGGER
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    | This method is ONLY for starting a NEW workflow.
-    |
-    | If user already has active/waiting session, this method must NOT
-    | be used. handleIncoming() takes care of that.
-    |
-    */
 
     public function findWorkflowByTrigger(string $message): ?Workflow
     {
@@ -45,10 +33,6 @@ class WorkflowEngine
             ->where('status', 'published')
             ->get();
 
-        Log::info('WHATSAPP TRIGGER SEARCH', [
-            'incoming_message' => $message,
-            'workflow_count' => $workflows->count(),
-        ]);
 
         foreach ($workflows as $workflow) {
 
@@ -84,11 +68,7 @@ class WorkflowEngine
 
             $triggers = [];
 
-            /*
-            |--------------------------------------------------------------------------
-            | triggerText
-            |--------------------------------------------------------------------------
-            */
+
 
             if (
                 isset($cfg['triggerText'])
@@ -98,11 +78,7 @@ class WorkflowEngine
                 $triggers[] = $cfg['triggerText'];
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | trigger
-            |--------------------------------------------------------------------------
-            */
+
 
             if (
                 isset($cfg['trigger'])
@@ -112,11 +88,7 @@ class WorkflowEngine
                 $triggers[] = $cfg['trigger'];
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | triggers
-            |--------------------------------------------------------------------------
-            */
+
 
             if (isset($cfg['triggers'])) {
 
@@ -132,11 +104,6 @@ class WorkflowEngine
                 }
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | keyword
-            |--------------------------------------------------------------------------
-            */
 
             if (
                 isset($cfg['keyword'])
@@ -146,11 +113,7 @@ class WorkflowEngine
                 $triggers[] = $cfg['keyword'];
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | keywords
-            |--------------------------------------------------------------------------
-            */
+
 
             if (isset($cfg['keywords'])) {
 
@@ -166,11 +129,6 @@ class WorkflowEngine
                 }
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | NORMALIZE TRIGGERS
-            |--------------------------------------------------------------------------
-            */
 
             $normalizedTriggers = [];
 
@@ -201,58 +159,22 @@ class WorkflowEngine
                 )
             );
 
-            Log::info('WHATSAPP TRIGGER CHECK', [
-                'workflow_id' => $workflow->id,
-                'workflow_name' => $workflow->name,
-                'start_node_id' => $startNode->node_id,
-                'triggerText' => $cfg['triggerText'] ?? null,
-                'triggers' => $normalizedTriggers,
-                'incoming' => $message,
-            ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | EXACT MATCH
-            |--------------------------------------------------------------------------
-            */
 
             foreach ($normalizedTriggers as $trigger) {
 
                 if ($message === $trigger) {
-
-                    Log::info(
-                        'WHATSAPP TRIGGER MATCHED',
-                        [
-                            'workflow_id' => $workflow->id,
-                            'workflow_name' => $workflow->name,
-                            'trigger' => $trigger,
-                            'incoming' => $message,
-                        ]
-                    );
 
                     return $workflow;
                 }
             }
         }
 
-        Log::info(
-            'WHATSAPP TRIGGER NOT FOUND',
-            [
-                'incoming' => $message,
-            ]
-        );
+
 
         return null;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | FIND ACTIVE SESSION
-    |--------------------------------------------------------------------------
-    |
-    | Only active/waiting sessions are considered active.
-    |
-    */
 
     public function findActiveSession(string $user): ?BotSession
     {
@@ -267,11 +189,6 @@ class WorkflowEngine
             ->first();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | GET START NODE
-    |--------------------------------------------------------------------------
-    */
 
     private function getStartNode(Workflow $workflow)
     {
@@ -279,24 +196,6 @@ class WorkflowEngine
             ->where('node_type', 'start')
             ->first();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HANDLE INCOMING MESSAGE
-    |--------------------------------------------------------------------------
-    |
-    | FLOW:
-    |
-    | EXIT COMMAND?
-    |      YES -> Current journey complete
-    |
-    | Existing active/waiting journey?
-    |      YES -> Continue SAME workflow
-    |
-    | No active journey?
-    |      YES -> Check trigger -> Start new workflow
-    |
-    */
 
     public function handleIncoming(
         string $user,
@@ -310,12 +209,6 @@ class WorkflowEngine
         if ($user === '') {
             return null;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | EXIT / STOP CURRENT JOURNEY
-        |--------------------------------------------------------------------------
-        */
 
         $messageNormalized = mb_strtolower(
             trim($message)
@@ -335,21 +228,6 @@ class WorkflowEngine
 
             if ($session) {
 
-                Log::info('WHATSAPP JOURNEY EXIT', [
-                    'user' => $user,
-                    'session_id' => $session->id,
-                    'workflow_id' => $session->workflow_id,
-                    'current_node_id' => $session->current_node_id,
-                    'status_before_exit' => $session->status,
-                    'command' => $message,
-                ]);
-
-                /*
-                |--------------------------------------------------------------------------
-                | COMPLETE CURRENT SESSION
-                |--------------------------------------------------------------------------
-                */
-
                 $session->update([
                     'status' => 'completed',
                     'current_node_id' => null,
@@ -358,11 +236,7 @@ class WorkflowEngine
 
                 $session->refresh();
 
-                /*
-                |--------------------------------------------------------------------------
-                | SEND EXIT MESSAGE
-                |--------------------------------------------------------------------------
-                */
+
 
                 $exitMessage =
                     'You have exited the current journey. You can start again anytime.';
@@ -372,11 +246,7 @@ class WorkflowEngine
                     $exitMessage
                 );
 
-                /*
-                |--------------------------------------------------------------------------
-                | SAVE OUTBOUND
-                |--------------------------------------------------------------------------
-                */
+
 
                 $this->saveOutbound(
                     $session,
@@ -385,54 +255,16 @@ class WorkflowEngine
                     $output
                 );
 
-                Log::info('WHATSAPP JOURNEY EXIT COMPLETED', [
-                    'user' => $user,
-                    'session_id' => $session->id,
-                    'workflow_id' => $session->workflow_id,
-                    'status' => $session->status,
-                ]);
-
                 return $session;
             }
-
-            Log::info('WHATSAPP EXIT WITHOUT ACTIVE SESSION', [
-                'user' => $user,
-                'command' => $message,
-            ]);
 
             return null;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 1. ALWAYS CHECK ACTIVE JOURNEY FIRST
-        |--------------------------------------------------------------------------
-        |
-        | Agar user already Journey A mein hai aur Journey B ka
-        | trigger bhejta hai, Journey B start nahi hogi.
-        |
-        | Journey A hi continue hogi.
-        |
-        */
 
         $existingSession = $this->findActiveSession($user);
 
         if ($existingSession) {
-
-            Log::info('WHATSAPP ACTIVE JOURNEY LOCKED', [
-                'user' => $user,
-                'session_id' => $existingSession->id,
-                'workflow_id' => $existingSession->workflow_id,
-                'current_node_id' => $existingSession->current_node_id,
-                'status' => $existingSession->status,
-                'incoming_message' => $message,
-            ]);
-
-            /*
-            |--------------------------------------------------------------------------
-            | LOAD SAME WORKFLOW
-            |--------------------------------------------------------------------------
-            */
 
             $workflow = Workflow::query()
                 ->where('id', $existingSession->workflow_id)
@@ -442,67 +274,24 @@ class WorkflowEngine
 
             if (! $workflow) {
 
-                Log::warning('ACTIVE JOURNEY WORKFLOW NOT FOUND', [
-                    'user' => $user,
-                    'session_id' => $existingSession->id,
-                    'workflow_id' => $existingSession->workflow_id,
-                ]);
 
                 return $existingSession;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | CURRENT NODE
-            |--------------------------------------------------------------------------
-            */
 
             $currentNodeId = $existingSession->current_node_id;
 
-            /*
-            |--------------------------------------------------------------------------
-            | CURRENT NODE EMPTY
-            |--------------------------------------------------------------------------
-            */
+
 
             if (! $currentNodeId) {
-
-                Log::warning(
-                    'ACTIVE JOURNEY CURRENT NODE EMPTY',
-                    [
-                        'user' => $user,
-                        'session_id' => $existingSession->id,
-                        'workflow_id' => $workflow->id,
-                    ]
-                );
-
-                /*
-                |--------------------------------------------------------------------------
-                | RECOVER START NODE
-                |--------------------------------------------------------------------------
-                */
 
                 $startNode = $this->getStartNode($workflow);
 
                 if (! $startNode) {
 
-                    Log::warning(
-                        'ACTIVE JOURNEY START NODE NOT FOUND',
-                        [
-                            'user' => $user,
-                            'session_id' => $existingSession->id,
-                            'workflow_id' => $workflow->id,
-                        ]
-                    );
-
                     return $existingSession;
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | RESTORE CURRENT NODE
-                |--------------------------------------------------------------------------
-                */
 
                 $existingSession->update([
                     'current_node_id' => $startNode->node_id,
@@ -511,12 +300,6 @@ class WorkflowEngine
                 ]);
 
                 $existingSession->refresh();
-
-                /*
-                |--------------------------------------------------------------------------
-                | EXECUTE START NODE
-                |--------------------------------------------------------------------------
-                */
 
                 $this->execute(
                     $workflow,
@@ -530,14 +313,6 @@ class WorkflowEngine
                 return $existingSession;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | CURRENT JOURNEY CONTINUES
-            |--------------------------------------------------------------------------
-            |
-            | Incoming message ko new workflow trigger nahi banana.
-            |
-            */
 
             $nodeInput = $incoming;
 
@@ -555,42 +330,14 @@ class WorkflowEngine
             return $existingSession;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 2. NO ACTIVE JOURNEY
-        |--------------------------------------------------------------------------
-        |
-        | Ab trigger check hoga.
-        |
-        */
 
         $workflow = $this->findWorkflowByTrigger($message);
 
         if (! $workflow) {
 
-            Log::info(
-                'NO ACTIVE JOURNEY AND NO TRIGGER MATCH',
-                [
-                    'user' => $user,
-                    'message' => $message,
-                ]
-            );
-
             return null;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 3. START NEW JOURNEY
-        |--------------------------------------------------------------------------
-        */
-
-        Log::info('STARTING NEW WHATSAPP JOURNEY', [
-            'user' => $user,
-            'workflow_id' => $workflow->id,
-            'workflow_name' => $workflow->name,
-            'trigger' => $message,
-        ]);
 
         return $this->start(
             $workflow,
@@ -599,11 +346,6 @@ class WorkflowEngine
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | START WORKFLOW
-    |--------------------------------------------------------------------------
-    */
 
     public function start(
         Workflow $workflow,
@@ -611,35 +353,13 @@ class WorkflowEngine
         array $incoming = []
     ): BotSession {
 
-        /*
-        |--------------------------------------------------------------------------
-        | CHECK EXISTING ACTIVE JOURNEY
-        |--------------------------------------------------------------------------
-        */
 
         $existingSession = $this->findActiveSession($user);
 
         if ($existingSession) {
 
-            Log::warning(
-                'WHATSAPP START BLOCKED - ACTIVE JOURNEY EXISTS',
-                [
-                    'user' => $user,
-                    'existing_session_id' => $existingSession->id,
-                    'existing_workflow_id' => $existingSession->workflow_id,
-                    'requested_workflow_id' => $workflow->id,
-                    'current_node_id' => $existingSession->current_node_id,
-                ]
-            );
-
             return $existingSession;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | FIND OLD SESSION OF SAME WORKFLOW
-        |--------------------------------------------------------------------------
-        */
 
         $session = BotSession::query()
             ->where('channel', 'whatsapp')
@@ -671,32 +391,13 @@ class WorkflowEngine
             ]);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | FIND START NODE
-        |--------------------------------------------------------------------------
-        */
-
         $startNode = $this->getStartNode($workflow);
 
         if (! $startNode) {
 
-            Log::warning(
-                'WHATSAPP WORKFLOW HAS NO START NODE',
-                [
-                    'workflow_id' => $workflow->id,
-                    'workflow_name' => $workflow->name,
-                ]
-            );
-
             return $session;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | EXECUTE START
-        |--------------------------------------------------------------------------
-        */
 
         $this->execute(
             $workflow,
@@ -710,11 +411,6 @@ class WorkflowEngine
         return $session;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | EXECUTE NODE
-    |--------------------------------------------------------------------------
-    */
 
     public function execute(
         Workflow $workflow,
@@ -728,12 +424,6 @@ class WorkflowEngine
             ->first();
 
         if (! $node) {
-
-            Log::warning('WORKFLOW NODE NOT FOUND', [
-                'workflow_id' => $workflow->id,
-                'session_id' => $session->id,
-                'node_id' => $nodeId,
-            ]);
 
             return;
         }
@@ -774,11 +464,6 @@ class WorkflowEngine
 
             $output = [];
 
-            /*
-            |--------------------------------------------------------------------------
-            | START
-            |--------------------------------------------------------------------------
-            */
 
             if ($type === 'start') {
 
@@ -839,11 +524,6 @@ class WorkflowEngine
                 }
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | MESSAGE
-            |--------------------------------------------------------------------------
-            */
 
             elseif ($type === 'message') {
 
@@ -888,19 +568,11 @@ class WorkflowEngine
                 }
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | MENU
-            |--------------------------------------------------------------------------
-            */
+
 
             elseif ($type === 'menu') {
 
-                /*
-                |--------------------------------------------------------------------------
-                | WHATSAPP BUTTON / LIST CLICK
-                |--------------------------------------------------------------------------
-                */
+
 
                 if (! empty($input['source_handle'])) {
 
@@ -1000,11 +672,7 @@ class WorkflowEngine
                     return;
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | MANUAL TEXT INPUT
-                |--------------------------------------------------------------------------
-                */
+
 
                 if (array_key_exists('text', $input)) {
 
@@ -1068,11 +736,6 @@ class WorkflowEngine
                         }
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | INVALID TEXT
-                    |--------------------------------------------------------------------------
-                    */
 
                     $validationMessage =
                         $cfg['validation_message']
@@ -1114,11 +777,7 @@ class WorkflowEngine
                     return;
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | FIRST VISIT
-                |--------------------------------------------------------------------------
-                */
+
 
                 $this->sendMenu(
                     $session,
@@ -1132,11 +791,7 @@ class WorkflowEngine
                 ]);
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | BUTTON
-            |--------------------------------------------------------------------------
-            */
+
 
             elseif ($type === 'button') {
 
@@ -1509,21 +1164,6 @@ class WorkflowEngine
                     $isEmpty =
                         $value === '';
 
-                    Log::info('USER INPUT DEBUG', [
-                        'node_id' => $nodeId,
-                        'variable' => $variable,
-                        'allow_skip' => $allowSkip,
-                        'skip_text' => $skipText,
-                        'received_value' => $value,
-                        'is_skip_text' => $isSkipText,
-                        'required' => $required,
-                    ]);
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | ALLOW SKIP
-                    |--------------------------------------------------------------------------
-                    */
 
                     if (
                         $allowSkip
@@ -1539,14 +1179,6 @@ class WorkflowEngine
                         )
                     ) {
 
-                        Log::info(
-                            'USER INPUT SKIPPED',
-                            [
-                                'node_id' => $nodeId,
-                                'variable' => $variable,
-                                'skip_text' => $skipText,
-                            ]
-                        );
 
                         $variables =
                             $session->variables ?? [];
@@ -2251,20 +1883,9 @@ class WorkflowEngine
                 ];
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | UNKNOWN NODE
-            |--------------------------------------------------------------------------
-            */
+
 
             else {
-
-                Log::warning('UNKNOWN WORKFLOW NODE TYPE', [
-                    'workflow_id' => $workflow->id,
-                    'session_id' => $session->id,
-                    'node_id' => $nodeId,
-                    'node_type' => $type,
-                ]);
 
                 $next =
                     $this->nextNode(
@@ -2306,13 +1927,6 @@ class WorkflowEngine
                 'status' => 'error',
             ]);
 
-            Log::error('WORKFLOW NODE EXECUTION FAILED', [
-                'workflow_id' => $workflow->id,
-                'session_id' => $session->id,
-                'node_id' => $nodeId,
-                'node_type' => $node->node_type ?? null,
-                'error' => $e->getMessage(),
-            ]);
 
             throw $e;
         }
