@@ -30,16 +30,171 @@ const API =
     import.meta.env.VITE_API_URL ||
     "http://localhost:8000/api";
 
-const DEFAULT_QR_MESSAGE = "Hi";
-
 /*
 |--------------------------------------------------------------------------
-| LOCAL STORAGE
+| IMPORTANT
+|--------------------------------------------------------------------------
+| No hardcoded QR keyword.
+|
+| QR message always comes from selected journey/workflow trigger.
 |--------------------------------------------------------------------------
 */
 
 const SIMULATOR_STORAGE_PREFIX =
     "whatsapp_simulator_";
+
+/*
+|--------------------------------------------------------------------------
+| LOCAL STORAGE KEYS
+|--------------------------------------------------------------------------
+*/
+
+const MOBILE_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}mobile`;
+
+const JOURNEY_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}journey`;
+
+const MESSAGES_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}messages`;
+
+const INPUT_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}input`;
+
+const SESSION_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}session`;
+
+const QR_MESSAGE_STORAGE_KEY =
+    `${SIMULATOR_STORAGE_PREFIX}qr_message`;
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE TRIGGER
+|--------------------------------------------------------------------------
+|
+| Supports:
+|
+| trigger_text: "hello"
+| trigger: "hello"
+| keyword: "hello"
+| keywords: ["hello", "hi"]
+| triggers: ["hello", "hi"]
+| trigger: { text: "hello" }
+|--------------------------------------------------------------------------
+*/
+
+function normalizeJourneyTrigger(journey) {
+    if (!journey) {
+        return "";
+    }
+
+    const possibleValues = [
+        journey.trigger_text,
+        journey.trigger,
+        journey.keyword,
+        journey.keywords,
+        journey.triggers,
+        journey.start_keyword,
+        journey.startKeyword,
+    ];
+
+    for (const value of possibleValues) {
+        /*
+        |--------------------------------------------------------------------------
+        | STRING
+        |--------------------------------------------------------------------------
+        */
+
+        if (typeof value === "string") {
+            const clean = value.trim();
+
+            if (clean) {
+                /*
+                | If backend sends comma-separated keywords,
+                | first keyword is used for QR.
+                */
+
+                const firstKeyword = clean
+                    .split(/[,|]+/)
+                    .map((item) => item.trim())
+                    .find(Boolean);
+
+                if (firstKeyword) {
+                    return firstKeyword;
+                }
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | ARRAY
+        |--------------------------------------------------------------------------
+        */
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                if (typeof item === "string") {
+                    const clean = item.trim();
+
+                    if (clean) {
+                        return clean;
+                    }
+                }
+
+                if (
+                    item &&
+                    typeof item === "object"
+                ) {
+                    const nested =
+                        item.text ??
+                        item.value ??
+                        item.keyword ??
+                        item.trigger ??
+                        item.name ??
+                        "";
+
+                    if (
+                        typeof nested ===
+                            "string" &&
+                        nested.trim()
+                    ) {
+                        return nested.trim();
+                    }
+                }
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | OBJECT
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            value &&
+            typeof value === "object" &&
+            !Array.isArray(value)
+        ) {
+            const nested =
+                value.text ??
+                value.value ??
+                value.keyword ??
+                value.trigger ??
+                value.name ??
+                "";
+
+            if (
+                typeof nested ===
+                    "string" &&
+                nested.trim()
+            ) {
+                return nested.trim();
+            }
+        }
+    }
+
+    return "";
+}
 
 export default function WhatsAppSimulator() {
     const navigate = useNavigate();
@@ -52,8 +207,8 @@ export default function WhatsAppSimulator() {
         try {
             return (
                 localStorage.getItem(
-                    `${SIMULATOR_STORAGE_PREFIX}mobile`
-                ) || "919876543210"
+                    MOBILE_STORAGE_KEY
+                ) || "0000000000"
             );
         } catch (error) {
             console.error(
@@ -77,7 +232,7 @@ export default function WhatsAppSimulator() {
             try {
                 return (
                     localStorage.getItem(
-                        `${SIMULATOR_STORAGE_PREFIX}journey`
+                        JOURNEY_STORAGE_KEY
                     ) || ""
                 );
             } catch (error) {
@@ -102,9 +257,10 @@ export default function WhatsAppSimulator() {
             try {
                 setJourneysLoading(true);
 
-                const response = await axios.get(
-                    `${API}/webhooks/whatsapp/journeys`
-                );
+                const response =
+                    await axios.get(
+                        `${API}/webhooks/whatsapp/journeys`
+                    );
 
                 console.log(
                     "JOURNEYS RESPONSE:",
@@ -120,82 +276,98 @@ export default function WhatsAppSimulator() {
                         ? response.data.data
                         : [];
 
+                console.log(
+                    "JOURNEY LIST:",
+                    list
+                );
+
                 setJourneys(list);
 
                 if (list.length > 0) {
-                    setSelectedJourney((current) => {
-                        /*
-                        |--------------------------------------------------------------------------
-                        | CURRENT STATE JOURNEY
-                        |--------------------------------------------------------------------------
-                        */
+                    setSelectedJourney(
+                        (current) => {
+                            /*
+                            |--------------------------------------------------------------------------
+                            | CURRENT STATE
+                            |--------------------------------------------------------------------------
+                            */
 
-                        if (current) {
-                            const exists =
+                            if (current) {
+                                const exists =
+                                    list.some(
+                                        (
+                                            journey
+                                        ) =>
+                                            String(
+                                                journey.id
+                                            ) ===
+                                            String(
+                                                current
+                                            )
+                                    );
+
+                                if (exists) {
+                                    return String(
+                                        current
+                                    );
+                                }
+                            }
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | LOCAL STORAGE
+                            |--------------------------------------------------------------------------
+                            */
+
+                            let savedJourney =
+                                "";
+
+                            try {
+                                savedJourney =
+                                    localStorage.getItem(
+                                        JOURNEY_STORAGE_KEY
+                                    ) || "";
+                            } catch (
+                                error
+                            ) {
+                                console.error(
+                                    "READ SAVED JOURNEY ERROR:",
+                                    error
+                                );
+                            }
+
+                            if (
+                                savedJourney &&
                                 list.some(
-                                    (journey) =>
+                                    (
+                                        journey
+                                    ) =>
                                         String(
                                             journey.id
                                         ) ===
                                         String(
-                                            current
+                                            savedJourney
                                         )
-                                );
-
-                            if (exists) {
+                                )
+                            ) {
                                 return String(
-                                    current
+                                    savedJourney
                                 );
                             }
-                        }
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | LOCAL STORAGE JOURNEY
-                        |--------------------------------------------------------------------------
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | FIRST JOURNEY
+                            |--------------------------------------------------------------------------
+                            */
 
-                        let savedJourney = "";
-
-                        try {
-                            savedJourney =
-                                localStorage.getItem(
-                                    `${SIMULATOR_STORAGE_PREFIX}journey`
-                                ) || "";
-                        } catch (error) {
-                            console.error(
-                                "READ SAVED JOURNEY ERROR:",
-                                error
-                            );
-                        }
-
-                        if (
-                            savedJourney &&
-                            list.some(
-                                (journey) =>
-                                    String(
-                                        journey.id
-                                    ) ===
-                                    String(
-                                        savedJourney
-                                    )
-                            )
-                        ) {
                             return String(
-                                savedJourney
+                                list[0].id
                             );
                         }
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | FIRST JOURNEY
-                        |--------------------------------------------------------------------------
-                        */
-
-                        return String(
-                            list[0].id
-                        );
-                    });
+                    );
+                } else {
+                    setSelectedJourney("");
                 }
             } catch (error) {
                 console.error(
@@ -207,6 +379,8 @@ export default function WhatsAppSimulator() {
                     "JOURNEYS RESPONSE ERROR:",
                     error.response?.data
                 );
+
+                setJourneys([]);
             } finally {
                 setJourneysLoading(false);
             }
@@ -224,7 +398,7 @@ export default function WhatsAppSimulator() {
             try {
                 const saved =
                     localStorage.getItem(
-                        `${SIMULATOR_STORAGE_PREFIX}messages`
+                        MESSAGES_STORAGE_KEY
                     );
 
                 if (!saved) {
@@ -256,7 +430,7 @@ export default function WhatsAppSimulator() {
             try {
                 return (
                     localStorage.getItem(
-                        `${SIMULATOR_STORAGE_PREFIX}input`
+                        INPUT_STORAGE_KEY
                     ) || ""
                 );
             } catch (error) {
@@ -285,7 +459,7 @@ export default function WhatsAppSimulator() {
             try {
                 const saved =
                     localStorage.getItem(
-                        `${SIMULATOR_STORAGE_PREFIX}session`
+                        SESSION_STORAGE_KEY
                     );
 
                 if (!saved) {
@@ -304,27 +478,21 @@ export default function WhatsAppSimulator() {
         });
 
     /* =========================================================
-       QR
+       QR MESSAGE
     ========================================================== */
 
-    const [qrMessage, setQrMessage] =
-        useState(() => {
-            try {
-                return (
-                    localStorage.getItem(
-                        `${SIMULATOR_STORAGE_PREFIX}qr_message`
-                    ) ||
-                    DEFAULT_QR_MESSAGE
-                );
-            } catch (error) {
-                console.error(
-                    "LOAD QR MESSAGE ERROR:",
-                    error
-                );
+    /*
+    |--------------------------------------------------------------------------
+    | IMPORTANT
+    |--------------------------------------------------------------------------
+    | Do NOT load old QR message from localStorage.
+    |
+    | Otherwise old "Hi" can remain even after workflow changes.
+    |--------------------------------------------------------------------------
+    */
 
-                return DEFAULT_QR_MESSAGE;
-            }
-        });
+    const [qrMessage, setQrMessage] =
+        useState("");
 
     const [copied, setCopied] =
         useState(false);
@@ -343,26 +511,149 @@ export default function WhatsAppSimulator() {
         mobile.replace(/\D/g, "");
 
     /* =========================================================
+       SELECTED JOURNEY DATA
+    ========================================================== */
+
+    const selectedJourneyData =
+        useMemo(() => {
+            return journeys.find(
+                (journey) =>
+                    String(journey.id) ===
+                    String(selectedJourney)
+            );
+        }, [
+            journeys,
+            selectedJourney,
+        ]);
+
+    /* =========================================================
        SELECTED JOURNEY NAME
     ========================================================== */
 
     const selectedJourneyName =
-        journeys.find(
-            (journey) =>
-                String(journey.id) ===
-                String(selectedJourney)
-        )?.name || "";
+        selectedJourneyData?.name || "";
+
+    /* =========================================================
+       DYNAMIC JOURNEY TRIGGER
+    ========================================================== */
+
+    const selectedJourneyTrigger =
+        useMemo(() => {
+            return normalizeJourneyTrigger(
+                selectedJourneyData
+            );
+        }, [selectedJourneyData]);
+
+    /* =========================================================
+       DEBUG JOURNEY
+    ========================================================== */
+
+    useEffect(() => {
+        console.log(
+            "SELECTED JOURNEY:",
+            selectedJourneyData
+        );
+
+        console.log(
+            "SELECTED JOURNEY TRIGGER:",
+            selectedJourneyTrigger
+        );
+    }, [
+        selectedJourneyData,
+        selectedJourneyTrigger,
+    ]);
+
+    /* =========================================================
+       DYNAMIC QR MESSAGE
+    ========================================================== */
+
+    useEffect(() => {
+        /*
+        |--------------------------------------------------------------------------
+        | No journey
+        |--------------------------------------------------------------------------
+        */
+
+        if (!selectedJourneyData) {
+            setQrMessage("");
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Dynamic trigger
+        |--------------------------------------------------------------------------
+        */
+
+        if (selectedJourneyTrigger) {
+            setQrMessage(
+                selectedJourneyTrigger
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Also update localStorage so old value
+            | cannot come back.
+            |--------------------------------------------------------------------------
+            */
+
+            try {
+                localStorage.setItem(
+                    QR_MESSAGE_STORAGE_KEY,
+                    selectedJourneyTrigger
+                );
+            } catch (error) {
+                console.error(
+                    "SAVE DYNAMIC QR MESSAGE ERROR:",
+                    error
+                );
+            }
+
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | No trigger configured
+        |--------------------------------------------------------------------------
+        */
+
+        setQrMessage("");
+
+        try {
+            localStorage.removeItem(
+                QR_MESSAGE_STORAGE_KEY
+            );
+        } catch (error) {
+            console.error(
+                "REMOVE QR MESSAGE ERROR:",
+                error
+            );
+        }
+    }, [
+        selectedJourneyData,
+        selectedJourneyTrigger,
+    ]);
 
     /* =========================================================
        QR URL
     ========================================================== */
 
-    const whatsappQrUrl =
-        cleanMobile
-            ? `https://wa.me/${cleanMobile}?text=${encodeURIComponent(
-                  qrMessage
-              )}`
-            : "";
+    const whatsappQrUrl = useMemo(() => {
+        if (
+            !cleanMobile ||
+            !qrMessage.trim()
+        ) {
+            return "";
+        }
+
+        return `https://wa.me/${cleanMobile}?text=${encodeURIComponent(
+            qrMessage.trim()
+        )}`;
+    }, [
+        cleanMobile,
+        qrMessage,
+    ]);
 
     /* =========================================================
        AUTO SCROLL
@@ -382,7 +673,7 @@ export default function WhatsAppSimulator() {
     useEffect(() => {
         try {
             localStorage.setItem(
-                `${SIMULATOR_STORAGE_PREFIX}mobile`,
+                MOBILE_STORAGE_KEY,
                 mobile
             );
         } catch (error) {
@@ -401,12 +692,12 @@ export default function WhatsAppSimulator() {
         try {
             if (selectedJourney) {
                 localStorage.setItem(
-                    `${SIMULATOR_STORAGE_PREFIX}journey`,
+                    JOURNEY_STORAGE_KEY,
                     selectedJourney
                 );
             } else {
                 localStorage.removeItem(
-                    `${SIMULATOR_STORAGE_PREFIX}journey`
+                    JOURNEY_STORAGE_KEY
                 );
             }
         } catch (error) {
@@ -424,7 +715,7 @@ export default function WhatsAppSimulator() {
     useEffect(() => {
         try {
             localStorage.setItem(
-                `${SIMULATOR_STORAGE_PREFIX}messages`,
+                MESSAGES_STORAGE_KEY,
                 JSON.stringify(messages)
             );
         } catch (error) {
@@ -443,12 +734,12 @@ export default function WhatsAppSimulator() {
         try {
             if (input) {
                 localStorage.setItem(
-                    `${SIMULATOR_STORAGE_PREFIX}input`,
+                    INPUT_STORAGE_KEY,
                     input
                 );
             } else {
                 localStorage.removeItem(
-                    `${SIMULATOR_STORAGE_PREFIX}input`
+                    INPUT_STORAGE_KEY
                 );
             }
         } catch (error) {
@@ -467,12 +758,12 @@ export default function WhatsAppSimulator() {
         try {
             if (session) {
                 localStorage.setItem(
-                    `${SIMULATOR_STORAGE_PREFIX}session`,
+                    SESSION_STORAGE_KEY,
                     JSON.stringify(session)
                 );
             } else {
                 localStorage.removeItem(
-                    `${SIMULATOR_STORAGE_PREFIX}session`
+                    SESSION_STORAGE_KEY
                 );
             }
         } catch (error) {
@@ -488,9 +779,13 @@ export default function WhatsAppSimulator() {
     ========================================================== */
 
     useEffect(() => {
+        if (!qrMessage) {
+            return;
+        }
+
         try {
             localStorage.setItem(
-                `${SIMULATOR_STORAGE_PREFIX}qr_message`,
+                QR_MESSAGE_STORAGE_KEY,
                 qrMessage
             );
         } catch (error) {
@@ -698,16 +993,21 @@ export default function WhatsAppSimulator() {
                     const finalPayload = {
                         ...payload,
 
-                        workflow_id:
-                            Number(
-                                selectedJourney
-                            ),
-
                         from:
                             cleanMobile ||
                             payload.from ||
                             mobile,
                     };
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | IMPORTANT
+                    |--------------------------------------------------------------------------
+                    | No workflow_id here.
+                    |
+                    | Backend must determine workflow using keyword.
+                    |--------------------------------------------------------------------------
+                    */
 
                     console.log(
                         "WEBHOOK REQUEST:",
@@ -771,7 +1071,7 @@ export default function WhatsAppSimulator() {
                     );
 
                     /* -----------------------------------------------------
-                       BACKEND SIMPLE MESSAGE
+                       SIMPLE BACKEND MESSAGE
                     ------------------------------------------------------ */
 
                     if (
@@ -843,11 +1143,6 @@ export default function WhatsAppSimulator() {
         setInput("");
 
         await sendWebhook({
-            workflow_id:
-                Number(
-                    selectedJourney
-                ),
-
             from: cleanMobile,
 
             type: "text",
@@ -876,11 +1171,6 @@ export default function WhatsAppSimulator() {
             }
 
             await sendWebhook({
-                workflow_id:
-                    Number(
-                        selectedJourney
-                    ),
-
                 from: cleanMobile,
 
                 type: "interactive",
@@ -949,14 +1239,54 @@ export default function WhatsAppSimulator() {
 
     const simulateQrScan =
         async () => {
-            if (
-                loading ||
-                !cleanMobile ||
-                !qrMessage.trim() ||
-                !selectedJourney
-            ) {
+            /*
+            |--------------------------------------------------------------------------
+            | VALIDATION
+            |--------------------------------------------------------------------------
+            */
+
+            if (loading) {
                 return;
             }
+
+            if (!cleanMobile) {
+                return;
+            }
+
+            if (!selectedJourney) {
+                return;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | IMPORTANT
+            |--------------------------------------------------------------------------
+            | QR must always use selected workflow's dynamic trigger.
+            |
+            | Do NOT trust an old/local QR message.
+            |--------------------------------------------------------------------------
+            */
+
+            const dynamicTrigger =
+                selectedJourneyTrigger.trim();
+
+            if (!dynamicTrigger) {
+                addBotMessage(
+                    "⚠️ Selected Journey does not have a trigger keyword."
+                );
+
+                return;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | FORCE CURRENT JOURNEY TRIGGER
+            |--------------------------------------------------------------------------
+            */
+
+            setQrMessage(
+                dynamicTrigger
+            );
 
             /*
             |--------------------------------------------------------------------------
@@ -968,11 +1298,18 @@ export default function WhatsAppSimulator() {
             setSession(null);
             setInput("");
 
+            /*
+            |--------------------------------------------------------------------------
+            | RESET CURRENT WORKFLOW SESSION
+            |--------------------------------------------------------------------------
+            */
+
             try {
                 await axios.post(
                     `${API}/webhooks/whatsapp/reset`,
                     {
-                        from: cleanMobile,
+                        from:
+                            cleanMobile,
 
                         workflow_id:
                             Number(
@@ -989,6 +1326,12 @@ export default function WhatsAppSimulator() {
                 );
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | SMALL DELAY
+            |--------------------------------------------------------------------------
+            */
+
             await new Promise(
                 (resolve) =>
                     setTimeout(
@@ -999,23 +1342,25 @@ export default function WhatsAppSimulator() {
 
             /*
             |--------------------------------------------------------------------------
-            | START NEW JOURNEY
+            | START JOURNEY USING DYNAMIC TRIGGER
+            |--------------------------------------------------------------------------
+            |
+            | IMPORTANT:
+            | workflow_id is NOT sent.
+            |
+            | Laravel will find workflow by exact trigger.
             |--------------------------------------------------------------------------
             */
 
             await sendWebhook({
-                workflow_id:
-                    Number(
-                        selectedJourney
-                    ),
-
-                from: cleanMobile,
+                from:
+                    cleanMobile,
 
                 type: "text",
 
                 text: {
                     body:
-                        qrMessage.trim(),
+                        dynamicTrigger,
                 },
             });
         };
@@ -1024,46 +1369,64 @@ export default function WhatsAppSimulator() {
        RESET CHAT
     ========================================================== */
 
-    const resetChat = async () => {
-        if (loading) {
-            return;
-        }
+    const resetChat =
+        async () => {
+            if (loading) {
+                return;
+            }
 
-        try {
-            setLoading(true);
+            try {
+                setLoading(true);
 
-            await axios.post(
-                `${API}/webhooks/whatsapp/reset`,
-                {
-                    from: cleanMobile,
+                await axios.post(
+                    `${API}/webhooks/whatsapp/reset`,
+                    {
+                        from:
+                            cleanMobile,
 
-                    workflow_id:
-                        selectedJourney
-                            ? Number(
-                                  selectedJourney
-                              )
-                            : null,
+                        workflow_id:
+                            selectedJourney
+                                ? Number(
+                                      selectedJourney
+                                  )
+                                : null,
+                    }
+                );
+            } catch (error) {
+                console.error(
+                    "SESSION RESET ERROR:",
+                    error
+                );
+            } finally {
+                /*
+                |--------------------------------------------------------------------------
+                | CLEAR UI
+                |--------------------------------------------------------------------------
+                */
+
+                setMessages([]);
+                setSession(null);
+                setInput("");
+
+                /*
+                |--------------------------------------------------------------------------
+                | RESTORE DYNAMIC TRIGGER
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    selectedJourneyTrigger
+                ) {
+                    setQrMessage(
+                        selectedJourneyTrigger
+                    );
+                } else {
+                    setQrMessage("");
                 }
-            );
-        } catch (error) {
-            console.error(
-                "SESSION RESET ERROR:",
-                error
-            );
-        } finally {
-            /*
-            |--------------------------------------------------------------------------
-            | CLEAR UI STATE
-            |--------------------------------------------------------------------------
-            */
 
-            setMessages([]);
-            setSession(null);
-            setInput("");
-
-            setLoading(false);
-        }
-    };
+                setLoading(false);
+            }
+        };
 
     /* =========================================================
        COPY QR LINK
@@ -1123,9 +1486,11 @@ export default function WhatsAppSimulator() {
             message.direction ===
             "out";
 
-        /* -----------------------------------------------------
-           MENU OPTIONS
-        ------------------------------------------------------ */
+        /*
+        |--------------------------------------------------------------------------
+        | MENU OPTIONS
+        |--------------------------------------------------------------------------
+        */
 
         const menuOptions =
             payload.options ||
@@ -1133,9 +1498,11 @@ export default function WhatsAppSimulator() {
             payload.menu_options ||
             [];
 
-        /* -----------------------------------------------------
-           BUTTON
-        ------------------------------------------------------ */
+        /*
+        |--------------------------------------------------------------------------
+        | BUTTON
+        |--------------------------------------------------------------------------
+        */
 
         const button =
             payload.button ||
@@ -1582,25 +1949,86 @@ export default function WhatsAppSimulator() {
                                             ""
                                         );
 
-                                        setQrMessage(
-                                            DEFAULT_QR_MESSAGE
-                                        );
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | Find newly selected journey immediately
+                                        |--------------------------------------------------------------------------
+                                        */
+
+                                        const newJourney =
+                                            journeys.find(
+                                                (
+                                                    journey
+                                                ) =>
+                                                    String(
+                                                        journey.id
+                                                    ) ===
+                                                    String(
+                                                        workflowId
+                                                    )
+                                            );
+
+                                        const newTrigger =
+                                            normalizeJourneyTrigger(
+                                                newJourney
+                                            );
 
                                         /*
                                         |--------------------------------------------------------------------------
-                                        | NO JOURNEY
+                                        | DYNAMIC QR MESSAGE
                                         |--------------------------------------------------------------------------
                                         */
+
+                                        setQrMessage(
+                                            newTrigger
+                                        );
 
                                         if (
                                             !workflowId
                                         ) {
+                                            try {
+                                                localStorage.removeItem(
+                                                    QR_MESSAGE_STORAGE_KEY
+                                                );
+                                            } catch (
+                                                error
+                                            ) {
+                                                console.error(
+                                                    "REMOVE QR STORAGE ERROR:",
+                                                    error
+                                                );
+                                            }
+
                                             return;
                                         }
 
                                         /*
                                         |--------------------------------------------------------------------------
-                                        | RESET ONLY SELECTED JOURNEY
+                                        | SAVE DYNAMIC TRIGGER
+                                        |--------------------------------------------------------------------------
+                                        */
+
+                                        if (
+                                            newTrigger
+                                        ) {
+                                            try {
+                                                localStorage.setItem(
+                                                    QR_MESSAGE_STORAGE_KEY,
+                                                    newTrigger
+                                                );
+                                            } catch (
+                                                error
+                                            ) {
+                                                console.error(
+                                                    "SAVE QR STORAGE ERROR:",
+                                                    error
+                                                );
+                                            }
+                                        }
+
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | RESET BACKEND SESSION
                                         |--------------------------------------------------------------------------
                                         */
 
@@ -1720,6 +2148,18 @@ export default function WhatsAppSimulator() {
                                             {
                                                 selectedJourneyName
                                             }
+                                        </div>
+
+                                        <div
+                                            className="
+                                                mt-1
+                                                text-[11px]
+                                                text-emerald-600
+                                            "
+                                        >
+                                            Trigger:{" "}
+                                            {selectedJourneyTrigger ||
+                                                "Not configured"}
                                         </div>
                                     </div>
                                 )}
@@ -1887,7 +2327,10 @@ export default function WhatsAppSimulator() {
                                                 .value
                                         )
                                     }
-                                    placeholder="Hi"
+                                    placeholder={
+                                        selectedJourneyTrigger ||
+                                        "Journey trigger not configured"
+                                    }
                                     className="
                                         w-full
                                         rounded-xl
@@ -1949,6 +2392,29 @@ export default function WhatsAppSimulator() {
                                         </p>
                                     </div>
                                 )}
+
+                                {/* NO TRIGGER */}
+
+                                {selectedJourney &&
+                                    !selectedJourneyTrigger && (
+                                        <div
+                                            className="
+                                                mt-4
+                                                rounded-xl
+                                                border
+                                                border-amber-200
+                                                bg-amber-50
+                                                p-3
+                                                text-xs
+                                                text-amber-700
+                                            "
+                                        >
+                                            This Journey
+                                            does not have a
+                                            configured trigger
+                                            keyword.
+                                        </div>
+                                    )}
 
                                 {/* QR LINK */}
 
@@ -2050,8 +2516,8 @@ export default function WhatsAppSimulator() {
                                     disabled={
                                         loading ||
                                         !cleanMobile ||
-                                        !qrMessage.trim() ||
-                                        !selectedJourney
+                                        !selectedJourney ||
+                                        !selectedJourneyTrigger
                                     }
                                     className="
                                         mt-3
@@ -2088,10 +2554,10 @@ export default function WhatsAppSimulator() {
                                         text-slate-400
                                     "
                                 >
-                                    QR scan simulator will
-                                    automatically send the
-                                    default message to your
-                                    selected Laravel journey.
+                                    QR scan simulator
+                                    automatically uses
+                                    the trigger configured
+                                    in the selected Journey.
                                 </p>
                             </div>
 
@@ -2408,7 +2874,9 @@ export default function WhatsAppSimulator() {
                                                 "
                                             >
                                                 {selectedJourney
-                                                    ? 'Type "Hi" or click "Simulate QR Scan" to start the selected WhatsApp journey.'
+                                                    ? selectedJourneyTrigger
+                                                        ? `Type "${selectedJourneyTrigger}" or click "Simulate QR Scan" to start the selected WhatsApp journey.`
+                                                        : "Selected Journey has no trigger keyword."
                                                     : "Select a published journey from the left panel."}
                                             </p>
                                         </div>
@@ -2562,9 +3030,11 @@ export default function WhatsAppSimulator() {
     );
 }
 
-/* =========================================================
-   TIME
-========================================================== */
+/*
+|--------------------------------------------------------------------------
+| TIME
+|--------------------------------------------------------------------------
+*/
 
 function getTime() {
     return new Date().toLocaleTimeString(

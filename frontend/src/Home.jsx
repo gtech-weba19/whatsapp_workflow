@@ -37,6 +37,7 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
+  useReactFlow
 } from "reactflow";
 
 import "reactflow/dist/style.css";
@@ -84,10 +85,27 @@ const defaultMenuOptions = [
 ========================================================= */
 
 function Node({
+   id,
   data,
   type,
   selected,
 }) {
+
+   const { deleteElements } = useReactFlow();
+
+  const handleDelete = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    deleteElements({
+      nodes: [
+        {
+          id: String(id),
+        },
+      ],
+    });
+  };
+
   const nodeStyles = {
     start: {
       wrapper: "border-emerald-200 bg-white",
@@ -207,14 +225,7 @@ function Node({
 {selected && type !== "start" && (
   <button
     type="button"
-    onClick={(e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (data?.onDelete) {
-        data.onDelete();
-      }
-    }}
+     onClick={handleDelete}
     className="
       absolute
       right-[-10px]
@@ -595,13 +606,6 @@ function Node({
   );
 }
 
-/* =========================================================
-   NODE TYPES
-========================================================= */
-
-/* =========================================================
-   NODE COMPONENTS
-========================================================= */
 
 const StartNode = (props) => (
   <Node {...props} type="start" />
@@ -737,54 +741,63 @@ function Config({
   pushHistory,
   onDelete,
 }) {
-  const [form, setForm] = useState({
-    label: "",
-    message: "",
-    variable: "",
-    buttonText: "",
-    condition: "",
-    apiUrl: "",
-    method: "GET",
+ const [form, setForm] = useState({
+  label: "",
 
-    // =====================================================
-    // MEDIA
-    // =====================================================
-    mediaId: "",
-    imageUrl: "",
-    videoUrl: "",
-    documentUrl: "",
-    audioUrl: "",
-    mediaUrl: "",
-    fileName: "",
-    caption: "",
-    mediaType: "",
+  // =====================================================
+  // START TRIGGER
+  // =====================================================
+  triggerText: "",
 
-    delay: "5",
-    delayUnit: "seconds",
+  // =====================================================
+  // COMMON
+  // =====================================================
+  message: "",
+  variable: "",
+  buttonText: "",
+  condition: "",
+  apiUrl: "",
+  method: "GET",
 
-    menuOptions: defaultMenuOptions,
+  // =====================================================
+  // MEDIA
+  // =====================================================
+  mediaId: "",
+  imageUrl: "",
+  videoUrl: "",
+  documentUrl: "",
+  audioUrl: "",
+  mediaUrl: "",
+  fileName: "",
+  caption: "",
+  mediaType: "",
 
-    // =====================================================
-    // USER INPUT
-    // =====================================================
-    required: true,
-    allowSkip: false,
-    skipText: "skip",
+  delay: "5",
+  delayUnit: "seconds",
 
-    validationType: "text",
+  menuOptions: defaultMenuOptions,
 
-    validationMessage:
-      "⚠️ Please enter a valid response.",
+  // =====================================================
+  // USER INPUT
+  // =====================================================
+  required: true,
+  allowSkip: false,
+  skipText: "skip",
 
-    requiredMessage:
-      "⚠️ This field is required. Please enter a valid response.",
+  validationType: "text",
 
-    minLength: "",
-    maxLength: "",
-    minValue: "",
-    maxValue: "",
-    regex: "",
-  });
+  validationMessage:
+    "⚠️ Please enter a valid response.",
+
+  requiredMessage:
+    "⚠️ This field is required. Please enter a valid response.",
+
+  minLength: "",
+  maxLength: "",
+  minValue: "",
+  maxValue: "",
+  regex: "",
+});
 
   // =======================================================
   // UPLOAD STATE
@@ -808,149 +821,162 @@ function Config({
       menuOptions = defaultMenuOptions;
     }
 
-    setForm({
-      label:
-        node.data?.label || "",
+   setForm({
+  // ===================================================
+  // COMMON
+  // ===================================================
 
-      message:
-        node.data?.message || "",
+  label:
+    node.data?.label || "",
 
-      variable:
-        node.data?.variable || "",
+  // ===================================================
+  // START TRIGGER
+  // ===================================================
 
-      buttonText:
-        node.data?.buttonText || "",
+  triggerText:
+    node.data?.triggerText ||
+    node.data?.trigger_text ||
+    "",
 
-      condition:
-        node.data?.condition || "",
+  message:
+    node.data?.message || "",
 
-      apiUrl:
-        node.data?.apiUrl || "",
+  variable:
+    node.data?.variable || "",
 
-      method:
-        node.data?.method || "GET",
+  buttonText:
+    node.data?.buttonText || "",
 
-      // ===================================================
-      // MEDIA
-      // ===================================================
+  condition:
+    node.data?.condition || "",
 
-      mediaId:
-        node.data?.mediaId || "",
+  apiUrl:
+    node.data?.apiUrl || "",
 
-      imageUrl:
-        node.data?.imageUrl || "",
+  method:
+    node.data?.method || "GET",
 
-      videoUrl:
-        node.data?.videoUrl || "",
+  // ===================================================
+  // MEDIA
+  // ===================================================
 
-      documentUrl:
-        node.data?.documentUrl || "",
+  mediaId:
+    node.data?.mediaId || "",
 
-      audioUrl:
-        node.data?.audioUrl || "",
+  imageUrl:
+    node.data?.imageUrl || "",
 
-      mediaUrl:
-        node.data?.mediaUrl || "",
+  videoUrl:
+    node.data?.videoUrl || "",
 
-      fileName:
-        node.data?.fileName || "",
+  documentUrl:
+    node.data?.documentUrl || "",
 
-      caption:
-        node.data?.caption || "",
+  audioUrl:
+    node.data?.audioUrl || "",
 
-      mediaType:
-        node.data?.mediaType || "",
+  mediaUrl:
+    node.data?.mediaUrl || "",
 
-      // ===================================================
-      // DELAY
-      // ===================================================
+  fileName:
+    node.data?.fileName || "",
 
-      delay:
-        node.data?.delay || "5",
+  caption:
+    node.data?.caption || "",
 
-      delayUnit:
-        node.data?.delayUnit || "seconds",
+  mediaType:
+    node.data?.mediaType || "",
 
-      // ===================================================
-      // MENU
-      // ===================================================
+  // ===================================================
+  // DELAY
+  // ===================================================
 
-    menuOptions: 
-  menuOptions.map(
-    (option, index) => ({
-      id:
-        `source-option-${index}`,
+  delay:
+    node.data?.delay || "5",
 
-      source_handle:
-        `source-option-${index}`,
+  delayUnit:
+    node.data?.delayUnit || "seconds",
 
-      label:
-        option.label ||
-        option.title ||
-        option.text ||
-        "",
-    })
-  ),
+  // ===================================================
+  // MENU
+  // ===================================================
 
-      // ===================================================
-      // USER INPUT CONFIG
-      // ===================================================
+  menuOptions:
+    menuOptions.map(
+      (option, index) => ({
+        id:
+          `source-option-${index}`,
 
-      required:
-        node.data?.required !== undefined
-          ? Boolean(node.data.required)
-          : true,
+        source_handle:
+          `source-option-${index}`,
 
-      allowSkip:
-        node.data?.allowSkip !== undefined
-          ? Boolean(node.data.allowSkip)
-          : node.data?.allow_skip !== undefined
-          ? Boolean(node.data.allow_skip)
-          : false,
+        label:
+          option.label ||
+          option.title ||
+          option.text ||
+          "",
+      })
+    ),
 
-      skipText:
-        node.data?.skipText ||
-        node.data?.skip_text ||
-        "skip",
+  // ===================================================
+  // USER INPUT CONFIG
+  // ===================================================
 
-      validationType:
-        node.data?.validationType ||
-        node.data?.validation_type ||
-        "text",
+  required:
+    node.data?.required !== undefined
+      ? Boolean(node.data.required)
+      : true,
 
-      validationMessage:
-        node.data?.validationMessage ||
-        node.data?.validation_message ||
-        "⚠️ Please enter a valid response.",
+  allowSkip:
+    node.data?.allowSkip !== undefined
+      ? Boolean(node.data.allowSkip)
+      : node.data?.allow_skip !== undefined
+      ? Boolean(node.data.allow_skip)
+      : false,
 
-      requiredMessage:
-        node.data?.requiredMessage ||
-        node.data?.required_message ||
-        "⚠️ This field is required. Please enter a valid response.",
+  skipText:
+    node.data?.skipText ||
+    node.data?.skip_text ||
+    "skip",
 
-      minLength:
-        node.data?.minLength ??
-        node.data?.min_length ??
-        "",
+  validationType:
+    node.data?.validationType ||
+    node.data?.validation_type ||
+    "text",
 
-      maxLength:
-        node.data?.maxLength ??
-        node.data?.max_length ??
-        "",
+  validationMessage:
+    node.data?.validationMessage ||
+    node.data?.validation_message ||
+    "⚠️ Please enter a valid response.",
 
-      minValue:
-        node.data?.minValue ??
-        node.data?.min_value ??
-        "",
+  requiredMessage:
+    node.data?.requiredMessage ||
+    node.data?.required_message ||
+    "⚠️ This field is required. Please enter a valid response.",
 
-      maxValue:
-        node.data?.maxValue ??
-        node.data?.max_value ??
-        "",
+  minLength:
+    node.data?.minLength ??
+    node.data?.min_length ??
+    "",
 
-      regex:
-        node.data?.regex || "",
-    });
+  maxLength:
+    node.data?.maxLength ??
+    node.data?.max_length ??
+    "",
+
+  minValue:
+    node.data?.minValue ??
+    node.data?.min_value ??
+    "",
+
+  maxValue:
+    node.data?.maxValue ??
+    node.data?.max_value ??
+    "",
+
+  regex:
+    node.data?.regex || "",
+});
   }, [node]);
 
   // =======================================================
@@ -1354,86 +1380,97 @@ function Config({
     const updatedNode = {
       ...node,
 
-      data: {
-        ...node.data,
+   data: {
+  ...node.data,
 
-        ...form,
+  ...form,
 
-        // =================================================
-        // USER INPUT CONFIG
-        // =================================================
+  // =================================================
+  // START TRIGGER
+  // =================================================
 
-        required:
-          Boolean(
-            form.required
-          ),
+  triggerText:
+    node.type === "start"
+      ? String(
+          form.triggerText || ""
+        ).trim()
+      : node.data?.triggerText || "",
 
-        allowSkip:
-          Boolean(
-            form.allowSkip
-          ),
+  // =================================================
+  // USER INPUT CONFIG
+  // =================================================
 
-        skipText:
-          String(
-            form.skipText ||
-              "skip"
-          ).trim() ||
-          "skip",
+  required:
+    Boolean(
+      form.required
+    ),
 
-        validationType:
-          String(
-            form.validationType ||
-              "text"
-          )
-            .trim()
-            .toLowerCase(),
+  allowSkip:
+    Boolean(
+      form.allowSkip
+    ),
 
-        validationMessage:
-          form.validationMessage ||
-          "⚠️ Please enter a valid response.",
+  skipText:
+    String(
+      form.skipText ||
+        "skip"
+    ).trim() ||
+    "skip",
 
-        requiredMessage:
-          form.requiredMessage ||
-          "⚠️ This field is required. Please enter a valid response.",
+  validationType:
+    String(
+      form.validationType ||
+        "text"
+    )
+      .trim()
+      .toLowerCase(),
 
-        minLength:
-          form.minLength === ""
-            ? ""
-            : Number(
-                form.minLength
-              ),
+  validationMessage:
+    form.validationMessage ||
+    "⚠️ Please enter a valid response.",
 
-        maxLength:
-          form.maxLength === ""
-            ? ""
-            : Number(
-                form.maxLength
-              ),
+  requiredMessage:
+    form.requiredMessage ||
+    "⚠️ This field is required. Please enter a valid response.",
 
-        minValue:
-          form.minValue === ""
-            ? ""
-            : Number(
-                form.minValue
-              ),
+  minLength:
+    form.minLength === ""
+      ? ""
+      : Number(
+          form.minLength
+        ),
 
-        maxValue:
-          form.maxValue === ""
-            ? ""
-            : Number(
-                form.maxValue
-              ),
+  maxLength:
+    form.maxLength === ""
+      ? ""
+      : Number(
+          form.maxLength
+        ),
 
-        regex:
-          form.regex || "",
+  minValue:
+    form.minValue === ""
+      ? ""
+      : Number(
+          form.minValue
+        ),
 
-        menuOptions:
-          Array.isArray(
-            form.menuOptions
-          )
-            ? form.menuOptions
-            : [],
-      },
+  maxValue:
+    form.maxValue === ""
+      ? ""
+      : Number(
+          form.maxValue
+        ),
+
+  regex:
+    form.regex || "",
+
+  menuOptions:
+    Array.isArray(
+      form.menuOptions
+    )
+      ? form.menuOptions
+      : [],
+},
     };
 
     // =====================================================
@@ -1549,24 +1586,88 @@ function Config({
         />
       </div>
 
-      {/* =====================================================
-          START
-      ====================================================== */}
 
-      {node?.type === "start" && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-sm font-bold text-emerald-700">
-            Start Node
-          </p>
+{/* =====================================================
+    START
+====================================================== */}
 
-          <p className="mt-1 text-xs leading-5 text-emerald-600">
-            This is the starting point
-            of your WhatsApp workflow.
-          </p>
-        </div>
-      )}
+{node?.type === "start" && (
+  <div className="space-y-4">
 
-      {/* =====================================================
+    {/* ================================================
+        TRIGGER MESSAGE
+    ================================================ */}
+
+    <div>
+      <label className={labelClass}>
+        Trigger Message
+      </label>
+
+      <input
+        type="text"
+        value={form.triggerText || ""}
+        onChange={(e) =>
+          updateField(
+            "triggerText",
+            e.target.value
+          )
+        }
+        placeholder="hi"
+        className={inputClass}
+      />
+
+      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+        When the customer sends this message,
+        the workflow will start.
+      </p>
+    </div>
+
+    {/* ================================================
+        TRIGGER PREVIEW
+    ================================================ */}
+
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+
+      <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+        Start Trigger
+      </p>
+
+      <div className="mt-3 rounded-lg border border-emerald-100 bg-white px-3 py-3">
+
+        <p className="text-xs text-slate-400">
+          Customer message
+        </p>
+
+        <p className="mt-1 text-sm font-semibold text-slate-700">
+          {form.triggerText || "hi"}
+        </p>
+
+      </div>
+
+    </div>
+
+    {/* ================================================
+        INFO
+    ================================================ */}
+
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+
+      <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600">
+        How it works
+      </p>
+
+      <p className="mt-2 text-xs leading-5 text-blue-700">
+        The Start Node only detects the trigger
+        message. Add a separate Message Node after
+        Start if you want to send a welcome message.
+      </p>
+
+    </div>
+
+  </div>
+)}
+
+  {/* =====================================================
           MESSAGE
       ====================================================== */}
 
@@ -1597,6 +1698,7 @@ function Config({
           </p>
         </div>
       )}
+
 
       {/* =====================================================
           BUTTON
@@ -5870,129 +5972,81 @@ const save = async (publish = false) => {
               CANVAS
           ================================================= */}
 
-            <section
-                ref={reactFlowWrapper}
-                className="
-                    relative
-                    h-full
-                    min-h-0
-                    min-w-0
-                    flex-1
-                    overflow-hidden
-                "
-            >
-                <ReactFlow
-                ref={reactFlowWrapper}
+       <section
+    ref={reactFlowWrapper}
+    className="
+        relative
+        h-full
+        min-h-0
+        min-w-0
+        flex-1
+        overflow-hidden
+    "
+>
+    <ReactFlow
+    ref={reactFlowWrapper}
 
-                nodes={nodes.map((node) => ({
-                    ...node,
+    nodes={nodes.map((node) => ({
+        ...node,
+        selected: selected?.id === node.id,
+    }))}
 
-                    selected:
-                        selected?.id === node.id,
+    edges={edges}
 
-                  data: {
-                ...node.data,
+    onInit={setReactFlowInstance}
 
-                onDelete: () => {
-                    deleteNode(node.id);
-                },
-            },
-                }))}
+    onDrop={onDrop}
+    onDragOver={onDragOver}
 
-                edges={edges}
+    onNodesChange={handleNodesChange}
+    onEdgesChange={handleEdgesChange}
 
-                /* =================================================
-                REACT FLOW INSTANCE
-                ================================================= */
+    onConnect={onConnect}
+    onReconnect={onReconnect}
 
-                onInit={setReactFlowInstance}
+    edgesReconnectable={true}
 
-                /* =================================================
-                DRAG & DROP
-                ================================================= */
+    onNodeDragStart={handleNodeDragStart}
 
-                onDrop={onDrop}
+    onNodeClick={(_event, node) =>
+        setSelected(node)
+    }
 
-                onDragOver={onDragOver}
+    onPaneClick={() =>
+        setSelected(null)
+    }
 
+    nodeTypes={nodeTypes}
 
+    defaultViewport={{
+        x: 80,
+        y: 80,
+        zoom: 0.65,
+    }}
 
-                        onNodesChange={
-                            handleNodesChange
-                        }
+    minZoom={0.4}
+    maxZoom={1.5}
 
-                        onEdgesChange={
-                            handleEdgesChange
-                        }
+    fitView={false}
 
-                        onConnect={
-                            onConnect
-                        }
+    proOptions={{
+        hideAttribution: true,
+    }}
+>
+    <MiniMap
+        nodeStrokeWidth={3}
+        pannable
+        zoomable
+    />
 
-                        onReconnect={
-                            onReconnect
-                        }
+    <Controls />
 
-                        edgesReconnectable={
-                            true
-                        }
-
-                        onNodeDragStart={
-                            handleNodeDragStart
-                        }
-
-                        onNodeClick={(
-                            _event,
-                            node
-                        ) =>
-                            setSelected(
-                            node
-                            )
-                        }
-
-                        onPaneClick={() =>
-                            setSelected(
-                            null
-                            )
-                        }
-
-                        nodeTypes={
-                            nodeTypes
-                        }
-
-                        defaultViewport={{
-                            x: 80,
-                            y: 80,
-                            zoom: 0.65,
-                        }}
-
-                        minZoom={0.4}
-
-                        maxZoom={1.5}
-
-                        fitView={false}
-
-                        proOptions={{
-                            hideAttribution:
-                            true,
-                        }}
-                        >
-                        <MiniMap
-                            nodeStrokeWidth={
-                            3
-                            }
-                            pannable
-                            zoomable
-                        />
-
-                        <Controls />
-
-                        <Background
-                            gap={20}
-                            size={1}
-                        />
-                        </ReactFlow>
-            </section>
+    <Background
+        gap={20}
+        size={1}
+    />
+</ReactFlow>
+</section>
 
           {/* =================================================
               RIGHT SIDEBAR
