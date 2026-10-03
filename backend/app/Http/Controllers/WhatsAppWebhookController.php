@@ -50,8 +50,6 @@ class WhatsAppWebhookController extends Controller
 
             $trigger = $this->getTriggerFromConfig($config);
 
-
-
             return [
                 'id' => $workflow->id,
                 'name' => $workflow->name,
@@ -66,14 +64,28 @@ class WhatsAppWebhookController extends Controller
         return response()->json($journeys);
     }
 
-
+    /**
+     * ==========================================================================
+     * WHATSAPP WEBHOOK
+     * ==========================================================================
+     */
     public function handle(
         Request $request,
         WorkflowEngine $engine
     ) {
-        $payload = $request->all();
+           Log::info('🔥 WEBHOOK HANDLE ENTERED');
 
+                $payload = $request->all();
 
+                Log::info('WHATSAPP WEBHOOK RECEIVED', [
+                    'payload' => $payload,
+                ]);
+
+        /**
+         * ----------------------------------------------------------------------
+         * DELIVERY EVENTS
+         * ----------------------------------------------------------------------
+         */
         $eventType = strtolower(
             trim(
                 (string) data_get(
@@ -84,13 +96,25 @@ class WhatsAppWebhookController extends Controller
         );
 
         if ($eventType === 'delivery events') {
+            Log::info('WHATSAPP DELIVERY EVENT IGNORED', [
+                'status' => data_get(
+                    $payload,
+                    'events.status'
+                ),
+                'payload' => $payload,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Delivery event received.',
             ], 200);
         }
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * WEBHOOK SOURCE
+         * ----------------------------------------------------------------------
+         */
         $isProviderWebhook = isset(
             $payload['eventContent']['message']
         );
@@ -99,18 +123,31 @@ class WhatsAppWebhookController extends Controller
             $payload['entry']
         );
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * WORKFLOW ID
+         * ----------------------------------------------------------------------
+         */
         $requestedWorkflowId =
             $request->input('workflow_id')
             ??
             $request->input('workflowId');
 
+        /**
+         * ----------------------------------------------------------------------
+         * PHONE NUMBER ID
+         * ----------------------------------------------------------------------
+         */
         $phoneNumberId = data_get(
             $payload,
             'entry.0.changes.0.value.metadata.phone_number_id'
         );
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * WHATSAPP TO / BUSINESS NUMBER
+         * ----------------------------------------------------------------------
+         */
         $whatsappTo =
             $request->input('to')
             ??
@@ -137,7 +174,11 @@ class WhatsAppWebhookController extends Controller
             );
         }
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * FROM / CUSTOMER MOBILE
+         * ----------------------------------------------------------------------
+         */
         $from =
             $request->input('from')
             ??
@@ -181,7 +222,6 @@ class WhatsAppWebhookController extends Controller
             );
 
         if (!$from) {
-
             Log::warning(
                 'WHATSAPP MOBILE NOT FOUND',
                 [
@@ -204,7 +244,6 @@ class WhatsAppWebhookController extends Controller
         );
 
         if (!$from) {
-
             return response()->json([
                 'success' => false,
                 'error' => true,
@@ -213,7 +252,11 @@ class WhatsAppWebhookController extends Controller
             ], 422);
         }
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * MESSAGE TYPE
+         * ----------------------------------------------------------------------
+         */
         $messageType =
             $request->input('type')
             ??
@@ -226,6 +269,8 @@ class WhatsAppWebhookController extends Controller
                 $payload,
                 'eventContent.message.type'
             )
+            ??
+            $request->input('contentType')
             ??
             data_get(
                 $payload,
@@ -244,7 +289,15 @@ class WhatsAppWebhookController extends Controller
             ??
             'text';
 
+        $messageType = strtolower(
+            trim((string) $messageType)
+        );
 
+        /**
+         * ----------------------------------------------------------------------
+         * TEXT
+         * ----------------------------------------------------------------------
+         */
         $text =
             $request->input('text.body')
             ??
@@ -307,7 +360,6 @@ class WhatsAppWebhookController extends Controller
             '';
 
         if (is_array($text)) {
-
             $text =
                 $text['body']
                 ??
@@ -320,7 +372,382 @@ class WhatsAppWebhookController extends Controller
 
         $text = trim((string) $text);
 
+        /**
+         * ----------------------------------------------------------------------
+         * MEDIA INFORMATION
+         * ----------------------------------------------------------------------
+         *
+         * Supports:
+         * image
+         * document
+         * pdf
+         * audio
+         * video
+         */
+        $mediaId =
+            $request->input('media_id')
+            ??
+            $request->input('mediaId')
+            ??
+            $request->input('media.id')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.media.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.image.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.document.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.audio.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.video.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.media.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.image.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.document.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.audio.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.video.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.image.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.document.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.audio.id'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.video.id'
+            );
 
+        /**
+         * ----------------------------------------------------------------------
+         * MEDIA URL
+         * ----------------------------------------------------------------------
+         */
+        $mediaUrl =
+            $request->input('media_url')
+            ??
+            $request->input('mediaUrl')
+            ??
+            $request->input('url')
+            ??
+            $request->input('file_url')
+            ??
+            $request->input('fileUrl')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.media.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.image.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.document.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.audio.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.video.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.media.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.image.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.document.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.audio.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.video.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.image.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.document.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.audio.url'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.video.url'
+            )
+            ??
+            '';
+
+        /**
+         * ----------------------------------------------------------------------
+         * MIME TYPE
+         * ----------------------------------------------------------------------
+         */
+        $mimeType =
+            $request->input('mime_type')
+            ??
+            $request->input('mimeType')
+            ??
+            $request->input('mimetype')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.mimetype'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.image.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.document.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.audio.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.video.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.mimetype'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.image.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.document.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.audio.mime_type'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.video.mime_type'
+            );
+
+        /**
+         * ----------------------------------------------------------------------
+         * MEDIA FILENAME
+         * ----------------------------------------------------------------------
+         */
+        $mediaFilename =
+            $request->input('filename')
+            ??
+            $request->input('file_name')
+            ??
+            $request->input('fileName')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.document.filename'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.filename'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.document.filename'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.document.filename'
+            )
+            ??
+            '';
+
+        /**
+         * ----------------------------------------------------------------------
+         * MEDIA CAPTION
+         * ----------------------------------------------------------------------
+         */
+        $mediaCaption =
+            $request->input('caption')
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.image.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.document.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'eventContent.message.video.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.image.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.document.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'message.video.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.image.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.document.caption'
+            )
+            ??
+            data_get(
+                $payload,
+                'entry.0.changes.0.value.messages.0.video.caption'
+            )
+            ??
+            '';
+
+        $mediaId = $mediaId
+            ? (string) $mediaId
+            : null;
+
+        $mediaUrl = $mediaUrl
+            ? (string) $mediaUrl
+            : null;
+
+        $mimeType = $mimeType
+            ? (string) $mimeType
+            : null;
+
+        $mediaFilename = $mediaFilename
+            ? (string) $mediaFilename
+            : null;
+
+        $mediaCaption = $mediaCaption
+            ? trim((string) $mediaCaption)
+            : null;
+
+        /**
+         * ----------------------------------------------------------------------
+         * NORMALIZE MEDIA TYPE
+         * ----------------------------------------------------------------------
+         */
+        if (
+            $messageType === 'document'
+            &&
+            $mimeType === 'application/pdf'
+        ) {
+            $messageType = 'pdf';
+        }
+
+        /**
+         * ----------------------------------------------------------------------
+         * INTERACTIVE SOURCE HANDLE
+         * ----------------------------------------------------------------------
+         */
         $sourceHandle =
             $request->input(
                 'interactive.source_handle'
@@ -358,7 +785,11 @@ class WhatsAppWebhookController extends Controller
                 'entry.0.changes.0.value.messages.0.interactive.list_reply.id'
             );
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * INTERACTIVE TITLE
+         * ----------------------------------------------------------------------
+         */
         $interactiveTitle =
             $request->input(
                 'interactive.title'
@@ -400,7 +831,11 @@ class WhatsAppWebhookController extends Controller
                 'entry.0.changes.0.value.messages.0.interactive.list_reply.title'
             );
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * EXTERNAL MESSAGE ID
+         * ----------------------------------------------------------------------
+         */
         $externalMessageId =
             data_get(
                 $payload,
@@ -416,7 +851,11 @@ class WhatsAppWebhookController extends Controller
             ??
             $request->input('external_message_id');
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * SOURCE
+         * ----------------------------------------------------------------------
+         */
         $source = $isProviderWebhook
             ? 'gtech_waba'
             : (
@@ -425,14 +864,15 @@ class WhatsAppWebhookController extends Controller
                     : 'simulator'
             );
 
-
         $normalizedText = strtolower(
             trim((string) $text)
         );
 
-
-
-
+        /**
+         * ----------------------------------------------------------------------
+         * NORMALIZED INPUT FOR WORKFLOW ENGINE
+         * ----------------------------------------------------------------------
+         */
         $input = [
             'text' => $text,
 
@@ -446,6 +886,25 @@ class WhatsAppWebhookController extends Controller
 
             'message_type' => $messageType,
 
+            /**
+             * Media information
+             */
+            'media_id' => $mediaId,
+
+            'media_url' => $mediaUrl,
+
+            'mime_type' => $mimeType,
+
+            'filename' => $mediaFilename,
+
+            'caption' => $mediaCaption,
+
+            'has_media' => !empty($mediaId)
+                || !empty($mediaUrl),
+
+            /**
+             * Full original payload
+             */
             'payload' => $payload,
 
             'external_message_id' => $externalMessageId,
@@ -455,18 +914,37 @@ class WhatsAppWebhookController extends Controller
             'whatsapp_to' => $whatsappTo,
 
             'source' => $source,
+
+            /**
+             * Optional workflow selected from simulator
+             */
+            'workflow_id' => $requestedWorkflowId,
         ];
 
+        Log::info('WHATSAPP NORMALIZED INPUT', [
+            'from' => $from,
+            'type' => $messageType,
+            'text' => $text,
+            'media_id' => $mediaId,
+            'media_url' => $mediaUrl,
+            'mime_type' => $mimeType,
+            'filename' => $mediaFilename,
+            'caption' => $mediaCaption,
+            'source' => $source,
+        ]);
 
+        /**
+         * ----------------------------------------------------------------------
+         * WORKFLOW ENGINE
+         * ----------------------------------------------------------------------
+         */
         $session = $engine->handleIncoming(
             $from,
             $text,
             $input
         );
 
-
         if (!$session) {
-
 
             return response()->json([
                 'success' => false,
@@ -478,21 +956,36 @@ class WhatsAppWebhookController extends Controller
                     'No active journey found and no matching trigger was found.',
                 'received_text' => $text,
                 'normalized_text' => $normalizedText,
+                'message_type' => $messageType,
+                'media_id' => $mediaId,
+                'media_url' => $mediaUrl,
                 'phone_number_id' => $phoneNumberId,
                 'whatsapp_to' => $whatsappTo,
             ], 422);
         }
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * REFRESH SESSION
+         * ----------------------------------------------------------------------
+         */
         $session->refresh();
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * WORKFLOW
+         * ----------------------------------------------------------------------
+         */
         $workflow = Workflow::query()
             ->where('id', $session->workflow_id)
             ->where('channel', 'whatsapp')
             ->first();
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * SAVE INBOUND BOT MESSAGE
+         * ----------------------------------------------------------------------
+         */
         $botMessage = new BotMessage();
 
         $botMessage->bot_session_id = $session->id;
@@ -508,8 +1001,14 @@ class WhatsAppWebhookController extends Controller
                     : 'text'
             );
 
+        /**
+         * For media message, save caption/text.
+         * Original media data remains inside payload.
+         */
         $botMessage->text =
             $text
+            ?:
+            $mediaCaption
             ?:
             $interactiveTitle
             ?:
@@ -526,7 +1025,11 @@ class WhatsAppWebhookController extends Controller
 
         $botMessage->save();
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * OUTBOUND MESSAGES
+         * ----------------------------------------------------------------------
+         */
         $messages = BotMessage::query()
             ->where(
                 'bot_session_id',
@@ -542,7 +1045,11 @@ class WhatsAppWebhookController extends Controller
             ->reverse()
             ->values();
 
-
+        /**
+         * ----------------------------------------------------------------------
+         * RESPONSE
+         * ----------------------------------------------------------------------
+         */
         return response()->json([
             'success' => true,
 
@@ -557,13 +1064,29 @@ class WhatsAppWebhookController extends Controller
 
             'phone_number_id' => $phoneNumberId,
 
+            'incoming' => [
+                'type' => $messageType,
+                'text' => $text,
+                'media_id' => $mediaId,
+                'media_url' => $mediaUrl,
+                'mime_type' => $mimeType,
+                'filename' => $mediaFilename,
+                'caption' => $mediaCaption,
+                'has_media' => !empty($mediaId)
+                    || !empty($mediaUrl),
+            ],
+
             'session' => [
                 'id' => $session->id,
+
                 'status' => $session->status,
+
                 'current_node_id' =>
                     $session->current_node_id,
+
                 'workflow_id' =>
                     $session->workflow_id,
+
                 'user_identifier' =>
                     $session->user_identifier,
             ],
@@ -572,14 +1095,20 @@ class WhatsAppWebhookController extends Controller
         ]);
     }
 
-
+    /**
+     * ==========================================================================
+     * GET TRIGGER
+     * ==========================================================================
+     */
     private function getTriggerFromConfig(
         array $config
     ): ?string {
 
         $possibleTriggers = [
             $config['triggerText'] ?? null,
+
             $config['trigger'] ?? null,
+
             $config['keyword'] ?? null,
 
             data_get(
@@ -627,7 +1156,11 @@ class WhatsAppWebhookController extends Controller
         return null;
     }
 
-
+    /**
+     * ==========================================================================
+     * RESET
+     * ==========================================================================
+     */
     public function reset(
         Request $request
     ) {
@@ -645,7 +1178,6 @@ class WhatsAppWebhookController extends Controller
             $request->input('workflowId');
 
         if (!$from) {
-
             return response()->json([
                 'success' => false,
                 'error' => true,
@@ -655,6 +1187,9 @@ class WhatsAppWebhookController extends Controller
             ], 422);
         }
 
+        /**
+         * FIXED REGEX
+         */
         $from = preg_replace(
             '/\D+/',
             '',
@@ -662,7 +1197,6 @@ class WhatsAppWebhookController extends Controller
         );
 
         if (!$from) {
-
             return response()->json([
                 'success' => false,
                 'error' => true,
@@ -683,7 +1217,6 @@ class WhatsAppWebhookController extends Controller
             );
 
         if (!empty($workflowId)) {
-
             $query->where(
                 'workflow_id',
                 $workflowId
@@ -717,12 +1250,16 @@ class WhatsAppWebhookController extends Controller
 
         return response()->json([
             'success' => true,
+
             'message' =>
                 'WhatsApp session reset successfully.',
+
             'mobile' =>
                 $from,
+
             'workflow_id' =>
                 $workflowId,
+
             'sessions_reset' =>
                 $sessions->count(),
         ]);

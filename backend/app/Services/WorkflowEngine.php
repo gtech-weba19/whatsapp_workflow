@@ -9,6 +9,7 @@ use App\Models\Workflow;
 use App\Models\WorkflowExecution;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\MediaUpload;
 
 class WorkflowEngine
 {
@@ -791,6 +792,791 @@ class WorkflowEngine
                 ]);
             }
 
+            /*
+|--------------------------------------------------------------------------
+| IMAGE
+|--------------------------------------------------------------------------
+*/
+
+elseif ($type === 'image') {
+
+    $mediaUrl = $this->resolveMediaUrl(
+        $cfg,
+        $workflow
+    );
+
+    $caption = $cfg['caption']
+        ?? $cfg['message']
+        ?? $cfg['text']
+        ?? '';
+
+    $mediaUrl = $this->resolve(
+        (string) $mediaUrl,
+        $session->variables ?? []
+    );
+
+    $caption = $this->resolve(
+        (string) $caption,
+        $session->variables ?? []
+    );
+
+    if ($mediaUrl === '') {
+
+        throw new \RuntimeException(
+            'Image media URL is empty.'
+        );
+    }
+
+    $output = $this->whatsapp->sendImage(
+        $session->user_identifier,
+        $mediaUrl,
+        $caption
+    );
+
+    $this->saveOutbound(
+        $session,
+        'image',
+        $caption !== '' ? $caption : null,
+        $output
+    );
+
+    $next = $this->nextNode(
+        $workflow,
+        $nodeId
+    );
+
+    if ($next) {
+
+        $this->goToNode(
+            $workflow,
+            $session,
+            $next
+        );
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| DOCUMENT / PDF
+|--------------------------------------------------------------------------
+*/
+
+elseif (
+    $type === 'document'
+    ||
+    $type === 'pdf'
+) {
+
+    $mediaUrl = $this->resolveMediaUrl(
+        $cfg,
+        $workflow
+    );
+
+    $filename = $cfg['filename']
+        ?? $cfg['file_name']
+        ?? $cfg['fileName']
+        ?? $cfg['name']
+        ?? '';
+
+    $caption = $cfg['caption']
+        ?? $cfg['message']
+        ?? $cfg['text']
+        ?? '';
+
+    $mediaUrl = $this->resolve(
+        (string) $mediaUrl,
+        $session->variables ?? []
+    );
+
+    $filename = $this->resolve(
+        (string) $filename,
+        $session->variables ?? []
+    );
+
+    $caption = $this->resolve(
+        (string) $caption,
+        $session->variables ?? []
+    );
+
+    if ($mediaUrl === '') {
+
+        throw new \RuntimeException(
+            'Document/PDF media URL is empty.'
+        );
+    }
+
+    $output = $this->whatsapp->sendDocument(
+        $session->user_identifier,
+        $mediaUrl,
+        $filename,
+        $caption
+    );
+
+    $this->saveOutbound(
+        $session,
+        'document',
+        $caption !== '' ? $caption : $filename,
+        $output
+    );
+
+    $next = $this->nextNode(
+        $workflow,
+        $nodeId
+    );
+
+    if ($next) {
+
+        $this->goToNode(
+            $workflow,
+            $session,
+            $next
+        );
+    }
+}
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIO
+    |--------------------------------------------------------------------------
+    */
+elseif ($type === 'audio') {
+
+    $mediaUrl = $this->resolveMediaUrl(
+        $cfg,
+        $workflow
+    );
+
+    $mediaUrl = $this->resolve(
+        (string) $mediaUrl,
+        $session->variables ?? []
+    );
+
+    if ($mediaUrl === '') {
+
+        throw new \RuntimeException(
+            'Audio media URL is empty.'
+        );
+    }
+
+    $output = $this->whatsapp->sendAudio(
+        $session->user_identifier,
+        $mediaUrl
+    );
+
+    $this->saveOutbound(
+        $session,
+        'audio',
+        null,
+        $output
+    );
+
+    $next = $this->nextNode(
+        $workflow,
+        $nodeId
+    );
+
+    if ($next) {
+
+        $this->goToNode(
+            $workflow,
+            $session,
+            $next
+        );
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| MEDIA TEMPLATE
+|--------------------------------------------------------------------------
+*/
+/*
+|--------------------------------------------------------------------------
+| MEDIA TEMPLATE
+|--------------------------------------------------------------------------
+*/
+elseif ($type === 'media_template') {
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE NAME
+    |--------------------------------------------------------------------------
+    */
+
+    $templateName = $cfg['templateName']
+        ?? $cfg['template_name']
+        ?? $cfg['name']
+        ?? '';
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE ID
+    |--------------------------------------------------------------------------
+    */
+
+    $templateId = $cfg['templateId']
+        ?? $cfg['template_id']
+        ?? $cfg['id']
+        ?? '';
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE LANGUAGE
+    |--------------------------------------------------------------------------
+    */
+
+    $templateLanguage = $cfg['templateLanguage']
+        ?? $cfg['template_language']
+        ?? $cfg['language']
+        ?? 'en';
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE BODY
+    |--------------------------------------------------------------------------
+    */
+
+    $templateBody = $cfg['templateBody']
+        ?? $cfg['template_body']
+        ?? $cfg['body']
+        ?? $cfg['caption']
+        ?? $cfg['message']
+        ?? '';
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE IMAGE URL
+    |--------------------------------------------------------------------------
+    |
+    | Support all possible frontend/backend field names.
+    |
+    */
+
+    $templateImageUrl = $cfg['templateImageUrl']
+        ?? $cfg['template_image_url']
+        ?? $cfg['image_url']
+        ?? $cfg['imageUrl']
+        ?? $cfg['template_image']
+        ?? $cfg['templateImage']
+        ?? $cfg['media_url']
+        ?? $cfg['mediaUrl']
+        ?? $cfg['url']
+        ?? '';
+
+    /*
+    |--------------------------------------------------------------------------
+    | MEDIA UPLOAD ID
+    |--------------------------------------------------------------------------
+    */
+
+    $mediaUploadId = $cfg['media_upload_id']
+        ?? $cfg['mediaUploadId']
+        ?? $cfg['media_id']
+        ?? $cfg['mediaId']
+        ?? null;
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMPLATE VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $templateVariables = $cfg['templateVariables']
+        ?? $cfg['template_variables']
+        ?? $cfg['variables']
+        ?? [];
+
+    if (! is_array($templateVariables)) {
+        $templateVariables = [];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $variables = $session->variables ?? [];
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE TEMPLATE BASIC VALUES
+    |--------------------------------------------------------------------------
+    */
+
+    $templateName = $this->resolve(
+        (string) $templateName,
+        $variables
+    );
+
+    $templateId = $this->resolve(
+        (string) $templateId,
+        $variables
+    );
+
+    $templateLanguage = $this->resolve(
+        (string) $templateLanguage,
+        $variables
+    );
+
+    $templateBody = $this->resolve(
+        (string) $templateBody,
+        $variables
+    );
+
+    $templateImageUrl = $this->resolve(
+        (string) $templateImageUrl,
+        $variables
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE IMAGE FROM MEDIA_UPLOADS
+    |--------------------------------------------------------------------------
+    |
+    | If image URL is not directly available but media_upload_id exists,
+    | get URL from media_uploads table.
+    |
+    */
+
+    if (
+        trim($templateImageUrl) === ''
+        &&
+        ! empty($mediaUploadId)
+    ) {
+
+        $media = MediaUpload::query()
+            ->where('id', $mediaUploadId)
+            ->where('status', 'active')
+            ->first();
+
+        if (! $media) {
+
+            throw new \RuntimeException(
+                "Media upload not found: {$mediaUploadId}"
+            );
+        }
+
+        $templateImageUrl =
+            $media->url
+            ?? $media->file_url
+            ?? $media->media_url
+            ?? '';
+
+        $templateImageUrl = trim(
+            (string) $templateImageUrl
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FALLBACK: RESOLVE MEDIA URL
+    |--------------------------------------------------------------------------
+    */
+
+    if (trim($templateImageUrl) === '') {
+
+        try {
+
+            $mediaConfig = $cfg;
+
+            /*
+             * Convert template-specific media ID
+             * into the generic resolver fields.
+             */
+
+            if (
+                empty($mediaConfig['media_upload_id'])
+                &&
+                ! empty($mediaUploadId)
+            ) {
+                $mediaConfig['media_upload_id'] =
+                    $mediaUploadId;
+            }
+
+            $resolvedMediaUrl =
+                $this->resolveMediaUrl(
+                    $mediaConfig,
+                    $workflow
+                );
+
+            if (
+                trim((string) $resolvedMediaUrl) !== ''
+            ) {
+                $templateImageUrl =
+                    trim(
+                        (string) $resolvedMediaUrl
+                    );
+            }
+
+        } catch (\Throwable $mediaException) {
+
+            Log::warning(
+                'MEDIA TEMPLATE MEDIA RESOLVE FAILED',
+                [
+                    'workflow_id' => $workflow->id,
+                    'session_id' => $session->id,
+                    'error' => $mediaException->getMessage(),
+                ]
+            );
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE TEMPLATE VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $resolvedVariables = [];
+
+    foreach ($templateVariables as $key => $value) {
+
+        if (is_array($value)) {
+
+            $resolvedValue = [];
+
+            foreach ($value as $subKey => $subValue) {
+
+                if (is_string($subValue)) {
+
+                    $resolvedValue[$subKey] =
+                        $this->resolve(
+                            $subValue,
+                            $variables
+                        );
+
+                } else {
+
+                    $resolvedValue[$subKey] =
+                        $subValue;
+                }
+            }
+
+            $resolvedVariables[$key] =
+                $resolvedValue;
+
+        } else {
+
+            $resolvedVariables[$key] =
+                $this->resolve(
+                    (string) $value,
+                    $variables
+                );
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CLEAN VALUES
+    |--------------------------------------------------------------------------
+    */
+
+    $templateName =
+        trim((string) $templateName);
+
+    $templateId =
+        trim((string) $templateId);
+
+    $templateLanguage =
+        trim((string) $templateLanguage);
+
+    $templateBody =
+        trim((string) $templateBody);
+
+    $templateImageUrl =
+        trim((string) $templateImageUrl);
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATE TEMPLATE
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $templateName === ''
+        &&
+        $templateId === ''
+    ) {
+
+        throw new \RuntimeException(
+            'Media Template name or template ID is required.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | IMAGE REQUIRED
+    |--------------------------------------------------------------------------
+    */
+
+    if ($templateImageUrl === '') {
+
+        Log::error(
+            'MEDIA TEMPLATE IMAGE URL EMPTY',
+            [
+                'workflow_id' => $workflow->id,
+                'session_id' => $session->id,
+                'node_id' => $nodeId,
+
+                'configuration' => $cfg,
+
+                'template_name' =>
+                    $templateName,
+
+                'template_id' =>
+                    $templateId,
+
+                'media_upload_id' =>
+                    $mediaUploadId,
+
+                'image_url_candidates' => [
+                    'templateImageUrl' =>
+                        $cfg['templateImageUrl'] ?? null,
+
+                    'template_image_url' =>
+                        $cfg['template_image_url'] ?? null,
+
+                    'image_url' =>
+                        $cfg['image_url'] ?? null,
+
+                    'imageUrl' =>
+                        $cfg['imageUrl'] ?? null,
+
+                    'media_url' =>
+                        $cfg['media_url'] ?? null,
+
+                    'mediaUrl' =>
+                        $cfg['mediaUrl'] ?? null,
+
+                    'url' =>
+                        $cfg['url'] ?? null,
+                ],
+            ]
+        );
+
+        throw new \RuntimeException(
+            'Media Template image URL is empty.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATE IMAGE URL
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        ! filter_var(
+            $templateImageUrl,
+            FILTER_VALIDATE_URL
+        )
+    ) {
+
+        throw new \RuntimeException(
+            'Invalid Media Template image URL: '
+            . $templateImageUrl
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DEBUG
+    |--------------------------------------------------------------------------
+    */
+
+    Log::info(
+        'MEDIA TEMPLATE BEFORE SEND',
+        [
+            'workflow_id' =>
+                $workflow->id,
+
+            'session_id' =>
+                $session->id,
+
+            'user' =>
+                $session->user_identifier,
+
+            'template_name' =>
+                $templateName,
+
+            'template_id' =>
+                $templateId,
+
+            'language' =>
+                $templateLanguage,
+
+            'body' =>
+                $templateBody,
+
+            'image_url' =>
+                $templateImageUrl,
+
+            'variables' =>
+                $resolvedVariables,
+        ]
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | SEND TO WHATSAPP PROVIDER
+    |--------------------------------------------------------------------------
+    */
+
+    $output =
+        $this->whatsapp->sendMediaTemplate(
+            $session->user_identifier,
+            $templateName,
+            $templateId,
+            $templateLanguage,
+            $templateBody,
+            $templateImageUrl,
+            $resolvedVariables
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | PROVIDER RESPONSE
+    |--------------------------------------------------------------------------
+    */
+
+    Log::info(
+        'MEDIA TEMPLATE PROVIDER RESPONSE',
+        [
+            'workflow_id' =>
+                $workflow->id,
+
+            'session_id' =>
+                $session->id,
+
+            'user' =>
+                $session->user_identifier,
+
+            'response' =>
+                $output,
+        ]
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | SAVE OUTBOUND
+    |--------------------------------------------------------------------------
+    */
+
+    $displayText =
+        $templateBody !== ''
+            ? $templateBody
+            : $templateName;
+
+    $this->saveOutbound(
+        $session,
+        'media_template',
+        $displayText !== ''
+            ? $displayText
+            : null,
+        is_array($output)
+            ? $output
+            : []
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | NEXT NODE
+    |--------------------------------------------------------------------------
+    */
+
+    $next =
+        $this->nextNode(
+            $workflow,
+            $nodeId
+        );
+
+    if ($next) {
+
+        $this->goToNode(
+            $workflow,
+            $session,
+            $next
+        );
+
+    } else {
+
+        $session->update([
+            'current_node_id' =>
+                $nodeId,
+
+            'status' =>
+                'completed',
+
+            'last_message_at' =>
+                now(),
+        ]);
+    }
+}
+    /*
+    |--------------------------------------------------------------------------
+    | VIDEO
+    |--------------------------------------------------------------------------
+    */
+elseif ($type === 'video') {
+
+    $mediaUrl = $this->resolveMediaUrl(
+        $cfg,
+        $workflow
+    );
+
+    $caption = $cfg['caption']
+        ?? $cfg['message']
+        ?? $cfg['text']
+        ?? '';
+
+    $mediaUrl = $this->resolve(
+        (string) $mediaUrl,
+        $session->variables ?? []
+    );
+
+    $caption = $this->resolve(
+        (string) $caption,
+        $session->variables ?? []
+    );
+
+    if ($mediaUrl === '') {
+
+        throw new \RuntimeException(
+            'Video media URL is empty.'
+        );
+    }
+
+    $output = $this->whatsapp->sendVideo(
+        $session->user_identifier,
+        $mediaUrl,
+        $caption
+    );
+
+    $this->saveOutbound(
+        $session,
+        'video',
+        $caption !== '' ? $caption : null,
+        $output
+    );
+
+    $next = $this->nextNode(
+        $workflow,
+        $nodeId
+    );
+
+    if ($next) {
+
+        $this->goToNode(
+            $workflow,
+            $session,
+            $next
+        );
+    }
+}
 
 
             elseif ($type === 'button') {
@@ -2025,6 +2811,69 @@ class WorkflowEngine
             $text
         );
     }
+
+    /*
+|--------------------------------------------------------------------------
+| RESOLVE MEDIA URL
+|--------------------------------------------------------------------------
+*/
+
+private function resolveMediaUrl(
+    array $cfg,
+    Workflow $workflow
+): string {
+
+    $mediaId = $cfg['media_upload_id']
+        ?? $cfg['mediaUploadId']
+        ?? $cfg['media_id']
+        ?? $cfg['mediaId']
+        ?? null;
+
+    /*
+    |--------------------------------------------------------------------------
+    | MEDIA UPLOAD ID
+    |--------------------------------------------------------------------------
+    */
+
+    if ($mediaId) {
+
+        $media = MediaUpload::query()
+            ->where('id', $mediaId)
+            ->where('status', 'active')
+            ->first();
+
+        if (! $media) {
+
+            throw new \RuntimeException(
+                "Media upload not found: {$mediaId}"
+            );
+        }
+
+        if (empty($media->url)) {
+
+            throw new \RuntimeException(
+                "Media URL is empty for upload ID: {$mediaId}"
+            );
+        }
+
+        return (string) $media->url;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DIRECT MEDIA URL
+    |--------------------------------------------------------------------------
+    */
+
+    $mediaUrl = $cfg['media_url']
+        ?? $cfg['mediaUrl']
+        ?? $cfg['url']
+        ?? $cfg['file_url']
+        ?? $cfg['fileUrl']
+        ?? '';
+
+    return (string) $mediaUrl;
+}
 
     /*
     |--------------------------------------------------------------------------

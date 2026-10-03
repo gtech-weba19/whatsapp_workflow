@@ -4,17 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\MediaUpload;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class MediaUploadController extends Controller
 {
     public function upload(Request $request)
     {
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDATION
+        |--------------------------------------------------------------------------
+        */
+
         $request->validate([
             'media' => [
                 'required',
                 'file',
-                'max:51200',
+                'max:51200', // 50 MB
             ],
 
             'media_type' => [
@@ -33,7 +40,14 @@ class MediaUploadController extends Controller
         $mediaType = $request->input('media_type');
 
 
+        /*
+        |--------------------------------------------------------------------------
+        | ALLOWED MIME TYPES
+        |--------------------------------------------------------------------------
+        */
+
         $allowedMimeTypes = [
+
             'image' => [
                 'image/jpeg',
                 'image/jpg',
@@ -76,6 +90,8 @@ class MediaUploadController extends Controller
         ];
 
 
+
+
         $mimeType = $file->getMimeType();
 
         if (
@@ -96,24 +112,8 @@ class MediaUploadController extends Controller
 
 
 
-        $folder = public_path(
-            'workflow/' . $mediaType
-        );
-
-
-
-        if (!is_dir($folder)) {
-            mkdir(
-                $folder,
-                0755,
-                true
-            );
-        }
-
-
 
         $originalName = $file->getClientOriginalName();
-
 
 
         $extension = strtolower(
@@ -122,35 +122,34 @@ class MediaUploadController extends Controller
 
 
 
-        $filename = Str::uuid()->toString()
-            . '.' .
-            $extension;
+        $filename = Str::uuid()->toString() . '.' . $extension;
 
 
-        $file->move(
-            $folder,
+        $path = Storage::disk('public')->putFileAs(
+            'workflow/' . $mediaType,
+            $file,
             $filename
         );
 
 
 
-        $fileSize = filesize(
-            $folder .
-            DIRECTORY_SEPARATOR .
-            $filename
+        if (!$path) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File upload failed.',
+            ], 500);
+        }
+
+
+        $fileSize = Storage::disk('public')->size($path);
+
+
+        $url = url(
+            '/storage/' . $path
         );
-
-
-        $path =
-            'workflow/' .
-            $mediaType .
-            '/' .
-            $filename;
-
-
-        $url = url($path);
 
         $mediaUpload = MediaUpload::create([
+
             'user_id' => auth()->id(),
 
             'media_type' => $mediaType,
@@ -173,7 +172,14 @@ class MediaUploadController extends Controller
         ]);
 
 
+        /*
+        |--------------------------------------------------------------------------
+        | RESPONSE
+        |--------------------------------------------------------------------------
+        */
+
         return response()->json([
+
             'success' => true,
 
             'message' =>
@@ -181,7 +187,9 @@ class MediaUploadController extends Controller
                 ' uploaded successfully.',
 
             'media' => [
-                'id' => $mediaUpload->id,
+
+                'id' =>
+                    $mediaUpload->id,
 
                 'media_type' =>
                     $mediaUpload->media_type,
@@ -207,6 +215,7 @@ class MediaUploadController extends Controller
                 'workflow_id' =>
                     $mediaUpload->workflow_id,
             ],
+
         ], 201);
     }
 }

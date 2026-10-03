@@ -37,7 +37,6 @@ import ReactFlow, {
   useEdgesState,
   Handle,
   Position,
-  useReactFlow
 } from "reactflow";
 
 import "reactflow/dist/style.css";
@@ -85,27 +84,11 @@ const defaultMenuOptions = [
 ========================================================= */
 
 function Node({
-   id,
+  id,
   data,
   type,
   selected,
 }) {
-
-   const { deleteElements } = useReactFlow();
-
-  const handleDelete = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    deleteElements({
-      nodes: [
-        {
-          id: String(id),
-        },
-      ],
-    });
-  };
-
   const nodeStyles = {
     start: {
       wrapper: "border-emerald-200 bg-white",
@@ -177,24 +160,26 @@ function Node({
       ? data.menuOptions
       : [];
 
-  const preview =
-    data.message ||
-    data.variable ||
-    data.condition ||
-    data.apiUrl ||
-    data.imageUrl ||
-    data.caption ||
-    data.delay
-      ? data.message ||
-        data.variable ||
-        data.condition ||
-        data.apiUrl ||
-        data.imageUrl ||
-        data.caption ||
-        `${data.delay || ""} ${
-          data.delayUnit || ""
-        }`
-      : "";
+ const preview =
+  data.message ||
+  data.variable ||
+  data.condition ||
+  data.apiUrl ||
+  data.imageUrl ||
+  data.caption ||
+  data.templateName ||
+  data.template_name ||
+  data.delay
+    ? data.message ||
+      data.variable ||
+      data.condition ||
+      data.apiUrl ||
+      data.imageUrl ||
+      data.caption ||
+      data.templateName ||
+      data.template_name ||
+      `${data.delay || ""} ${data.delayUnit || ""}`
+    : "";
 
   return (
     <div
@@ -225,7 +210,18 @@ function Node({
 {selected && type !== "start" && (
   <button
     type="button"
-     onClick={handleDelete}
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      window.dispatchEvent(
+        new CustomEvent("workflow-node-delete", {
+          detail: {
+            nodeId: id,
+          },
+        })
+      );
+    }}
     className="
       absolute
       right-[-10px]
@@ -251,7 +247,6 @@ function Node({
     <X className="h-3.5 w-3.5" />
   </button>
 )}
-
 
 
       {/* =====================================================
@@ -296,72 +291,84 @@ function Node({
           HEADER
       ====================================================== */}
 
-      <div className="flex items-center gap-3 px-4 pt-4">
-        <div
-          className={`
-            flex
-            h-10
-            w-10
-            shrink-0
-            items-center
-            justify-center
-            rounded-xl
-            ${style.icon}
-          `}
-        >
-          {type === "start" ? (
-            <Play className="h-5 w-5" />
-          ) : type === "message" ? (
-            <MessageSquare className="h-5 w-5" />
-          ) : type === "button" ? (
-            <MousePointerClick className="h-5 w-5" />
-          ) : type === "menu" ? (
-            <MenuIcon className="h-5 w-5" />
-          ) : type === "userInput" ? (
-            <Keyboard className="h-5 w-5" />
-          ) : type === "condition" ? (
-            <GitBranch className="h-5 w-5" />
-          ) : type === "api" ? (
-            <Globe className="h-5 w-5" />
-          ) : type === "image" ? (
-            <ImageIcon className="h-5 w-5" />
-          ) : type === "delay" ? (
-            <Clock3 className="h-5 w-5" />
-          ) : type === "end" ? (
-            <Square className="h-5 w-5" />
-          ) : (
-            <span className="text-sm font-bold uppercase">
-              {type.slice(0, 2)}
-            </span>
-          )}
-        </div>
+     <div className="flex items-center gap-3 px-4 pt-4">
+  <div
+    className={`
+      flex
+      h-10
+      w-10
+      shrink-0
+      items-center
+      justify-center
+      rounded-xl
+      ${style.icon}
+    `}
+  >
+    {type === "start" ? (
+      <Play className="h-5 w-5" />
+    ) : type === "message" ? (
+      <MessageSquare className="h-5 w-5" />
+    ) : type === "button" ? (
+      <MousePointerClick className="h-5 w-5" />
+    ) : type === "menu" ? (
+      <MenuIcon className="h-5 w-5" />
+    ) : type === "userInput" ? (
+      <Keyboard className="h-5 w-5" />
+    ) : type === "condition" ? (
+      <GitBranch className="h-5 w-5" />
+    ) : type === "api" ? (
+      <Globe className="h-5 w-5" />
+    ) : type === "image" ? (
+      <ImageIcon className="h-5 w-5" />
+    ) : type === "media_template" ? (
+      <ImageIcon className="h-5 w-5" />
+    ) : type === "video" ? (
+      <Video className="h-5 w-5" />
+    ) : type === "document" ? (
+      <FileText className="h-5 w-5" />
+    ) : type === "pdf" ? (
+      <FileText className="h-5 w-5" />
+    ) : type === "audio" ? (
+      <Volume2 className="h-5 w-5" />
+    ) : type === "delay" ? (
+      <Clock3 className="h-5 w-5" />
+    ) : type === "end" ? (
+      <Square className="h-5 w-5" />
+    ) : (
+      <span className="text-sm font-bold uppercase">
+        {type.slice(0, 2)}
+      </span>
+    )}
+  </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={`
-                h-2
-                w-2
-                shrink-0
-                rounded-full
-                ${style.dot}
-              `}
-            />
+  <div className="min-w-0 flex-1">
+    <div className="flex items-center gap-2">
+      <span
+        className={`
+          h-2
+          w-2
+          shrink-0
+          rounded-full
+          ${style.dot}
+        `}
+      />
 
-            <p className="truncate text-sm font-bold text-slate-800">
-              {data.label || type}
-            </p>
-          </div>
+      <p className="truncate text-sm font-bold text-slate-800">
+        {data.label || type}
+      </p>
+    </div>
 
-          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-            {type === "userInput"
-              ? "USER INPUT"
-              : type === "menu"
-              ? "MAIN MENU"
-              : type}
-          </p>
-        </div>
-      </div>
+    <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      {type === "userInput"
+        ? "USER INPUT"
+        : type === "menu"
+        ? "MAIN MENU"
+        : type === "media_template"
+        ? "MEDIA TEMPLATE"
+        : type}
+    </p>
+  </div>
+</div>
 
 
 
@@ -606,6 +613,13 @@ function Node({
   );
 }
 
+/* =========================================================
+   NODE TYPES
+========================================================= */
+
+/* =========================================================
+   NODE COMPONENTS
+========================================================= */
 
 const StartNode = (props) => (
   <Node {...props} type="start" />
@@ -639,6 +653,10 @@ const ImageNode = (props) => (
     <Node {...props} type="image" />
 );
 
+const MediaTemplateNode = (props) => (
+  <Node {...props} type="media_template" />
+);
+
 const VideoNode = (props) => (
     <Node {...props} type="video" />
 );
@@ -669,24 +687,25 @@ const EndNode = (props) => (
 ========================================================= */
 
 const nodeTypes = {
-    start: StartNode,
-    message: MessageNode,
-    button: ButtonNode,
-    menu: MenuNode,
-    userInput: UserInputNode,
-    condition: ConditionNode,
-    api: ApiNode,
+  start: StartNode,
+  message: MessageNode,
+  button: ButtonNode,
+  menu: MenuNode,
+  userInput: UserInputNode,
+  condition: ConditionNode,
+  api: ApiNode,
 
-    image: ImageNode,
-    video: VideoNode,
-    document: DocumentNode,
-    pdf: PdfNode,
-    audio: AudioNode,
+  image: ImageNode,
+  media_template: MediaTemplateNode,
 
-    delay: DelayNode,
-    end: EndNode,
+  video: VideoNode,
+  document: DocumentNode,
+  pdf: PdfNode,
+  audio: AudioNode,
+
+  delay: DelayNode,
+  end: EndNode,
 };
-
 /* =========================================================
    PALETTE
 ========================================================= */
@@ -695,15 +714,18 @@ const palette = [
   ["start", "Start"],
   ["message", "Message"],
   ["button", "Button"],
-  ["menu", "Main Menu"],
+  ["menu", "Menu"],
   ["userInput", "User Input"],
   ["condition", "Condition"],
   ["api", "API"],
+
   ["image", "Image"],
+  ["media_template", "Media Template"],
   ["video", "Video"],
   ["document", "Document"],
   ["pdf", "PDF"],
   ["audio", "Audio"],
+
   ["delay", "Delay"],
   ["end", "End"],
 ];
@@ -717,11 +739,15 @@ const paletteIcons = {
   userInput: Keyboard,
   condition: GitBranch,
   api: Globe,
+
   image: ImageIcon,
+  media_template: ImageIcon,
+
   video: Video,
   document: FileText,
   pdf: FileText,
   audio: Volume2,
+
   delay: Clock3,
   end: Square,
 };
@@ -741,63 +767,67 @@ function Config({
   pushHistory,
   onDelete,
 }) {
- const [form, setForm] = useState({
-  label: "",
+  const [form, setForm] = useState({
+    label: "",
+    message: "",
+    variable: "",
+    buttonText: "",
+    condition: "",
+    apiUrl: "",
+    method: "GET",
 
-  // =====================================================
-  // START TRIGGER
-  // =====================================================
-  triggerText: "",
+    // =====================================================
+    // MEDIA
+    // =====================================================
+    mediaId: "",
+    imageUrl: "",
+    videoUrl: "",
+    documentUrl: "",
+    audioUrl: "",
+    mediaUrl: "",
+    fileName: "",
+    caption: "",
+    mediaType: "",
 
-  // =====================================================
-  // COMMON
-  // =====================================================
-  message: "",
-  variable: "",
-  buttonText: "",
-  condition: "",
-  apiUrl: "",
-  method: "GET",
+    // =====================================================
+    // MEDIA TEMPLATE
+    // =====================================================
+    templateName: "",
+    templateId: "",
+    templateLanguage: "en",
+    templateBody: "",
+    templateImageUrl: "",
+    templateVariables: [],
 
-  // =====================================================
-  // MEDIA
-  // =====================================================
-  mediaId: "",
-  imageUrl: "",
-  videoUrl: "",
-  documentUrl: "",
-  audioUrl: "",
-  mediaUrl: "",
-  fileName: "",
-  caption: "",
-  mediaType: "",
+    delay: "5",
+    delayUnit: "seconds",
 
-  delay: "5",
-  delayUnit: "seconds",
+    menuOptions: defaultMenuOptions,
 
-  menuOptions: defaultMenuOptions,
+    // =====================================================
+    // USER INPUT
+    // =====================================================
+    required: true,
+    allowSkip: false,
+    skipText: "skip",
+      // START
+    triggerText: "",
+    triggerType: "keyword",
 
-  // =====================================================
-  // USER INPUT
-  // =====================================================
-  required: true,
-  allowSkip: false,
-  skipText: "skip",
+    validationType: "text",
 
-  validationType: "text",
+    validationMessage:
+      "⚠️ Please enter a valid response.",
 
-  validationMessage:
-    "⚠️ Please enter a valid response.",
+    requiredMessage:
+      "⚠️ This field is required. Please enter a valid response.",
 
-  requiredMessage:
-    "⚠️ This field is required. Please enter a valid response.",
-
-  minLength: "",
-  maxLength: "",
-  minValue: "",
-  maxValue: "",
-  regex: "",
-});
+    minLength: "",
+    maxLength: "",
+    minValue: "",
+    maxValue: "",
+    regex: "",
+  });
 
   // =======================================================
   // UPLOAD STATE
@@ -821,162 +851,200 @@ function Config({
       menuOptions = defaultMenuOptions;
     }
 
-   setForm({
-  // ===================================================
-  // COMMON
-  // ===================================================
+    setForm({
+      label:
+        node.data?.label || "",
 
-  label:
-    node.data?.label || "",
+      message:
+        node.data?.message || "",
 
-  // ===================================================
-  // START TRIGGER
-  // ===================================================
+      variable:
+        node.data?.variable || "",
 
-  triggerText:
-    node.data?.triggerText ||
-    node.data?.trigger_text ||
-    "",
+      buttonText:
+        node.data?.buttonText || "",
 
-  message:
-    node.data?.message || "",
+      condition:
+        node.data?.condition || "",
 
-  variable:
-    node.data?.variable || "",
+      apiUrl:
+        node.data?.apiUrl || "",
 
-  buttonText:
-    node.data?.buttonText || "",
+      method:
+        node.data?.method || "GET",
 
-  condition:
-    node.data?.condition || "",
-
-  apiUrl:
-    node.data?.apiUrl || "",
-
-  method:
-    node.data?.method || "GET",
-
-  // ===================================================
-  // MEDIA
-  // ===================================================
-
-  mediaId:
-    node.data?.mediaId || "",
-
-  imageUrl:
-    node.data?.imageUrl || "",
-
-  videoUrl:
-    node.data?.videoUrl || "",
-
-  documentUrl:
-    node.data?.documentUrl || "",
-
-  audioUrl:
-    node.data?.audioUrl || "",
-
-  mediaUrl:
-    node.data?.mediaUrl || "",
-
-  fileName:
-    node.data?.fileName || "",
-
-  caption:
-    node.data?.caption || "",
-
-  mediaType:
-    node.data?.mediaType || "",
-
-  // ===================================================
-  // DELAY
-  // ===================================================
-
-  delay:
-    node.data?.delay || "5",
-
-  delayUnit:
-    node.data?.delayUnit || "seconds",
-
-  // ===================================================
-  // MENU
-  // ===================================================
-
-  menuOptions:
-    menuOptions.map(
-      (option, index) => ({
-        id:
-          `source-option-${index}`,
-
-        source_handle:
-          `source-option-${index}`,
-
-        label:
-          option.label ||
-          option.title ||
-          option.text ||
+          triggerText:
+          node.data?.triggerText ||
+          node.data?.trigger_text ||
           "",
-      })
-    ),
 
-  // ===================================================
-  // USER INPUT CONFIG
-  // ===================================================
+        triggerType:
+          node.data?.triggerType ||
+          node.data?.trigger_type ||
+          "keyword",
 
-  required:
-    node.data?.required !== undefined
-      ? Boolean(node.data.required)
-      : true,
+        variable:
+          node.data?.variable || "",
 
-  allowSkip:
-    node.data?.allowSkip !== undefined
-      ? Boolean(node.data.allowSkip)
-      : node.data?.allow_skip !== undefined
-      ? Boolean(node.data.allow_skip)
-      : false,
+      // ===================================================
+      // MEDIA
+      // ===================================================
 
-  skipText:
-    node.data?.skipText ||
-    node.data?.skip_text ||
-    "skip",
+      mediaId:
+        node.data?.mediaId || "",
 
-  validationType:
-    node.data?.validationType ||
-    node.data?.validation_type ||
-    "text",
+      imageUrl:
+        node.data?.imageUrl || "",
 
-  validationMessage:
-    node.data?.validationMessage ||
-    node.data?.validation_message ||
-    "⚠️ Please enter a valid response.",
+      videoUrl:
+        node.data?.videoUrl || "",
 
-  requiredMessage:
-    node.data?.requiredMessage ||
-    node.data?.required_message ||
-    "⚠️ This field is required. Please enter a valid response.",
+      documentUrl:
+        node.data?.documentUrl || "",
 
-  minLength:
-    node.data?.minLength ??
-    node.data?.min_length ??
-    "",
+      audioUrl:
+        node.data?.audioUrl || "",
 
-  maxLength:
-    node.data?.maxLength ??
-    node.data?.max_length ??
-    "",
+      mediaUrl:
+        node.data?.mediaUrl || "",
 
-  minValue:
-    node.data?.minValue ??
-    node.data?.min_value ??
-    "",
+      fileName:
+        node.data?.fileName || "",
 
-  maxValue:
-    node.data?.maxValue ??
-    node.data?.max_value ??
-    "",
+      caption:
+        node.data?.caption || "",
 
-  regex:
-    node.data?.regex || "",
-});
+      mediaType:
+        node.data?.mediaType || "",
+
+
+        // ===================================================
+// MEDIA TEMPLATE
+// ===================================================
+
+templateName:
+  node.data?.templateName ||
+  node.data?.template_name ||
+  "",
+
+templateId:
+  node.data?.templateId ||
+  node.data?.template_id ||
+  "",
+
+templateLanguage:
+  node.data?.templateLanguage ||
+  node.data?.template_language ||
+  "en",
+
+templateBody:
+  node.data?.templateBody ||
+  node.data?.template_body ||
+  "",
+
+templateImageUrl:
+  node.data?.templateImageUrl ||
+  node.data?.template_image_url ||
+  "",
+
+templateVariables:
+  Array.isArray(node.data?.templateVariables)
+    ? node.data.templateVariables
+    : Array.isArray(node.data?.template_variables)
+    ? node.data.template_variables
+    : [],
+
+
+      // ===================================================
+      // DELAY
+      // ===================================================
+
+      delay:
+        node.data?.delay || "5",
+
+      delayUnit:
+        node.data?.delayUnit || "seconds",
+
+      // ===================================================
+      // MENU
+      // ===================================================
+
+    menuOptions: 
+  menuOptions.map(
+    (option, index) => ({
+      id:
+        `source-option-${index}`,
+
+      source_handle:
+        `source-option-${index}`,
+
+      label:
+        option.label ||
+        option.title ||
+        option.text ||
+        "",
+    })
+  ),
+
+      // ===================================================
+      // USER INPUT CONFIG
+      // ===================================================
+
+      required:
+        node.data?.required !== undefined
+          ? Boolean(node.data.required)
+          : true,
+
+      allowSkip:
+        node.data?.allowSkip !== undefined
+          ? Boolean(node.data.allowSkip)
+          : node.data?.allow_skip !== undefined
+          ? Boolean(node.data.allow_skip)
+          : false,
+
+      skipText:
+        node.data?.skipText ||
+        node.data?.skip_text ||
+        "skip",
+
+      validationType:
+        node.data?.validationType ||
+        node.data?.validation_type ||
+        "text",
+
+      validationMessage:
+        node.data?.validationMessage ||
+        node.data?.validation_message ||
+        "⚠️ Please enter a valid response.",
+
+      requiredMessage:
+        node.data?.requiredMessage ||
+        node.data?.required_message ||
+        "⚠️ This field is required. Please enter a valid response.",
+
+      minLength:
+        node.data?.minLength ??
+        node.data?.min_length ??
+        "",
+
+      maxLength:
+        node.data?.maxLength ??
+        node.data?.max_length ??
+        "",
+
+      minValue:
+        node.data?.minValue ??
+        node.data?.min_value ??
+        "",
+
+      maxValue:
+        node.data?.maxValue ??
+        node.data?.max_value ??
+        "",
+
+      regex:
+        node.data?.regex || "",
+    });
   }, [node]);
 
   // =======================================================
@@ -1380,97 +1448,86 @@ function Config({
     const updatedNode = {
       ...node,
 
-   data: {
-  ...node.data,
+      data: {
+        ...node.data,
 
-  ...form,
+        ...form,
 
-  // =================================================
-  // START TRIGGER
-  // =================================================
+        // =================================================
+        // USER INPUT CONFIG
+        // =================================================
 
-  triggerText:
-    node.type === "start"
-      ? String(
-          form.triggerText || ""
-        ).trim()
-      : node.data?.triggerText || "",
+        required:
+          Boolean(
+            form.required
+          ),
 
-  // =================================================
-  // USER INPUT CONFIG
-  // =================================================
+        allowSkip:
+          Boolean(
+            form.allowSkip
+          ),
 
-  required:
-    Boolean(
-      form.required
-    ),
+        skipText:
+          String(
+            form.skipText ||
+              "skip"
+          ).trim() ||
+          "skip",
 
-  allowSkip:
-    Boolean(
-      form.allowSkip
-    ),
+        validationType:
+          String(
+            form.validationType ||
+              "text"
+          )
+            .trim()
+            .toLowerCase(),
 
-  skipText:
-    String(
-      form.skipText ||
-        "skip"
-    ).trim() ||
-    "skip",
+        validationMessage:
+          form.validationMessage ||
+          "⚠️ Please enter a valid response.",
 
-  validationType:
-    String(
-      form.validationType ||
-        "text"
-    )
-      .trim()
-      .toLowerCase(),
+        requiredMessage:
+          form.requiredMessage ||
+          "⚠️ This field is required. Please enter a valid response.",
 
-  validationMessage:
-    form.validationMessage ||
-    "⚠️ Please enter a valid response.",
+        minLength:
+          form.minLength === ""
+            ? ""
+            : Number(
+                form.minLength
+              ),
 
-  requiredMessage:
-    form.requiredMessage ||
-    "⚠️ This field is required. Please enter a valid response.",
+        maxLength:
+          form.maxLength === ""
+            ? ""
+            : Number(
+                form.maxLength
+              ),
 
-  minLength:
-    form.minLength === ""
-      ? ""
-      : Number(
-          form.minLength
-        ),
+        minValue:
+          form.minValue === ""
+            ? ""
+            : Number(
+                form.minValue
+              ),
 
-  maxLength:
-    form.maxLength === ""
-      ? ""
-      : Number(
-          form.maxLength
-        ),
+        maxValue:
+          form.maxValue === ""
+            ? ""
+            : Number(
+                form.maxValue
+              ),
 
-  minValue:
-    form.minValue === ""
-      ? ""
-      : Number(
-          form.minValue
-        ),
+        regex:
+          form.regex || "",
 
-  maxValue:
-    form.maxValue === ""
-      ? ""
-      : Number(
-          form.maxValue
-        ),
-
-  regex:
-    form.regex || "",
-
-  menuOptions:
-    Array.isArray(
-      form.menuOptions
-    )
-      ? form.menuOptions
-      : [],
-},
+        menuOptions:
+          Array.isArray(
+            form.menuOptions
+          )
+            ? form.menuOptions
+            : [],
+      },
     };
 
     // =====================================================
@@ -1586,88 +1643,131 @@ function Config({
         />
       </div>
 
-
+      {/* =====================================================
+          START
+      ====================================================== */}
 {/* =====================================================
     START
 ====================================================== */}
 
 {node?.type === "start" && (
-  <div className="space-y-4">
-
-    {/* ================================================
-        TRIGGER MESSAGE
-    ================================================ */}
+  <>
+    {/* TRIGGER TYPE */}
 
     <div>
       <label className={labelClass}>
-        Trigger Message
+        Start Trigger
       </label>
 
-      <input
-        type="text"
-        value={form.triggerText || ""}
+      <select
+        value={form.triggerType}
         onChange={(e) =>
           updateField(
-            "triggerText",
+            "triggerType",
             e.target.value
           )
         }
-        placeholder="hi"
         className={inputClass}
+      >
+        <option value="keyword">
+          Keyword / Message
+        </option>
+
+        <option value="any">
+          Any Incoming Message
+        </option>
+      </select>
+    </div>
+
+    {/* TRIGGER MESSAGE */}
+
+    {form.triggerType === "keyword" && (
+      <div>
+        <label className={labelClass}>
+          Trigger Message
+        </label>
+
+        <input
+          type="text"
+          value={form.triggerText}
+          onChange={(e) =>
+            updateField(
+              "triggerText",
+              e.target.value
+            )
+          }
+          placeholder="hi"
+          className={inputClass}
+        />
+
+        <p className="mt-2 text-[11px] text-slate-400">
+          Example: hi, hello, start
+        </p>
+      </div>
+    )}
+
+    {/* WELCOME MESSAGE */}
+
+    <div>
+      <label className={labelClass}>
+        Welcome Message
+      </label>
+
+      <textarea
+        value={form.message}
+        onChange={(e) =>
+          updateField(
+            "message",
+            e.target.value
+          )
+        }
+        rows={5}
+        placeholder="Welcome! How can I help you?"
+        className={textareaClass}
       />
 
-      <p className="mt-2 text-[11px] leading-5 text-slate-400">
-        When the customer sends this message,
-        the workflow will start.
+      <p className="mt-2 text-[11px] text-slate-400">
+        This message will be sent when the
+        workflow starts.
       </p>
     </div>
 
-    {/* ================================================
-        TRIGGER PREVIEW
-    ================================================ */}
+    {/* PREVIEW */}
 
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
       <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
-        Start Trigger
+        Start Configuration
       </p>
 
-      <div className="mt-3 rounded-lg border border-emerald-100 bg-white px-3 py-3">
+      <div className="mt-3 space-y-2 text-xs">
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">
+            Trigger
+          </span>
 
-        <p className="text-xs text-slate-400">
-          Customer message
-        </p>
+          <span className="font-bold text-slate-700">
+            {form.triggerType === "any"
+              ? "Any Message"
+              : form.triggerText || "Not configured"}
+          </span>
+        </div>
 
-        <p className="mt-1 text-sm font-semibold text-slate-700">
-          {form.triggerText || "hi"}
-        </p>
+        <div>
+          <span className="text-slate-500">
+            Welcome
+          </span>
 
+          <p className="mt-1 rounded-lg bg-white p-3 text-slate-700">
+            {form.message ||
+              "No welcome message configured"}
+          </p>
+        </div>
       </div>
-
     </div>
-
-    {/* ================================================
-        INFO
-    ================================================ */}
-
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-
-      <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600">
-        How it works
-      </p>
-
-      <p className="mt-2 text-xs leading-5 text-blue-700">
-        The Start Node only detects the trigger
-        message. Add a separate Message Node after
-        Start if you want to send a welcome message.
-      </p>
-
-    </div>
-
-  </div>
+  </>
 )}
 
-  {/* =====================================================
+      {/* =====================================================
           MESSAGE
       ====================================================== */}
 
@@ -1698,7 +1798,6 @@ function Config({
           </p>
         </div>
       )}
-
 
       {/* =====================================================
           BUTTON
@@ -2821,6 +2920,236 @@ function Config({
       )}
 
       {/* =====================================================
+    MEDIA TEMPLATE
+====================================================== */}
+
+{node?.type === "media_template" && (
+  <>
+    {/* TEMPLATE NAME */}
+
+    <div>
+      <label className={labelClass}>
+        Template Name
+      </label>
+
+      <input
+        type="text"
+        value={form.templateName}
+        onChange={(e) =>
+          updateField(
+            "templateName",
+            e.target.value
+          )
+        }
+        placeholder="welcome_customer"
+        className={inputClass}
+      />
+
+      <p className="mt-2 text-[11px] text-slate-400">
+        Enter the Media Template name configured
+        in your WhatsApp provider.
+      </p>
+    </div>
+
+    {/* TEMPLATE ID */}
+
+    <div>
+      <label className={labelClass}>
+        Template ID
+      </label>
+
+      <input
+        type="text"
+        value={form.templateId}
+        onChange={(e) =>
+          updateField(
+            "templateId",
+            e.target.value
+          )
+        }
+        placeholder="123456"
+        className={inputClass}
+      />
+
+      <p className="mt-2 text-[11px] text-slate-400">
+        Provider template ID, if required.
+      </p>
+    </div>
+
+    {/* LANGUAGE */}
+
+    <div>
+      <label className={labelClass}>
+        Template Language
+      </label>
+
+      <select
+        value={form.templateLanguage}
+        onChange={(e) =>
+          updateField(
+            "templateLanguage",
+            e.target.value
+          )
+        }
+        className={inputClass}
+      >
+        <option value="en">
+          English
+        </option>
+
+        <option value="hi">
+          Hindi
+        </option>
+
+        <option value="en_US">
+          English (US)
+        </option>
+
+        <option value="en_GB">
+          English (UK)
+        </option>
+      </select>
+    </div>
+
+    {/* IMAGE */}
+
+    <div>
+      <label className={labelClass}>
+        Template Image URL
+      </label>
+
+      <input
+        type="url"
+        value={form.templateImageUrl}
+        onChange={(e) =>
+          updateField(
+            "templateImageUrl",
+            e.target.value
+          )
+        }
+        placeholder="https://example.com/image.jpg"
+        className={inputClass}
+      />
+
+      <p className="mt-2 text-[11px] text-slate-400">
+        Public HTTPS image URL used by the Media
+        Template.
+      </p>
+    </div>
+
+    {/* BODY */}
+
+    <div>
+      <label className={labelClass}>
+        Template Body / Caption
+      </label>
+
+      <textarea
+        value={form.templateBody}
+        onChange={(e) =>
+          updateField(
+            "templateBody",
+            e.target.value
+          )
+        }
+        rows={6}
+        placeholder="Hello {{1}}, welcome to our store!"
+        className={textareaClass}
+      />
+
+      <p className="mt-2 text-[11px] text-slate-400">
+        Enter the body/caption configured for
+        your Media Template.
+      </p>
+    </div>
+
+    {/* PREVIEW */}
+
+    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+      <div className="flex items-center gap-2">
+        <ImageIcon className="h-4 w-4 text-fuchsia-600" />
+
+        <p className="text-[10px] font-bold uppercase tracking-wide text-fuchsia-600">
+          Media Template Preview
+        </p>
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-xl bg-white shadow-sm">
+        {/* IMAGE */}
+
+        {form.templateImageUrl ? (
+          <img
+            src={form.templateImageUrl}
+            alt="Template preview"
+            className="h-40 w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display =
+                "none";
+            }}
+          />
+        ) : (
+          <div className="flex h-32 items-center justify-center bg-slate-100">
+            <ImageIcon className="h-8 w-8 text-slate-300" />
+          </div>
+        )}
+
+        {/* BODY */}
+
+        <div className="p-4">
+          <p className="whitespace-pre-wrap text-sm leading-5 text-slate-700">
+            {form.templateBody ||
+              "Template body / caption will appear here."}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* CONFIGURATION INFO */}
+
+    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-fuchsia-600">
+        Template Configuration
+      </p>
+
+      <div className="mt-3 space-y-2 text-xs">
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">
+            Name
+          </span>
+
+          <span className="truncate font-bold text-slate-700">
+            {form.templateName ||
+              "Not configured"}
+          </span>
+        </div>
+
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">
+            ID
+          </span>
+
+          <span className="truncate font-bold text-slate-700">
+            {form.templateId ||
+              "Not configured"}
+          </span>
+        </div>
+
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">
+            Language
+          </span>
+
+          <span className="font-bold uppercase text-slate-700">
+            {form.templateLanguage ||
+              "en"}
+          </span>
+        </div>
+      </div>
+    </div>
+  </>
+)}
+
+      {/* =====================================================
           VIDEO
       ====================================================== */}
 
@@ -3597,34 +3926,22 @@ const onDrop = useCallback(
                         : "",
 
                 required:
-                    type === "userInput"
-                        ? true
-                        : true,
+                    true,
 
                 allowSkip:
-                    type === "userInput"
-                        ? false
-                        : false,
+                    false,
 
                 skipText:
-                    type === "userInput"
-                        ? "skip"
-                        : "skip",
+                    "skip",
 
                 validationType:
-                    type === "userInput"
-                        ? "text"
-                        : "text",
+                    "text",
 
                 validationMessage:
-                    type === "userInput"
-                        ? "⚠️ Please enter a valid response."
-                        : "⚠️ Please enter a valid response.",
+                    "⚠️ Please enter a valid response.",
 
                 requiredMessage:
-                    type === "userInput"
-                        ? "⚠️ This field is required. Please enter a valid response."
-                        : "⚠️ This field is required. Please enter a valid response.",
+                    "⚠️ This field is required. Please enter a valid response.",
 
                 minLength: "",
 
@@ -3691,6 +4008,46 @@ const onDrop = useCallback(
                 caption: "",
 
                 /* =============================================
+                   MEDIA TEMPLATE
+                ============================================== */
+
+                // Provider template name
+                templateName:
+                    type === "media_template"
+                        ? ""
+                        : "",
+
+                // Provider template ID
+                templateId:
+                    type === "media_template"
+                        ? ""
+                        : "",
+
+                // Template language
+                templateLanguage:
+                    type === "media_template"
+                        ? "en"
+                        : "",
+
+                // Template body / caption
+                templateBody:
+                    type === "media_template"
+                        ? ""
+                        : "",
+
+                // Template image URL
+                templateImageUrl:
+                    type === "media_template"
+                        ? ""
+                        : "",
+
+                // Template variables
+                templateVariables:
+                    type === "media_template"
+                        ? []
+                        : [],
+
+                /* =============================================
                    DELAY
                 ============================================== */
 
@@ -3737,7 +4094,6 @@ const onDrop = useCallback(
         setSelected,
     ]
 );
-
 
   /* =======================================================
      UNDO
@@ -4783,13 +5139,31 @@ const deleteNode = useCallback(
     setSelected,
   ]
 );
-  /* =======================================================
-     SAVE
-  ======================================================= */
 
-/* =======================================================
-   SAVE
-======================================================= */
+useEffect(() => {
+  const handleDeleteRequest = (event) => {
+    const nodeId = event.detail?.nodeId;
+
+    if (!nodeId) {
+      return;
+    }
+
+    deleteNode(nodeId);
+  };
+
+  window.addEventListener(
+    "workflow-node-delete",
+    handleDeleteRequest
+  );
+
+  return () => {
+    window.removeEventListener(
+      "workflow-node-delete",
+      handleDeleteRequest
+    );
+  };
+}, [deleteNode]);
+
 
 const save = async (publish = false) => {
   if (!token) {
@@ -5972,81 +6346,129 @@ const save = async (publish = false) => {
               CANVAS
           ================================================= */}
 
-       <section
-    ref={reactFlowWrapper}
-    className="
-        relative
-        h-full
-        min-h-0
-        min-w-0
-        flex-1
-        overflow-hidden
-    "
->
-    <ReactFlow
-    ref={reactFlowWrapper}
+            <section
+                ref={reactFlowWrapper}
+                className="
+                    relative
+                    h-full
+                    min-h-0
+                    min-w-0
+                    flex-1
+                    overflow-hidden
+                "
+            >
+                <ReactFlow
+                ref={reactFlowWrapper}
 
-    nodes={nodes.map((node) => ({
-        ...node,
-        selected: selected?.id === node.id,
-    }))}
+                nodes={nodes.map((node) => ({
+                    ...node,
 
-    edges={edges}
+                    selected:
+                        selected?.id === node.id,
 
-    onInit={setReactFlowInstance}
+                  data: {
+                ...node.data,
 
-    onDrop={onDrop}
-    onDragOver={onDragOver}
+                // onDelete: () => {
+                //     deleteNode(node.id);
+                // },
+            },
+                }))}
 
-    onNodesChange={handleNodesChange}
-    onEdgesChange={handleEdgesChange}
+                edges={edges}
 
-    onConnect={onConnect}
-    onReconnect={onReconnect}
+                /* =================================================
+                REACT FLOW INSTANCE
+                ================================================= */
 
-    edgesReconnectable={true}
+                onInit={setReactFlowInstance}
 
-    onNodeDragStart={handleNodeDragStart}
+                /* =================================================
+                DRAG & DROP
+                ================================================= */
 
-    onNodeClick={(_event, node) =>
-        setSelected(node)
-    }
+                onDrop={onDrop}
 
-    onPaneClick={() =>
-        setSelected(null)
-    }
+                onDragOver={onDragOver}
 
-    nodeTypes={nodeTypes}
 
-    defaultViewport={{
-        x: 80,
-        y: 80,
-        zoom: 0.65,
-    }}
 
-    minZoom={0.4}
-    maxZoom={1.5}
+                        onNodesChange={
+                            handleNodesChange
+                        }
 
-    fitView={false}
+                        onEdgesChange={
+                            handleEdgesChange
+                        }
 
-    proOptions={{
-        hideAttribution: true,
-    }}
->
-    <MiniMap
-        nodeStrokeWidth={3}
-        pannable
-        zoomable
-    />
+                        onConnect={
+                            onConnect
+                        }
 
-    <Controls />
+                        onReconnect={
+                            onReconnect
+                        }
 
-    <Background
-        gap={20}
-        size={1}
-    />
-</ReactFlow>
-</section>
+                        edgesReconnectable={
+                            true
+                        }
+
+                        onNodeDragStart={
+                            handleNodeDragStart
+                        }
+
+                        onNodeClick={(
+                            _event,
+                            node
+                        ) =>
+                            setSelected(
+                            node
+                            )
+                        }
+
+                        onPaneClick={() =>
+                            setSelected(
+                            null
+                            )
+                        }
+
+                        nodeTypes={
+                            nodeTypes
+                        }
+
+                        defaultViewport={{
+                            x: 80,
+                            y: 80,
+                            zoom: 0.65,
+                        }}
+
+                        minZoom={0.4}
+
+                        maxZoom={1.5}
+
+                        fitView={false}
+
+                        proOptions={{
+                            hideAttribution:
+                            true,
+                        }}
+                        >
+                        <MiniMap
+                            nodeStrokeWidth={
+                            3
+                            }
+                            pannable
+                            zoomable
+                        />
+
+                        <Controls />
+
+                        <Background
+                            gap={20}
+                            size={1}
+                        />
+                        </ReactFlow>
+            </section>
 
           {/* =================================================
               RIGHT SIDEBAR
