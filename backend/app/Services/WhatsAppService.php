@@ -36,6 +36,490 @@ class WhatsAppService
             'services.whatsapp.webhook_dn_id',
             '1001'
         );
+
+
+    }
+
+
+        /**
+     * =====================================================
+     * SEND OTP
+     * =====================================================
+     */
+    public function sendOtp(
+        string $mobile,
+        array $config = []
+    ): array {
+
+        try {
+
+            $url = trim(
+                (string) (
+                    $config['sendOtpUrl']
+                    ?? $this->sendUrl
+                    ?? ''
+                )
+            );
+
+            if ($url === '') {
+                return [
+                    'success' => false,
+                    'message' => 'OTP send URL is not configured.',
+                ];
+            }
+
+            $method = strtoupper(
+                (string) (
+                    $config['sendOtpMethod']
+                    ?? 'POST'
+                )
+            );
+
+            $payload = $config[
+                'sendOtpPayload'
+            ] ?? [];
+
+            if (!is_array($payload)) {
+                $payload = [];
+            }
+
+
+
+            $payload = $this->replaceVariables(
+                $payload,
+                [
+                    'phone' => $mobile,
+                    'mobile' => $mobile,
+                    'phone_number' => $mobile,
+                ]
+            );
+
+
+
+            if (
+                empty($payload['mobile']) &&
+                empty($payload['phone']) &&
+                empty($payload['phone_number'])
+            ) {
+                $payload['mobile'] = $mobile;
+            }
+
+            Log::info(
+                'OTP SEND REQUEST',
+                [
+                    'url' => $url,
+                    'method' => $method,
+                    'mobile' => $mobile,
+                ]
+            );
+
+            $request = Http::acceptJson()
+                ->timeout(30);
+
+            /*
+             * -------------------------------------------------
+             * Token
+             * -------------------------------------------------
+             */
+
+            if ($this->token !== '') {
+                $request = $request->withToken(
+                    $this->token
+                );
+            }
+
+            /*
+             * -------------------------------------------------
+             * Send request
+             * -------------------------------------------------
+             */
+
+            if ($method === 'GET') {
+
+                $response = $request->get(
+                    $url,
+                    $payload
+                );
+
+            } else {
+
+                $response = $request->post(
+                    $url,
+                    $payload
+                );
+            }
+
+            $body = $response->json();
+
+            Log::info(
+                'OTP SEND RESPONSE',
+                [
+                    'status' => $response->status(),
+                    'body' => $body,
+                ]
+            );
+
+            if (!$response->successful()) {
+
+                return [
+                    'success' => false,
+                    'message' =>
+                        $body['message']
+                        ?? $body['error']
+                        ?? 'OTP send request failed.',
+
+                    'status' =>
+                        $response->status(),
+
+                    'response' => $body,
+                ];
+            }
+
+            return [
+                'success' => true,
+
+                'message' =>
+                    $body['message']
+                    ?? 'OTP sent successfully.',
+
+                'status' =>
+                    $response->status(),
+
+                'response' => $body,
+
+                /*
+                 * Provider may return a transaction ID.
+                 */
+                'reference' =>
+                    $body['reference']
+                    ?? $body['reference_id']
+                    ?? $body['transaction_id']
+                    ?? $body['request_id']
+                    ?? null,
+            ];
+
+        } catch (Throwable $e) {
+
+            Log::error(
+                'OTP SEND ERROR',
+                [
+                    'message' =>
+                        $e->getMessage(),
+                ]
+            );
+
+            return [
+                'success' => false,
+                'message' =>
+                    'Unable to send OTP.',
+                'error' =>
+                    $e->getMessage(),
+            ];
+        }
+    }
+
+
+    /**
+     * =====================================================
+     * VERIFY OTP
+     * =====================================================
+     */
+    public function verifyOtp(
+        string $mobile,
+        string $otp,
+        array $config = [],
+        ?string $reference = null
+    ): array {
+
+        try {
+
+            $url = trim(
+                (string) (
+                    $config['verifyOtpUrl']
+                    ?? $this->verifyUrl
+                    ?? ''
+                )
+            );
+
+            if ($url === '') {
+                return [
+                    'success' => false,
+                    'verified' => false,
+                    'message' =>
+                        'OTP verify URL is not configured.',
+                ];
+            }
+
+            $method = strtoupper(
+                (string) (
+                    $config['verifyOtpMethod']
+                    ?? 'POST'
+                )
+            );
+
+            $payload = $config[
+                'verifyOtpPayload'
+            ] ?? [];
+
+            if (!is_array($payload)) {
+                $payload = [];
+            }
+
+            /*
+             * -------------------------------------------------
+             * Replace placeholders
+             * -------------------------------------------------
+             */
+
+            $payload = $this->replaceVariables(
+                $payload,
+                [
+                    'phone' => $mobile,
+                    'mobile' => $mobile,
+                    'phone_number' => $mobile,
+                    'otp' => $otp,
+                    'reference' => $reference ?? '',
+                    'reference_id' => $reference ?? '',
+                    'transaction_id' => $reference ?? '',
+                ]
+            );
+
+            /*
+             * -------------------------------------------------
+             * Default values
+             * -------------------------------------------------
+             */
+
+            if (
+                empty($payload['mobile']) &&
+                empty($payload['phone']) &&
+                empty($payload['phone_number'])
+            ) {
+                $payload['mobile'] = $mobile;
+            }
+
+            if (
+                empty($payload['otp']) &&
+                empty($payload['code'])
+            ) {
+                $payload['otp'] = $otp;
+            }
+
+            Log::info(
+                'OTP VERIFY REQUEST',
+                [
+                    'url' => $url,
+                    'method' => $method,
+                    'mobile' => $mobile,
+                ]
+            );
+
+            $request = Http::acceptJson()
+                ->timeout(30);
+
+            if ($this->token !== '') {
+                $request = $request->withToken(
+                    $this->token
+                );
+            }
+
+            if ($method === 'GET') {
+
+                $response = $request->get(
+                    $url,
+                    $payload
+                );
+
+            } else {
+
+                $response = $request->post(
+                    $url,
+                    $payload
+                );
+            }
+
+            $body = $response->json();
+
+            Log::info(
+                'OTP VERIFY RESPONSE',
+                [
+                    'status' => $response->status(),
+                    'body' => $body,
+                ]
+            );
+
+            if (!$response->successful()) {
+
+                return [
+                    'success' => false,
+                    'verified' => false,
+
+                    'message' =>
+                        $body['message']
+                        ?? $body['error']
+                        ?? 'OTP verification failed.',
+
+                    'status' =>
+                        $response->status(),
+
+                    'response' => $body,
+                ];
+            }
+
+            /*
+             * -------------------------------------------------
+             * Different providers use different success keys.
+             * -------------------------------------------------
+             */
+
+            $verified = $this->detectVerification(
+                $body
+            );
+
+            return [
+                'success' => true,
+                'verified' => $verified,
+
+                'message' =>
+                    $body['message']
+                    ?? (
+                        $verified
+                            ? 'OTP verified successfully.'
+                            : 'Invalid OTP.'
+                    ),
+
+                'status' =>
+                    $response->status(),
+
+                'response' => $body,
+            ];
+
+        } catch (Throwable $e) {
+
+            Log::error(
+                'OTP VERIFY ERROR',
+                [
+                    'message' =>
+                        $e->getMessage(),
+                ]
+            );
+
+            return [
+                'success' => false,
+                'verified' => false,
+
+                'message' =>
+                    'Unable to verify OTP.',
+
+                'error' =>
+                    $e->getMessage(),
+            ];
+        }
+    }
+
+
+    /**
+     * =====================================================
+     * VARIABLE REPLACEMENT
+     * =====================================================
+     */
+    protected function replaceVariables(
+        mixed $value,
+        array $variables
+    ): mixed {
+
+        if (is_array($value)) {
+
+            foreach ($value as $key => $item) {
+
+                $value[$key] =
+                    $this->replaceVariables(
+                        $item,
+                        $variables
+                    );
+            }
+
+            return $value;
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        foreach (
+            $variables as $key => $replacement
+        ) {
+
+            $value = str_replace(
+                [
+                    '{{' . $key . '}}',
+                    '{' . $key . '}',
+                ],
+                (string) $replacement,
+                $value
+            );
+        }
+
+        return $value;
+    }
+
+
+    /**
+     * =====================================================
+     * DETECT VERIFY SUCCESS
+     * =====================================================
+     */
+    protected function detectVerification(
+        mixed $body
+    ): bool {
+
+        if (!is_array($body)) {
+            return false;
+        }
+
+        if (
+            isset($body['verified'])
+        ) {
+            return (bool) $body['verified'];
+        }
+
+        if (
+            isset($body['success'])
+        ) {
+            return (bool) $body['success'];
+        }
+
+        if (
+            isset($body['valid'])
+        ) {
+            return (bool) $body['valid'];
+        }
+
+        if (
+            isset($body['status'])
+        ) {
+
+            $status = strtolower(
+                (string) $body['status']
+            );
+
+            if (
+                in_array(
+                    $status,
+                    [
+                        'success',
+                        'verified',
+                        'valid',
+                        'approved',
+                    ],
+                    true
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /*
@@ -745,13 +1229,72 @@ class WhatsAppService
     }
 
 
+    /**
+ * |--------------------------------------------------------------------------
+ * | DETECT MEDIA TYPE
+ * |--------------------------------------------------------------------------
+ */
+private function detectMediaType(string $url): string
+{
+    $path = parse_url($url, PHP_URL_PATH);
+
+    $extension = strtolower(
+        pathinfo((string) $path, PATHINFO_EXTENSION)
+    );
+
+    return match ($extension) {
+
+        // IMAGE
+        'jpg',
+        'jpeg',
+        'png',
+        'gif',
+        'webp' =>
+            'image',
+
+        // DOCUMENT
+        'pdf',
+        'doc',
+        'docx',
+        'xls',
+        'xlsx',
+        'ppt',
+        'pptx',
+        'txt' =>
+            'document',
+
+        // VIDEO
+        'mp4',
+        '3gp',
+        'mov' =>
+            'video',
+
+        // AUDIO
+        'mp3',
+        'wav',
+        'ogg',
+        'm4a' =>
+            'audio',
+
+        // DEFAULT
+        default =>
+            'document',
+    };
+}
+
+
+/**
+ * |--------------------------------------------------------------------------
+ * | MEDIA TEMPLATE
+ * |--------------------------------------------------------------------------
+ */
 public function sendMediaTemplate(
     string $to,
     string $templateName,
     string $templateId,
     string $language = 'en',
     string $body = '',
-    string $imageUrl = '',
+    string $mediaUrl = '',
     array $variables = []
 ): array {
 
@@ -761,12 +1304,20 @@ public function sendMediaTemplate(
     |--------------------------------------------------------------------------
     */
 
-    $to         = trim($to);
+    $to = trim($to);
     $templateName = trim($templateName);
     $templateId = trim($templateId);
-    $language   = trim($language);
-    $body       = trim($body);
-    $imageUrl   = trim($imageUrl);
+    $language = trim($language);
+    $body = trim($body);
+    $mediaUrl = trim($mediaUrl);
+
+    /*
+    |--------------------------------------------------------------------------
+    | DETECT MEDIA TYPE
+    |--------------------------------------------------------------------------
+    */
+
+    $mediaType = $this->detectMediaType($mediaUrl);
 
     /*
     |--------------------------------------------------------------------------
@@ -781,7 +1332,8 @@ public function sendMediaTemplate(
         'template_id' => $templateId,
         'language' => $language,
         'body' => $body,
-        'image_url' => $imageUrl,
+        'media_url' => $mediaUrl,
+        'media_type' => $mediaType,
         'variables' => $variables,
     ]);
 
@@ -809,24 +1361,19 @@ public function sendMediaTemplate(
         ];
     }
 
-    if ($imageUrl === '') {
+    if ($mediaUrl === '') {
         return [
             'success' => false,
             'status' => 422,
             'response' => null,
-            'body' => 'Image URL is required.',
+            'body' => 'Media URL is required.',
         ];
     }
 
     /*
     |--------------------------------------------------------------------------
-    | BODY PARAMETER VALUES
+    | BODY PARAMETERS
     |--------------------------------------------------------------------------
-    |
-    | Provider expects:
-    |
-    | "bodyParameterValues": {}
-    |
     */
 
     $bodyParameterValues = !empty($variables)
@@ -837,11 +1384,6 @@ public function sendMediaTemplate(
     |--------------------------------------------------------------------------
     | BUTTONS
     |--------------------------------------------------------------------------
-    |
-    | Provider sample expects:
-    |
-    | "buttons": {}
-    |
     */
 
     $buttons = new \stdClass();
@@ -853,15 +1395,23 @@ public function sendMediaTemplate(
     */
 
     $mediaTemplate = [
-        'templateId' => $templateId,
 
-        'bodyParameterValues' => $bodyParameterValues,
+        'templateId' =>
+            $templateId,
 
-        'buttons' => $buttons,
+        'bodyParameterValues' =>
+            $bodyParameterValues,
+
+        'buttons' =>
+            $buttons,
 
         'media' => [
-            'type' => 'image',
-            'url' => $imageUrl,
+
+            'type' =>
+                $mediaType,
+
+            'url' =>
+                $mediaUrl,
         ],
     ];
 
@@ -872,13 +1422,18 @@ public function sendMediaTemplate(
     */
 
     $content = [
-        'preview_url' => false,
 
-        'type' => 'MEDIA_TEMPLATE',
+        'preview_url' =>
+            false,
 
-        'mediaTemplate' => $mediaTemplate,
+        'type' =>
+            'MEDIA_TEMPLATE',
 
-        'shorten_url' => true,
+        'mediaTemplate' =>
+            $mediaTemplate,
+
+        'shorten_url' =>
+            true,
     ];
 
     /*
@@ -891,46 +1446,56 @@ public function sendMediaTemplate(
 
         'message' => [
 
-            'channel' => 'WABA',
+            'channel' =>
+                'WABA',
 
-            'content' => $content,
+            'content' =>
+                $content,
 
             'recipient' => [
 
-                'to' => $to,
+                'to' =>
+                    $to,
 
-                'recipient_type' => 'individual',
+                'recipient_type' =>
+                    'individual',
 
                 'reference' => [
 
-                    'cust_ref' => 'cust_ref123',
+                    'cust_ref' =>
+                        'cust_ref123',
 
-                    'messageTag1' => 'Message Tag 001',
+                    'messageTag1' =>
+                        'Message Tag 001',
 
-                    'conversationId' => 'Conv_123',
+                    'conversationId' =>
+                        'Conv_123',
                 ],
             ],
 
             'sender' => [
 
-                'from' => $this->senderNumber,
+                'from' =>
+                    $this->senderNumber,
             ],
 
             'preferences' => [
 
-                'webHookDNId' => $this->webhookDNId,
+                'webHookDNId' =>
+                    $this->webhookDNId,
             ],
         ],
 
         'metaData' => [
 
-            'version' => 'v1.0.9',
+            'version' =>
+                'v1.0.9',
         ],
     ];
 
     /*
     |--------------------------------------------------------------------------
-    | FINAL DEBUG
+    | DEBUG PAYLOAD
     |--------------------------------------------------------------------------
     */
 
@@ -975,7 +1540,7 @@ public function sendMediaTemplate(
 
         /*
         |--------------------------------------------------------------------------
-        | RESPONSE LOG
+        | RESPONSE
         |--------------------------------------------------------------------------
         */
 
@@ -984,11 +1549,13 @@ public function sendMediaTemplate(
         );
 
         Log::info(
-            'STATUS: ' . $response->status()
+            'STATUS: ' .
+            $response->status()
         );
 
         Log::info(
-            'BODY: ' . $response->body()
+            'BODY: ' .
+            $response->body()
         );
 
         return [
@@ -1028,11 +1595,14 @@ public function sendMediaTemplate(
 
         return [
 
-            'success' => false,
+            'success' =>
+                false,
 
-            'status' => 500,
+            'status' =>
+                500,
 
-            'response' => null,
+            'response' =>
+                null,
 
             'body' =>
                 $e->getMessage(),

@@ -38,6 +38,34 @@ class WhatsAppService
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | NORMALIZE MOBILE
+    |--------------------------------------------------------------------------
+    */
+
+    private function normalizeMobile(string $mobile): string
+    {
+        $mobile = preg_replace('/\D+/', '', $mobile);
+
+        if (strlen($mobile) === 10) {
+            $mobile = '91' . $mobile;
+        }
+
+        return (string) $mobile;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CONFIG CHECK
+    |--------------------------------------------------------------------------
+    */
+
+    private function hasConfiguration(): bool
+    {
+        return !empty($this->apiUrl)
+            && !empty($this->token);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -49,12 +77,11 @@ class WhatsAppService
         string $to,
         string $text
     ): array {
-
         $originalTo = $to;
 
-        $to = preg_replace('/\D+/', '', $to);
+        $to = $this->normalizeMobile($to);
 
-        if (empty($to)) {
+        if ($to === '') {
             return [
                 'success' => false,
                 'error' => true,
@@ -62,14 +89,7 @@ class WhatsAppService
             ];
         }
 
-        if (strlen($to) === 10) {
-            $to = '91' . $to;
-        }
-
-        if (
-            empty($this->apiUrl) ||
-            empty($this->token)
-        ) {
+        if (!$this->hasConfiguration()) {
             return [
                 'success' => false,
                 'error' => true,
@@ -96,18 +116,22 @@ class WhatsAppService
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | INTERACTIVE BUTTON
+    |--------------------------------------------------------------------------
+    */
 
     public function sendInteractive(
         string $to,
         string $body,
         array $buttons
     ): array {
-
         $originalTo = $to;
 
-        $to = preg_replace('/\D+/', '', $to);
+        $to = $this->normalizeMobile($to);
 
-        if (empty($to)) {
+        if ($to === '') {
             return [
                 'success' => false,
                 'error' => true,
@@ -115,14 +139,7 @@ class WhatsAppService
             ];
         }
 
-        if (strlen($to) === 10) {
-            $to = '91' . $to;
-        }
-
-        if (
-            empty($this->apiUrl) ||
-            empty($this->token)
-        ) {
+        if (!$this->hasConfiguration()) {
             return [
                 'success' => false,
                 'error' => true,
@@ -133,7 +150,6 @@ class WhatsAppService
         $interactiveButtons = [];
 
         foreach ($buttons as $index => $button) {
-
             if (!is_array($button)) {
                 continue;
             }
@@ -158,14 +174,12 @@ class WhatsAppService
 
             $interactiveButtons[] = [
                 'type' => 'reply',
-
                 'reply' => [
                     'id' => $id,
                     'title' => $title,
                 ],
             ];
         }
-
 
         $interactiveButtons = array_slice(
             $interactiveButtons,
@@ -185,14 +199,11 @@ class WhatsAppService
             'preview_url' => false,
             'shorten_url' => false,
             'type' => 'INTERACTIVE',
-
             'interactive' => [
                 'type' => 'button',
-
                 'body' => [
                     'text' => $body,
                 ],
-
                 'action' => [
                     'buttons' => $interactiveButtons,
                 ],
@@ -211,19 +222,22 @@ class WhatsAppService
         );
     }
 
-
+    /*
+    |--------------------------------------------------------------------------
+    | MENU BUTTONS
+    |--------------------------------------------------------------------------
+    */
 
     public function sendMenuButtons(
         string $to,
         string $body,
         array $options
     ): array {
-
         $originalTo = $to;
 
-        $to = preg_replace('/\D+/', '', $to);
+        $to = $this->normalizeMobile($to);
 
-        if (empty($to)) {
+        if ($to === '') {
             return [
                 'success' => false,
                 'error' => true,
@@ -231,14 +245,7 @@ class WhatsAppService
             ];
         }
 
-        if (strlen($to) === 10) {
-            $to = '91' . $to;
-        }
-
-        if (
-            empty($this->apiUrl) ||
-            empty($this->token)
-        ) {
+        if (!$this->hasConfiguration()) {
             return [
                 'success' => false,
                 'error' => true,
@@ -255,7 +262,6 @@ class WhatsAppService
         $normalizedOptions = [];
 
         foreach ($options as $index => $option) {
-
             if (!is_array($option)) {
                 continue;
             }
@@ -294,10 +300,13 @@ class WhatsAppService
             ];
         }
 
-
+        /*
+        |--------------------------------------------------------------------------
+        | More than 3 = LIST
+        |--------------------------------------------------------------------------
+        */
 
         if (count($normalizedOptions) > 3) {
-
             return $this->sendList(
                 $originalTo,
                 $body,
@@ -306,15 +315,17 @@ class WhatsAppService
             );
         }
 
-
+        /*
+        |--------------------------------------------------------------------------
+        | BUTTONS
+        |--------------------------------------------------------------------------
+        */
 
         $buttons = [];
 
         foreach ($normalizedOptions as $option) {
-
             $buttons[] = [
                 'type' => 'reply',
-
                 'reply' => [
                     'id' => (string) $option['id'],
                     'title' => (string) $option['title'],
@@ -326,14 +337,11 @@ class WhatsAppService
             'preview_url' => false,
             'shorten_url' => false,
             'type' => 'INTERACTIVE',
-
             'interactive' => [
                 'type' => 'button',
-
                 'body' => [
                     'text' => $body,
                 ],
-
                 'action' => [
                     'buttons' => $buttons,
                 ],
@@ -345,8 +353,6 @@ class WhatsAppService
             $to
         );
 
-
-
         return $this->sendRequest(
             $payload,
             'MENU_BUTTON',
@@ -354,7 +360,11 @@ class WhatsAppService
         );
     }
 
-
+    /*
+    |--------------------------------------------------------------------------
+    | LIST MESSAGE
+    |--------------------------------------------------------------------------
+    */
 
     public function sendList(
         string $to,
@@ -362,12 +372,11 @@ class WhatsAppService
         array $options,
         string $buttonText = 'View Options'
     ): array {
-
         $originalTo = $to;
 
-        $to = preg_replace('/\D+/', '', $to);
+        $to = $this->normalizeMobile($to);
 
-        if (empty($to)) {
+        if ($to === '') {
             return [
                 'success' => false,
                 'error' => true,
@@ -375,14 +384,7 @@ class WhatsAppService
             ];
         }
 
-        if (strlen($to) === 10) {
-            $to = '91' . $to;
-        }
-
-        if (
-            empty($this->apiUrl) ||
-            empty($this->token)
-        ) {
+        if (!$this->hasConfiguration()) {
             return [
                 'success' => false,
                 'error' => true,
@@ -399,7 +401,6 @@ class WhatsAppService
         $rows = [];
 
         foreach ($options as $index => $option) {
-
             if (!is_array($option)) {
                 continue;
             }
@@ -417,7 +418,6 @@ class WhatsAppService
                 ?? $option['text']
                 ?? 'Option ' . ($index + 1)
             ));
-
 
             if ($title === '') {
                 continue;
@@ -439,7 +439,6 @@ class WhatsAppService
             $rows[] = $row;
         }
 
-
         if (empty($rows)) {
             return [
                 'success' => false,
@@ -448,27 +447,20 @@ class WhatsAppService
             ];
         }
 
-
-
         $content = [
             'preview_url' => false,
             'shorten_url' => false,
             'type' => 'INTERACTIVE',
-
             'interactive' => [
                 'type' => 'list',
-
                 'body' => [
                     'text' => $body,
                 ],
-
                 'action' => [
                     'button' => $buttonText,
-
                     'sections' => [
                         [
                             'title' => 'Options',
-
                             'rows' => $rows,
                         ],
                     ],
@@ -481,8 +473,6 @@ class WhatsAppService
             $to
         );
 
-
-
         return $this->sendRequest(
             $payload,
             'INTERACTIVE_LIST',
@@ -490,199 +480,568 @@ class WhatsAppService
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | IMAGE
+    |--------------------------------------------------------------------------
+    */
 
-    // ========================================
-// MEDIA METHODS
-// ========================================
+    public function sendImage(
+        string $to,
+        string $mediaUrl,
+        string $caption = ''
+    ): array {
+        $originalTo = $to;
 
-public function sendImage(
+        $to = $this->normalizeMobile($to);
+
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid WhatsApp mobile number.',
+            ];
+        }
+
+        if (!$this->hasConfiguration()) {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'WhatsApp API configuration missing.',
+            ];
+        }
+
+        $mediaUrl = trim($mediaUrl);
+
+        if ($mediaUrl === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Image URL is empty.',
+            ];
+        }
+
+        $content = [
+            'preview_url' => false,
+            'shorten_url' => false,
+            'type' => 'IMAGE',
+            'image' => [
+                'url' => $mediaUrl,
+            ],
+        ];
+
+        if ($caption !== '') {
+            $content['image']['caption'] = $caption;
+        }
+
+        $payload = $this->buildPayload(
+            $content,
+            $to
+        );
+
+        return $this->sendRequest(
+            $payload,
+            'IMAGE',
+            $originalTo
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOCUMENT
+    |--------------------------------------------------------------------------
+    */
+
+    public function sendDocument(
+        string $to,
+        string $mediaUrl,
+        string $filename = '',
+        string $caption = ''
+    ): array {
+        $originalTo = $to;
+
+        $to = $this->normalizeMobile($to);
+
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid WhatsApp mobile number.',
+            ];
+        }
+
+        if (!$this->hasConfiguration()) {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'WhatsApp API configuration missing.',
+            ];
+        }
+
+        $mediaUrl = trim($mediaUrl);
+
+        if ($mediaUrl === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Document URL is empty.',
+            ];
+        }
+
+        $content = [
+            'preview_url' => false,
+            'shorten_url' => false,
+            'type' => 'DOCUMENT',
+            'document' => [
+                'url' => $mediaUrl,
+            ],
+        ];
+
+        if ($filename !== '') {
+            $content['document']['filename'] = $filename;
+        }
+
+        if ($caption !== '') {
+            $content['document']['caption'] = $caption;
+        }
+
+        $payload = $this->buildPayload(
+            $content,
+            $to
+        );
+
+        return $this->sendRequest(
+            $payload,
+            'DOCUMENT',
+            $originalTo
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIO
+    |--------------------------------------------------------------------------
+    */
+
+    public function sendAudio(
+        string $to,
+        string $mediaUrl
+    ): array {
+        $originalTo = $to;
+
+        $to = $this->normalizeMobile($to);
+
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid WhatsApp mobile number.',
+            ];
+        }
+
+        if (!$this->hasConfiguration()) {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'WhatsApp API configuration missing.',
+            ];
+        }
+
+        $mediaUrl = trim($mediaUrl);
+
+        if ($mediaUrl === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Audio URL is empty.',
+            ];
+        }
+
+        $content = [
+            'preview_url' => false,
+            'shorten_url' => false,
+            'type' => 'AUDIO',
+            'audio' => [
+                'url' => $mediaUrl,
+            ],
+        ];
+
+        $payload = $this->buildPayload(
+            $content,
+            $to
+        );
+
+        return $this->sendRequest(
+            $payload,
+            'AUDIO',
+            $originalTo
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VIDEO
+    |--------------------------------------------------------------------------
+    */
+
+    public function sendVideo(
+        string $to,
+        string $mediaUrl,
+        string $caption = ''
+    ): array {
+        $originalTo = $to;
+
+        $to = $this->normalizeMobile($to);
+
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Invalid WhatsApp mobile number.',
+            ];
+        }
+
+        if (!$this->hasConfiguration()) {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'WhatsApp API configuration missing.',
+            ];
+        }
+
+        $mediaUrl = trim($mediaUrl);
+
+        if ($mediaUrl === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Video URL is empty.',
+            ];
+        }
+
+        $content = [
+            'preview_url' => false,
+            'shorten_url' => false,
+            'type' => 'VIDEO',
+            'video' => [
+                'url' => $mediaUrl,
+            ],
+        ];
+
+        if ($caption !== '') {
+            $content['video']['caption'] = $caption;
+        }
+
+        $payload = $this->buildPayload(
+            $content,
+            $to
+        );
+
+        return $this->sendRequest(
+            $payload,
+            'VIDEO',
+            $originalTo
+        );
+    }
+
+
+public function sendMediaTemplate(
     string $to,
-    string $mediaUrl,
-    string $caption = ''
+    string $templateName,
+    string $templateId,
+    string $language = 'en',
+    string $body = '',
+    string $imageUrl = '',
+    array $variables = []
 ): array {
-    $originalTo = $to;
 
-    $to = preg_replace('/\D+/', '', $to);
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE VALUES
+    |--------------------------------------------------------------------------
+    */
 
-    if (empty($to)) {
+    $to         = trim($to);
+    $templateName = trim($templateName);
+    $templateId = trim($templateId);
+    $language   = trim($language);
+    $body       = trim($body);
+    $imageUrl   = trim($imageUrl);
+
+    /*
+    |--------------------------------------------------------------------------
+    | DEBUG INPUT
+    |--------------------------------------------------------------------------
+    */
+
+    Log::info('🔥 NEW MEDIA TEMPLATE METHOD RUNNING', [
+        'file' => __FILE__,
+        'to' => $to,
+        'template_name' => $templateName,
+        'template_id' => $templateId,
+        'language' => $language,
+        'body' => $body,
+        'image_url' => $imageUrl,
+        'variables' => $variables,
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+    if ($to === '') {
         return [
             'success' => false,
-            'error' => true,
-            'message' => 'Invalid WhatsApp mobile number.',
+            'status' => 422,
+            'response' => null,
+            'body' => 'Recipient number is required.',
         ];
     }
 
-    if (strlen($to) === 10) {
-        $to = '91' . $to;
-    }
-
-    $content = [
-        'preview_url' => false,
-        'shorten_url' => false,
-        'type' => 'IMAGE',
-        'image' => [
-            'url' => $mediaUrl,
-        ],
-    ];
-
-    if ($caption !== '') {
-        $content['image']['caption'] = $caption;
-    }
-
-    $payload = $this->buildPayload(
-        $content,
-        $to
-    );
-
-    return $this->sendRequest(
-        $payload,
-        'IMAGE',
-        $originalTo
-    );
-}
-
-
-public function sendDocument(
-    string $to,
-    string $mediaUrl,
-    string $filename = '',
-    string $caption = ''
-): array {
-    $originalTo = $to;
-
-    $to = preg_replace('/\D+/', '', $to);
-
-    if (empty($to)) {
+    if ($templateId === '') {
         return [
             'success' => false,
-            'error' => true,
-            'message' => 'Invalid WhatsApp mobile number.',
+            'status' => 422,
+            'response' => null,
+            'body' => 'Template ID is required.',
         ];
     }
 
-    if (strlen($to) === 10) {
-        $to = '91' . $to;
-    }
-
-    $content = [
-        'preview_url' => false,
-        'shorten_url' => false,
-        'type' => 'DOCUMENT',
-        'document' => [
-            'url' => $mediaUrl,
-        ],
-    ];
-
-    if ($filename !== '') {
-        $content['document']['filename'] = $filename;
-    }
-
-    if ($caption !== '') {
-        $content['document']['caption'] = $caption;
-    }
-
-    $payload = $this->buildPayload(
-        $content,
-        $to
-    );
-
-    return $this->sendRequest(
-        $payload,
-        'DOCUMENT',
-        $originalTo
-    );
-}
-
-
-public function sendAudio(
-    string $to,
-    string $mediaUrl
-): array {
-    $originalTo = $to;
-
-    $to = preg_replace('/\D+/', '', $to);
-
-    if (empty($to)) {
+    if ($imageUrl === '') {
         return [
             'success' => false,
-            'error' => true,
-            'message' => 'Invalid WhatsApp mobile number.',
+            'status' => 422,
+            'response' => null,
+            'body' => 'Image URL is required.',
         ];
     }
 
-    if (strlen($to) === 10) {
-        $to = '91' . $to;
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | BODY PARAMETER VALUES
+    |--------------------------------------------------------------------------
+    |
+    | Provider expects:
+    |
+    | "bodyParameterValues": {}
+    |
+    */
 
-    $content = [
-        'preview_url' => false,
-        'shorten_url' => false,
-        'type' => 'AUDIO',
-        'audio' => [
-            'url' => $mediaUrl,
+    $bodyParameterValues = !empty($variables)
+        ? $variables
+        : new \stdClass();
+
+    /*
+    |--------------------------------------------------------------------------
+    | BUTTONS
+    |--------------------------------------------------------------------------
+    |
+    | Provider sample expects:
+    |
+    | "buttons": {}
+    |
+    */
+
+    $buttons = new \stdClass();
+
+    /*
+    |--------------------------------------------------------------------------
+    | MEDIA TEMPLATE
+    |--------------------------------------------------------------------------
+    */
+
+    $mediaTemplate = [
+        'templateId' => $templateId,
+
+        'bodyParameterValues' => $bodyParameterValues,
+
+        'buttons' => $buttons,
+
+        'media' => [
+            'type' => 'image',
+            'url' => $imageUrl,
         ],
     ];
 
-    $payload = $this->buildPayload(
-        $content,
-        $to
+    /*
+    |--------------------------------------------------------------------------
+    | CONTENT
+    |--------------------------------------------------------------------------
+    */
+
+    $content = [
+        'preview_url' => false,
+
+        'type' => 'MEDIA_TEMPLATE',
+
+        'mediaTemplate' => $mediaTemplate,
+
+        'shorten_url' => true,
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAIN PAYLOAD
+    |--------------------------------------------------------------------------
+    */
+
+    $payload = [
+
+        'message' => [
+
+            'channel' => 'WABA',
+
+            'content' => $content,
+
+            'recipient' => [
+
+                'to' => $to,
+
+                'recipient_type' => 'individual',
+
+                'reference' => [
+
+                    'cust_ref' => 'cust_ref123',
+
+                    'messageTag1' => 'Message Tag 001',
+
+                    'conversationId' => 'Conv_123',
+                ],
+            ],
+
+            'sender' => [
+
+                'from' => $this->senderNumber,
+            ],
+
+            'preferences' => [
+
+                'webHookDNId' => $this->webhookDNId,
+            ],
+        ],
+
+        'metaData' => [
+
+            'version' => 'v1.0.9',
+        ],
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | FINAL DEBUG
+    |--------------------------------------------------------------------------
+    */
+
+    Log::info(
+        '========== NEW MEDIA TEMPLATE REQUEST =========='
     );
 
-    return $this->sendRequest(
-        $payload,
-        'AUDIO',
-        $originalTo
+    Log::info(
+        json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES |
+            JSON_UNESCAPED_UNICODE |
+            JSON_PRETTY_PRINT
+        )
     );
-}
 
+    /*
+    |--------------------------------------------------------------------------
+    | SEND REQUEST
+    |--------------------------------------------------------------------------
+    */
 
-public function sendVideo(
-    string $to,
-    string $mediaUrl,
-    string $caption = ''
-): array {
-    $originalTo = $to;
+    try {
 
-    $to = preg_replace('/\D+/', '', $to);
+        $response = Http::withHeaders([
 
-    if (empty($to)) {
+            'Authentication' =>
+                'Bearer ' . $this->token,
+
+            'Content-Type' =>
+                'application/json',
+
+            'Accept' =>
+                'application/json',
+
+        ])
+        ->timeout(30)
+        ->post(
+            $this->apiUrl,
+            $payload
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | RESPONSE LOG
+        |--------------------------------------------------------------------------
+        */
+
+        Log::info(
+            '========== NEW MEDIA TEMPLATE RESPONSE =========='
+        );
+
+        Log::info(
+            'STATUS: ' . $response->status()
+        );
+
+        Log::info(
+            'BODY: ' . $response->body()
+        );
+
         return [
+
+            'success' =>
+                $response->successful(),
+
+            'status' =>
+                $response->status(),
+
+            'response' =>
+                $response->json(),
+
+            'body' =>
+                $response->body(),
+
+            'payload' =>
+                $payload,
+        ];
+
+    } catch (\Throwable $e) {
+
+        Log::error(
+            'MEDIA TEMPLATE HTTP ERROR',
+            [
+
+                'message' =>
+                    $e->getMessage(),
+
+                'file' =>
+                    $e->getFile(),
+
+                'line' =>
+                    $e->getLine(),
+            ]
+        );
+
+        return [
+
             'success' => false,
-            'error' => true,
-            'message' => 'Invalid WhatsApp mobile number.',
+
+            'status' => 500,
+
+            'response' => null,
+
+            'body' =>
+                $e->getMessage(),
+
+            'payload' =>
+                $payload,
         ];
     }
-
-    if (strlen($to) === 10) {
-        $to = '91' . $to;
-    }
-
-    $content = [
-        'preview_url' => false,
-        'shorten_url' => false,
-        'type' => 'VIDEO',
-        'video' => [
-            'url' => $mediaUrl,
-        ],
-    ];
-
-    if ($caption !== '') {
-        $content['video']['caption'] = $caption;
-    }
-
-    $payload = $this->buildPayload(
-        $content,
-        $to
-    );
-
-    return $this->sendRequest(
-        $payload,
-        'VIDEO',
-        $originalTo
-    );
 }
-
-
     /*
     |--------------------------------------------------------------------------
     | COMMON HTTP REQUEST
@@ -694,8 +1053,15 @@ public function sendVideo(
         string $messageType,
         string $originalTo
     ): array {
-
         $url = trim($this->apiUrl);
+
+        if ($url === '') {
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'WhatsApp API URL is empty.',
+            ];
+        }
 
         $jsonPayload = json_encode(
             $payload,
@@ -704,8 +1070,6 @@ public function sendVideo(
         );
 
         if ($jsonPayload === false) {
-
-
             return [
                 'success' => false,
                 'error' => true,
@@ -713,10 +1077,17 @@ public function sendVideo(
             ];
         }
 
-
+        Log::info(
+            'WHATSAPP API REQUEST',
+            [
+                'type' => $messageType,
+                'to' => $originalTo,
+                'url' => $url,
+                'payload' => $payload,
+            ]
+        );
 
         try {
-
             $response = Http::timeout(30)
                 ->connectTimeout(10)
                 ->withHeaders([
@@ -737,6 +1108,18 @@ public function sendVideo(
 
             $responseBody = $response->json();
 
+            Log::info(
+                'WHATSAPP API RESPONSE',
+                [
+                    'type' => $messageType,
+                    'to' => $originalTo,
+                    'status' => $response->status(),
+                    'successful' => $response->successful(),
+                    'body' => $response->body(),
+                    'json' => $responseBody,
+                ]
+            );
+
             return [
                 'success' =>
                     $response->successful(),
@@ -753,17 +1136,14 @@ public function sendVideo(
                 'body' =>
                     $response->body(),
             ];
-
         } catch (\Throwable $e) {
-
             Log::error(
                 'WHATSAPP API EXCEPTION',
                 [
                     'type' => $messageType,
-
+                    'to' => $originalTo,
                     'message' =>
                         $e->getMessage(),
-
                     'trace' =>
                         $e->getTraceAsString(),
                 ]
@@ -772,13 +1152,11 @@ public function sendVideo(
             return [
                 'success' => false,
                 'error' => true,
-
                 'message' =>
                     $e->getMessage(),
             ];
         }
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -790,11 +1168,8 @@ public function sendVideo(
         array $content,
         string $usermobile
     ): array {
-
         return [
-
             'message' => [
-
                 'channel' => 'WABA',
 
                 'single_send' => 'true',
@@ -802,14 +1177,12 @@ public function sendVideo(
                 'content' => $content,
 
                 'recipient' => [
-
                     'to' => $usermobile,
 
                     'recipient_type' =>
                         'individual',
 
                     'reference' => [
-
                         'cust_ref' =>
                             'cust_ref123',
 
@@ -822,7 +1195,6 @@ public function sendVideo(
                 ],
 
                 'sender' => [
-
                     'name' =>
                         $this->senderName,
 
@@ -831,14 +1203,12 @@ public function sendVideo(
                 ],
 
                 'preferences' => [
-
                     'webHookDNId' =>
                         $this->webhookDNId,
                 ],
             ],
 
             'metaData' => [
-
                 'version' =>
                     'v1.0.9',
             ],

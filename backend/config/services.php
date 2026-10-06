@@ -62,4 +62,9 @@ return [
 
 ],
 
+   'otp' => [
+    'token' => env('OTP_API_TOKEN', ''),
+    'send_url' => env('OTP_SEND_URL', ''),
+    'verify_url' => env('OTP_VERIFY_URL', ''),
+],
 ];
