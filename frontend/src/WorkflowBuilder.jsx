@@ -46,7 +46,6 @@ import ReactFlow, {
 
 import "reactflow/dist/style.css";
 import "react-toastify/dist/ReactToastify.css";
-import OtpNode from "./OtpNode";
 
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -986,33 +985,72 @@ const [form, setForm] = useState({
 
 
   // =====================================================
-  // USER INPUT
-  // =====================================================
+// USER INPUT
+// =====================================================
 
-  required: true,
+required: true,
 
-  allowSkip: false,
+allowSkip: false,
 
-  skipText: "skip",
+skipText: "skip",
 
-  validationType: "text",
+validationType: "text",
 
-  validationMessage:
-    "⚠️ Please enter a valid response.",
+validationMessage:
+  "⚠️ Please enter a valid response.",
 
-  requiredMessage:
-    "⚠️ This field is required. Please enter a valid response.",
+requiredMessage:
+  "⚠️ This field is required. Please enter a valid response.",
 
-  minLength: "",
+minLength: "",
 
-  maxLength: "",
+maxLength: "",
 
-  minValue: "",
+minValue: "",
 
-  maxValue: "",
+maxValue: "",
 
-  regex: "",
+regex: "",
 
+
+// =====================================================
+// DATE VALIDATION
+// =====================================================
+
+dateFormat: "YYYY-MM-DD",
+
+minDate: "",
+
+maxDate: "",
+
+
+// =====================================================
+// TIME VALIDATION
+// =====================================================
+
+timeFormat: "HH:mm",
+
+minTime: "",
+
+maxTime: "",
+
+
+// =====================================================
+// DATE & TIME VALIDATION
+// =====================================================
+
+dateTimeFormat: "YYYY-MM-DD HH:mm",
+
+minDateTime: "",
+
+maxDateTime: "",
+
+
+// =====================================================
+// CITY VALIDATION
+// =====================================================
+
+cityValidation: "any",
 
   // =====================================================
   // START
@@ -1078,240 +1116,240 @@ const [form, setForm] = useState({
           node.data?.trigger_type ||
           "keyword",
 
-// ===================================================
-// API CONFIG
-// ===================================================
+    // ===================================================
+    // API CONFIG
+    // ===================================================
 
-apiName:
-  node.data?.apiName ??
-  node.data?.api_name ??
-  "",
-
-apiUrl:
-  node.data?.apiUrl ??
-  node.data?.api_url ??
-  "",
-
-apiMethod:
-  node.data?.apiMethod ??
-  node.data?.api_method ??
-  node.data?.method ??
-  "GET",
-
-// ===================================================
-// API AUTHENTICATION
-// ===================================================
-
-apiAuthType:
-  node.data?.apiAuthType ??
-  node.data?.api_auth_type ??
-  "none",
-
-apiBearerToken:
-  node.data?.apiBearerToken ??
-  node.data?.api_bearer_token ??
-  "",
-
-apiKeyName:
-  node.data?.apiKeyName ??
-  node.data?.api_key_name ??
-  "",
-
-apiKeyValue:
-  node.data?.apiKeyValue ??
-  node.data?.api_key_value ??
-  "",
-
-apiUsername:
-  node.data?.apiUsername ??
-  node.data?.api_username ??
-  "",
-
-apiPassword:
-  node.data?.apiPassword ??
-  node.data?.api_password ??
-  "",
-
-// ===================================================
-// API HEADERS
-// ===================================================
-
-apiHeaders:
-  typeof node.data?.apiHeaders === "object" &&
-  node.data?.apiHeaders !== null
-    ? JSON.stringify(
-        node.data.apiHeaders,
-        null,
-        2
-      )
-    : typeof node.data?.api_headers === "object" &&
-      node.data?.api_headers !== null
-    ? JSON.stringify(
-        node.data.api_headers,
-        null,
-        2
-      )
-    : node.data?.apiHeaders ??
-      node.data?.api_headers ??
+    apiName:
+      node.data?.apiName ??
+      node.data?.api_name ??
       "",
 
-// ===================================================
-// API QUERY PARAMETERS
-// ===================================================
-
-apiQuery:
-  typeof node.data?.apiQuery === "object" &&
-  node.data?.apiQuery !== null
-    ? JSON.stringify(
-        node.data.apiQuery,
-        null,
-        2
-      )
-    : typeof node.data?.api_query === "object" &&
-      node.data?.api_query !== null
-    ? JSON.stringify(
-        node.data.api_query,
-        null,
-        2
-      )
-    : node.data?.apiQuery ??
-      node.data?.api_query ??
+    apiUrl:
+      node.data?.apiUrl ??
+      node.data?.api_url ??
       "",
 
-// ===================================================
-// API PAYLOAD TYPE
-// ===================================================
+    apiMethod:
+      node.data?.apiMethod ??
+      node.data?.api_method ??
+      node.data?.method ??
+      "GET",
 
-apiBodyType:
-  node.data?.apiBodyType ??
-  node.data?.api_body_type ??
-  "json",
+    // ===================================================
+    // API AUTHENTICATION
+    // ===================================================
 
-// ===================================================
-// API CONTENT TYPE
-// ===================================================
+    apiAuthType:
+      node.data?.apiAuthType ??
+      node.data?.api_auth_type ??
+      "none",
 
-apiContentType:
-  node.data?.apiContentType ??
-  node.data?.api_content_type ??
-  (
-    node.data?.apiBodyType === "form"
-      ? "application/x-www-form-urlencoded"
-      : node.data?.apiBodyType === "xml"
-      ? "application/xml"
-      : node.data?.apiBodyType === "raw"
-      ? "text/plain"
-      : "application/json"
-  ),
-
-// ===================================================
-// API JSON / RAW / XML BODY
-// ===================================================
-
-apiBody:
-  typeof node.data?.apiBody === "object" &&
-  node.data?.apiBody !== null
-    ? JSON.stringify(
-        node.data.apiBody,
-        null,
-        2
-      )
-    : typeof node.data?.api_body === "object" &&
-      node.data?.api_body !== null
-    ? JSON.stringify(
-        node.data.api_body,
-        null,
-        2
-      )
-    : node.data?.apiBody ??
-      node.data?.api_body ??
+    apiBearerToken:
+      node.data?.apiBearerToken ??
+      node.data?.api_bearer_token ??
       "",
 
-// ===================================================
-// API FORM DATA
-// ===================================================
-
-apiFormData:
-  typeof node.data?.apiFormData === "object" &&
-  node.data?.apiFormData !== null
-    ? JSON.stringify(
-        node.data.apiFormData,
-        null,
-        2
-      )
-    : typeof node.data?.api_form_data === "object" &&
-      node.data?.api_form_data !== null
-    ? JSON.stringify(
-        node.data.api_form_data,
-        null,
-        2
-      )
-    : node.data?.apiFormData ??
-      node.data?.api_form_data ??
+    apiKeyName:
+      node.data?.apiKeyName ??
+      node.data?.api_key_name ??
       "",
 
-// ===================================================
-// API RESPONSE
-// ===================================================
+    apiKeyValue:
+      node.data?.apiKeyValue ??
+      node.data?.api_key_value ??
+      "",
 
-apiResponseVariable:
-  node.data?.apiResponseVariable ??
-  node.data?.api_response_variable ??
-  "api_response",
+    apiUsername:
+      node.data?.apiUsername ??
+      node.data?.api_username ??
+      "",
 
-apiResponsePath:
-  node.data?.apiResponsePath ??
-  node.data?.api_response_path ??
-  "",
+    apiPassword:
+      node.data?.apiPassword ??
+      node.data?.api_password ??
+      "",
 
-// ===================================================
-// API SUCCESS / CONFIRMATION
-// ===================================================
+    // ===================================================
+    // API HEADERS
+    // ===================================================
 
-apiSuccessType:
-  node.data?.apiSuccessType ??
-  node.data?.api_success_type ??
-  "status",
+    apiHeaders:
+      typeof node.data?.apiHeaders === "object" &&
+      node.data?.apiHeaders !== null
+        ? JSON.stringify(
+            node.data.apiHeaders,
+            null,
+            2
+          )
+        : typeof node.data?.api_headers === "object" &&
+          node.data?.api_headers !== null
+        ? JSON.stringify(
+            node.data.api_headers,
+            null,
+            2
+          )
+        : node.data?.apiHeaders ??
+          node.data?.api_headers ??
+          "",
 
-apiSuccessStatus:
-  node.data?.apiSuccessStatus ??
-  node.data?.api_success_status ??
-  "200,201",
+    // ===================================================
+    // API QUERY PARAMETERS
+    // ===================================================
 
-apiSuccessField:
-  node.data?.apiSuccessField ??
-  node.data?.api_success_field ??
-  "",
+    apiQuery:
+      typeof node.data?.apiQuery === "object" &&
+      node.data?.apiQuery !== null
+        ? JSON.stringify(
+            node.data.apiQuery,
+            null,
+            2
+          )
+        : typeof node.data?.api_query === "object" &&
+          node.data?.api_query !== null
+        ? JSON.stringify(
+            node.data.api_query,
+            null,
+            2
+          )
+        : node.data?.apiQuery ??
+          node.data?.api_query ??
+          "",
 
-apiSuccessValue:
-  node.data?.apiSuccessValue ??
-  node.data?.api_success_value ??
-  "",
+    // ===================================================
+    // API PAYLOAD TYPE
+    // ===================================================
 
-// ===================================================
-// API MESSAGES
-// ===================================================
+    apiBodyType:
+      node.data?.apiBodyType ??
+      node.data?.api_body_type ??
+      "json",
 
-apiSuccessMessage:
-  node.data?.apiSuccessMessage ??
-  node.data?.api_success_message ??
-  "",
+    // ===================================================
+    // API CONTENT TYPE
+    // ===================================================
 
-apiFailureMessage:
-  node.data?.apiFailureMessage ??
-  node.data?.api_failure_message ??
-  "",
+    apiContentType:
+      node.data?.apiContentType ??
+      node.data?.api_content_type ??
+      (
+        node.data?.apiBodyType === "form"
+          ? "application/x-www-form-urlencoded"
+          : node.data?.apiBodyType === "xml"
+          ? "application/xml"
+          : node.data?.apiBodyType === "raw"
+          ? "text/plain"
+          : "application/json"
+      ),
 
-// ===================================================
-// API TIMEOUT
-// ===================================================
+    // ===================================================
+    // API JSON / RAW / XML BODY
+    // ===================================================
 
-apiTimeout:
-  Number(
-    node.data?.apiTimeout ??
-    node.data?.api_timeout ??
-    30
-  ),
+    apiBody:
+      typeof node.data?.apiBody === "object" &&
+      node.data?.apiBody !== null
+        ? JSON.stringify(
+            node.data.apiBody,
+            null,
+            2
+          )
+        : typeof node.data?.api_body === "object" &&
+          node.data?.api_body !== null
+        ? JSON.stringify(
+            node.data.api_body,
+            null,
+            2
+          )
+        : node.data?.apiBody ??
+          node.data?.api_body ??
+          "",
+
+    // ===================================================
+    // API FORM DATA
+    // ===================================================
+
+    apiFormData:
+      typeof node.data?.apiFormData === "object" &&
+      node.data?.apiFormData !== null
+        ? JSON.stringify(
+            node.data.apiFormData,
+            null,
+            2
+          )
+        : typeof node.data?.api_form_data === "object" &&
+          node.data?.api_form_data !== null
+        ? JSON.stringify(
+            node.data.api_form_data,
+            null,
+            2
+          )
+        : node.data?.apiFormData ??
+          node.data?.api_form_data ??
+          "",
+
+    // ===================================================
+    // API RESPONSE
+    // ===================================================
+
+    apiResponseVariable:
+      node.data?.apiResponseVariable ??
+      node.data?.api_response_variable ??
+      "api_response",
+
+    apiResponsePath:
+      node.data?.apiResponsePath ??
+      node.data?.api_response_path ??
+      "",
+
+    // ===================================================
+    // API SUCCESS / CONFIRMATION
+    // ===================================================
+
+    apiSuccessType:
+      node.data?.apiSuccessType ??
+      node.data?.api_success_type ??
+      "status",
+
+    apiSuccessStatus:
+      node.data?.apiSuccessStatus ??
+      node.data?.api_success_status ??
+      "200,201",
+
+    apiSuccessField:
+      node.data?.apiSuccessField ??
+      node.data?.api_success_field ??
+      "",
+
+    apiSuccessValue:
+      node.data?.apiSuccessValue ??
+      node.data?.api_success_value ??
+      "",
+
+    // ===================================================
+    // API MESSAGES
+    // ===================================================
+
+    apiSuccessMessage:
+      node.data?.apiSuccessMessage ??
+      node.data?.api_success_message ??
+      "",
+
+    apiFailureMessage:
+      node.data?.apiFailureMessage ??
+      node.data?.api_failure_message ??
+      "",
+
+    // ===================================================
+    // API TIMEOUT
+    // ===================================================
+
+    apiTimeout:
+      Number(
+        node.data?.apiTimeout ??
+        node.data?.api_timeout ??
+        30
+      ),
 
 
 // ===================================================
@@ -1641,8 +1679,99 @@ templateVariables:
         node.data?.max_value ??
         "",
 
-      regex:
-        node.data?.regex || "",
+       regex:
+        node.data?.regex ||
+        node.data?.validationRegex ||
+        node.data?.validation_regex ||
+        "",
+
+      // ===================================================
+      // DATE VALIDATION CONFIG
+      // ===================================================
+
+      dateFormat:
+        node.data?.dateFormat ??
+        node.data?.date_format ??
+        "YYYY-MM-DD",
+
+      minDate:
+        node.data?.minDate ??
+        node.data?.min_date ??
+        "",
+
+      maxDate:
+        node.data?.maxDate ??
+        node.data?.max_date ??
+        "",
+
+            // ===================================================
+      // DATE VALIDATION CONFIG
+      // ===================================================
+
+      dateFormat:
+        node.data?.dateFormat ??
+        node.data?.date_format ??
+        "YYYY-MM-DD",
+
+      minDate:
+        node.data?.minDate ??
+        node.data?.min_date ??
+        "",
+
+      maxDate:
+        node.data?.maxDate ??
+        node.data?.max_date ??
+        "",
+
+
+      // ===================================================
+      // TIME VALIDATION CONFIG
+      // ===================================================
+
+      timeFormat:
+        node.data?.timeFormat ??
+        node.data?.time_format ??
+        "HH:mm",
+
+      minTime:
+        node.data?.minTime ??
+        node.data?.min_time ??
+        "",
+
+      maxTime:
+        node.data?.maxTime ??
+        node.data?.max_time ??
+        "",
+
+
+      // ===================================================
+      // DATE & TIME VALIDATION CONFIG
+      // ===================================================
+
+      dateTimeFormat:
+        node.data?.dateTimeFormat ??
+        node.data?.date_time_format ??
+        "YYYY-MM-DD HH:mm",
+
+      minDateTime:
+        node.data?.minDateTime ??
+        node.data?.min_datetime ??
+        "",
+
+      maxDateTime:
+        node.data?.maxDateTime ??
+        node.data?.max_datetime ??
+        "",
+
+
+      // ===================================================
+      // CITY VALIDATION CONFIG
+      // ===================================================
+
+      cityValidation:
+        node.data?.cityValidation ??
+        node.data?.city_validation ??
+        "any",
     });
   }, [node]);
 
@@ -3213,66 +3342,76 @@ const update = () => {
             )}
           </div>
 
-          {/* VALIDATION TYPE */}
+         {/* VALIDATION TYPE */}
 
-          <div>
-            <label className={labelClass}>
-              Validation Type
-            </label>
+        <div>
+          <label className={labelClass}>
+            Validation Type
+          </label>
 
-            <select
-              value={
-                form.validationType
-              }
-              onChange={(e) =>
-                updateField(
-                  "validationType",
-                  e.target.value
-                )
-              }
-              className={inputClass}
-            >
-              <option value="text">
-                Text
-              </option>
+          <select
+            value={form.validationType}
+            onChange={(e) =>
+              updateField(
+                "validationType",
+                e.target.value
+              )
+            }
+            className={inputClass}
+          >
+            <option value="text">
+              Text
+            </option>
 
-              <option value="mobile">
-                Mobile Number
-              </option>
+            <option value="mobile">
+              Mobile Number
+            </option>
 
-              <option value="email">
-                Email
-              </option>
+            <option value="email">
+              Email
+            </option>
 
-              <option value="number">
-                Number
-              </option>
+            <option value="number">
+              Number
+            </option>
 
-              <option value="integer">
-                Integer
-              </option>
+            <option value="integer">
+              Integer
+            </option>
 
-              <option value="date">
-                Date
-              </option>
+            <option value="date">
+              Date
+            </option>
 
-              <option value="url">
-                URL
-              </option>
+            <option value="time">
+              Time
+            </option>
 
-              <option value="alpha">
-                Alphabets Only
-              </option>
+            <option value="datetime">
+              Date & Time
+            </option>
 
-              <option value="alphanumeric">
-                Alphanumeric
-              </option>
+            <option value="city">
+              City
+            </option>
 
-              <option value="regex">
-                Custom Regex
-              </option>
-            </select>
-          </div>
+            <option value="url">
+              URL
+            </option>
+
+            <option value="alpha">
+              Alphabets Only
+            </option>
+
+            <option value="alphanumeric">
+              Alphanumeric
+            </option>
+
+            <option value="regex">
+              Custom Regex
+            </option>
+          </select>
+        </div>
 
           {/* VALIDATION MESSAGE */}
 
@@ -3443,6 +3582,454 @@ const update = () => {
               </div>
             </div>
           )}
+
+          {/* =====================================================
+              DATE VALIDATION
+          ====================================================== */}
+
+          {form.validationType === "date" && (
+            <div className="space-y-4">
+
+              {/* DATE FORMAT */}
+
+              <div>
+                <label className={labelClass}>
+                  Date Format
+                </label>
+
+                <select
+                  value={form.dateFormat || "YYYY-MM-DD"}
+                  onChange={(e) =>
+                    updateField(
+                      "dateFormat",
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="YYYY-MM-DD">
+                    YYYY-MM-DD
+                  </option>
+
+                  <option value="DD-MM-YYYY">
+                    DD-MM-YYYY
+                  </option>
+
+                  <option value="MM-DD-YYYY">
+                    MM-DD-YYYY
+                  </option>
+
+                  <option value="DD/MM/YYYY">
+                    DD/MM/YYYY
+                  </option>
+
+                  <option value="MM/DD/YYYY">
+                    MM/DD/YYYY
+                  </option>
+                </select>
+
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Format in which customer should enter the date.
+                </p>
+              </div>
+
+              {/* MIN DATE / MAX DATE */}
+
+              <div className="grid grid-cols-2 gap-3">
+
+                <div>
+                  <label className={labelClass}>
+                    Minimum Date
+                  </label>
+
+                  <input
+                    type="date"
+                    value={form.minDate || ""}
+                    onChange={(e) =>
+                      updateField(
+                        "minDate",
+                        e.target.value
+                      )
+                    }
+                    className={inputClass}
+                  />
+
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Earliest allowed date.
+                  </p>
+                </div>
+
+                <div>
+                  <label className={labelClass}>
+                    Maximum Date
+                  </label>
+
+                  <input
+                    type="date"
+                    value={form.maxDate || ""}
+                    onChange={(e) =>
+                      updateField(
+                        "maxDate",
+                        e.target.value
+                      )
+                    }
+                    className={inputClass}
+                  />
+
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Latest allowed date.
+                  </p>
+                </div>
+
+              </div>
+
+              {/* DATE PREVIEW */}
+
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+
+                <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600">
+                  Date Validation
+                </p>
+
+                <div className="mt-3 space-y-2 text-xs">
+
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                      Format
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                      {form.dateFormat || "YYYY-MM-DD"}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                      Minimum
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                      {form.minDate || "No limit"}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                      Maximum
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                      {form.maxDate || "No limit"}
+                    </span>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+
+          {/* =====================================================
+                TIME VALIDATION
+            ====================================================== */}
+
+            {form.validationType === "time" && (
+            <div className="space-y-4">
+
+                <div>
+                <label className={labelClass}>
+                    Time Format
+                </label>
+
+                <select
+                    value={form.timeFormat || "HH:mm"}
+                    onChange={(e) =>
+                    updateField(
+                        "timeFormat",
+                        e.target.value
+                    )
+                    }
+                    className={inputClass}
+                >
+                    <option value="HH:mm">
+                    HH:mm
+                    </option>
+
+                    <option value="HH:mm:ss">
+                    HH:mm:ss
+                    </option>
+
+                    <option value="hh:mm A">
+                    hh:mm AM/PM
+                    </option>
+                </select>
+
+                <p className="mt-2 text-[11px] text-slate-400">
+                    Time format customer should enter.
+                </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+
+                <div>
+                    <label className={labelClass}>
+                    Minimum Time
+                    </label>
+
+                    <input
+                    type="time"
+                    value={form.minTime || ""}
+                    onChange={(e) =>
+                        updateField(
+                        "minTime",
+                        e.target.value
+                        )
+                    }
+                    className={inputClass}
+                    />
+                </div>
+
+                <div>
+                    <label className={labelClass}>
+                    Maximum Time
+                    </label>
+
+                    <input
+                    type="time"
+                    value={form.maxTime || ""}
+                    onChange={(e) =>
+                        updateField(
+                        "maxTime",
+                        e.target.value
+                        )
+                    }
+                    className={inputClass}
+                    />
+                </div>
+
+                </div>
+
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600">
+                    Time Validation
+                </p>
+
+                <div className="mt-3 space-y-2 text-xs">
+
+                    <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                        Format
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                        {form.timeFormat || "HH:mm"}
+                    </span>
+                    </div>
+
+                    <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                        Minimum
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                        {form.minTime || "No limit"}
+                    </span>
+                    </div>
+
+                    <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">
+                        Maximum
+                    </span>
+
+                    <span className="font-bold text-slate-700">
+                        {form.maxTime || "No limit"}
+                    </span>
+                    </div>
+
+                </div>
+                </div>
+
+            </div>
+            )}
+
+
+           {/* =====================================================
+                DATE & TIME VALIDATION
+            ====================================================== */}
+
+            {form.validationType === "datetime" && (
+            <div className="space-y-4">
+
+                <div>
+                <label className={labelClass}>
+                    Date & Time Format
+                </label>
+
+                <select
+                    value={
+                    form.dateTimeFormat ||
+                    "YYYY-MM-DD HH:mm"
+                    }
+                    onChange={(e) =>
+                    updateField(
+                        "dateTimeFormat",
+                        e.target.value
+                    )
+                    }
+                    className={inputClass}
+                >
+                    <option value="YYYY-MM-DD HH:mm">
+                    YYYY-MM-DD HH:mm
+                    </option>
+
+                    <option value="DD-MM-YYYY HH:mm">
+                    DD-MM-YYYY HH:mm
+                    </option>
+
+                    <option value="MM-DD-YYYY HH:mm">
+                    MM-DD-YYYY HH:mm
+                    </option>
+
+                    <option value="DD/MM/YYYY HH:mm">
+                    DD/MM/YYYY HH:mm
+                    </option>
+
+                    <option value="MM/DD/YYYY HH:mm">
+                    MM/DD/YYYY HH:mm
+                    </option>
+                </select>
+
+                <p className="mt-2 text-[11px] text-slate-400">
+                    Example: 2026-10-07 14:30
+                </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+
+                <div>
+                    <label className={labelClass}>
+                    Minimum Date & Time
+                    </label>
+
+                    <input
+                    type="datetime-local"
+                    value={form.minDateTime || ""}
+                    onChange={(e) =>
+                        updateField(
+                        "minDateTime",
+                        e.target.value
+                        )
+                    }
+                    className={inputClass}
+                    />
+                </div>
+
+                <div>
+                    <label className={labelClass}>
+                    Maximum Date & Time
+                    </label>
+
+                    <input
+                    type="datetime-local"
+                    value={form.maxDateTime || ""}
+                    onChange={(e) =>
+                        updateField(
+                        "maxDateTime",
+                        e.target.value
+                        )
+                    }
+                    className={inputClass}
+                    />
+                </div>
+
+                </div>
+
+            </div>
+            )}
+
+
+              {/* =====================================================
+                CITY VALIDATION
+            ====================================================== */}
+
+            {form.validationType === "city" && (
+            <div className="space-y-4">
+
+                <div>
+                <label className={labelClass}>
+                    City Validation
+                </label>
+
+                <select
+                    value={form.cityValidation || "any"}
+                    onChange={(e) =>
+                    updateField(
+                        "cityValidation",
+                        e.target.value
+                    )
+                    }
+                    className={inputClass}
+                >
+                    <option value="any">
+                    Any City
+                    </option>
+
+                    <option value="india">
+                    Indian City
+                    </option>
+                </select>
+                </div>
+
+                {/* =====================================================
+                    INDIAN CITY
+                ====================================================== */}
+
+                {form.cityValidation === "india" && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600">
+                    Indian City Validation
+                    </p>
+
+                    <p className="mt-2 text-xs text-slate-600">
+                    Customer must enter a valid Indian city.
+                    </p>
+
+                    <p className="mt-2 text-[11px] text-slate-500">
+                    Examples: Delhi, Mumbai, Jaipur, Pune,
+                    Bengaluru, Hyderabad, Chennai
+                    </p>
+
+                </div>
+                )}
+
+                {/* =====================================================
+                    ANY CITY
+                ====================================================== */}
+
+                {form.cityValidation === "any" && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                    Any City Validation
+                    </p>
+
+                    <p className="mt-2 text-xs text-slate-600">
+                    Customer can enter any valid city name.
+                    </p>
+
+                    <p className="mt-2 text-[11px] text-slate-500">
+                    Examples: Delhi, London, Dubai, New York
+                    </p>
+
+                </div>
+                )}
+
+            </div>
+            )}
+
 
           {/* REGEX */}
 
@@ -5453,12 +6040,12 @@ order_id={{order_id}}`}
             e.target.value
           )
         }
-        placeholder="123456"
+        placeholder="TEMPLATE_ID_12345"
         className={inputClass}
       />
 
       <p className="mt-2 text-[11px] text-slate-400">
-        Provider template ID, if required.
+        Provider template ID required.
       </p>
     </div>
 
@@ -6179,408 +6766,78 @@ order_id={{order_id}}`}
     </div>
   </>
 )}
+  {/* =====================================================
+      DELAY
+  ====================================================== */}
 
-      {/* =====================================================
-          VIDEO
-      ====================================================== */}
+    {node?.type === "delay" && (
+      <>
+        <div>
+          <label className={labelClass}>
+            Delay
+          </label>
 
-      {/* {node?.type === "video" && (
-        <>
-          {renderUploadBox(
-            "video",
-            "video/mp4,video/3gpp,video/quicktime,video/webm",
-            "Upload Video"
-          )}
+          <input
+            type="number"
+            min="1"
+            value={form.delay}
+            onChange={(e) =>
+              updateField(
+                "delay",
+                e.target.value
+              )
+            }
+            className={inputClass}
+          />
+        </div>
 
-          <div>
-            <label className={labelClass}>
-              Video URL
-            </label>
+        <div>
+          <label className={labelClass}>
+            Delay Unit
+          </label>
 
-            <input
-              type="url"
-              value={
-                form.videoUrl
-              }
-              onChange={(e) =>
-                updateMediaUrl(
-                  "videoUrl",
-                  e.target.value,
-                  "video"
-                )
-              }
-              placeholder="https://example.com/video.mp4"
-              className={inputClass}
-            />
+          <select
+            value={
+              form.delayUnit
+            }
+            onChange={(e) =>
+              updateField(
+                "delayUnit",
+                e.target.value
+              )
+            }
+            className={inputClass}
+          >
+            <option value="seconds">
+              Seconds
+            </option>
 
-            <p className="mt-2 text-[11px] text-slate-400">
-              Upload a video above or enter a public HTTPS URL.
-            </p>
-          </div>
+            <option value="minutes">
+              Minutes
+            </option>
 
-          <div>
-            <label className={labelClass}>
-              Caption
-            </label>
+            <option value="hours">
+              Hours
+            </option>
 
-            <textarea
-              value={form.caption}
-              onChange={(e) =>
-                updateField(
-                  "caption",
-                  e.target.value
-                )
-              }
-              rows={4}
-              placeholder="Enter video caption..."
-              className={
-                textareaClass
-              }
-            />
-          </div>
+            <option value="days">
+              Days
+            </option>
+          </select>
+        </div>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <p className="text-[10px] font-bold uppercase text-blue-500">
-              Video
-            </p>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <p className="text-[10px] font-bold uppercase text-orange-500">
+            Wait Time
+          </p>
 
-            <p className="mt-2 truncate text-xs text-slate-600">
-              {form.videoUrl ||
-                "No video configured"}
-            </p>
-
-            {form.fileName && (
-              <p className="mt-1 truncate text-xs font-semibold text-blue-700">
-                {form.fileName}
-              </p>
-            )}
-          </div>
-        </>
-      )} */}
-
-      {/* =====================================================
-          DOCUMENT
-      ====================================================== */}
-
-      {/* {node?.type === "document" && (
-        <>
-          {renderUploadBox(
-            "document",
-            ".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv",
-            "Upload Document"
-          )}
-
-          <div>
-            <label className={labelClass}>
-              Document URL
-            </label>
-
-            <input
-              type="url"
-              value={
-                form.documentUrl
-              }
-              onChange={(e) =>
-                updateMediaUrl(
-                  "documentUrl",
-                  e.target.value,
-                  "document"
-                )
-              }
-              placeholder="https://example.com/document.pdf"
-              className={inputClass}
-            />
-
-            <p className="mt-2 text-[11px] text-slate-400">
-              Upload a document above or enter a public HTTPS URL.
-            </p>
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              File Name
-            </label>
-
-            <input
-              type="text"
-              value={form.fileName}
-              onChange={(e) =>
-                updateField(
-                  "fileName",
-                  e.target.value
-                )
-              }
-              placeholder="brochure.pdf"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Caption
-            </label>
-
-            <textarea
-              value={form.caption}
-              onChange={(e) =>
-                updateField(
-                  "caption",
-                  e.target.value
-                )
-              }
-              rows={4}
-              placeholder="Enter document caption..."
-              className={
-                textareaClass
-              }
-            />
-          </div>
-
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-            <p className="text-[10px] font-bold uppercase text-indigo-500">
-              Document
-            </p>
-
-            <p className="mt-2 truncate text-xs text-slate-600">
-              {form.documentUrl ||
-                "No document configured"}
-            </p>
-
-            {form.fileName && (
-              <p className="mt-1 truncate text-xs font-semibold text-indigo-700">
-                {form.fileName}
-              </p>
-            )}
-          </div>
-        </>
-      )} */}
-
-      {/* =====================================================
-          PDF
-      ====================================================== */}
-
-      {/* {node?.type === "pdf" && (
-        <>
-          {renderUploadBox(
-            "pdf",
-            "application/pdf",
-            "Upload PDF"
-          )}
-
-          <div>
-            <label className={labelClass}>
-              PDF URL
-            </label>
-
-            <input
-              type="url"
-              value={
-                form.documentUrl
-              }
-              onChange={(e) =>
-                updateMediaUrl(
-                  "documentUrl",
-                  e.target.value,
-                  "pdf"
-                )
-              }
-              placeholder="https://example.com/brochure.pdf"
-              className={inputClass}
-            />
-
-            <p className="mt-2 text-[11px] text-slate-400">
-              Upload a PDF above or enter a public HTTPS URL.
-            </p>
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              File Name
-            </label>
-
-            <input
-              type="text"
-              value={form.fileName}
-              onChange={(e) =>
-                updateField(
-                  "fileName",
-                  e.target.value
-                )
-              }
-              placeholder="brochure.pdf"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Caption
-            </label>
-
-            <textarea
-              value={form.caption}
-              onChange={(e) =>
-                updateField(
-                  "caption",
-                  e.target.value
-                )
-              }
-              rows={4}
-              placeholder="Enter PDF caption..."
-              className={
-                textareaClass
-              }
-            />
-          </div>
-
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="text-[10px] font-bold uppercase text-red-500">
-              PDF Document
-            </p>
-
-            <p className="mt-2 truncate text-xs text-slate-600">
-              {form.documentUrl ||
-                "No PDF configured"}
-            </p>
-
-            {form.fileName && (
-              <p className="mt-1 truncate text-xs font-semibold text-red-700">
-                {form.fileName}
-              </p>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* =====================================================
-          AUDIO
-      ====================================================== */}
-
-      {/* {node?.type === "audio" && (
-        <>
-          {renderUploadBox(
-            "audio",
-            ".mp3,.wav,.ogg,.aac,.m4a,.mp4",
-            "Upload Audio"
-          )}
-
-          <div>
-            <label className={labelClass}>
-              Audio URL
-            </label>
-
-            <input
-              type="url"
-              value={
-                form.audioUrl
-              }
-              onChange={(e) =>
-                updateMediaUrl(
-                  "audioUrl",
-                  e.target.value,
-                  "audio"
-                )
-              }
-              placeholder="https://example.com/audio.mp3"
-              className={inputClass}
-            />
-
-            <p className="mt-2 text-[11px] text-slate-400">
-              Upload an audio file above or enter a public HTTPS URL.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-[10px] font-bold uppercase text-amber-500">
-              Audio
-            </p>
-
-            <p className="mt-2 truncate text-xs text-slate-600">
-              {form.audioUrl ||
-                "No audio configured"}
-            </p>
-
-            {form.fileName && (
-              <p className="mt-1 truncate text-xs font-semibold text-amber-700">
-                {form.fileName}
-              </p>
-            )}
-          </div>
-        </>
-      )} */}
-
-      {/* =====================================================
-          DELAY
-      ====================================================== */}
-
-      {node?.type === "delay" && (
-        <>
-          <div>
-            <label className={labelClass}>
-              Delay
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              value={form.delay}
-              onChange={(e) =>
-                updateField(
-                  "delay",
-                  e.target.value
-                )
-              }
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Delay Unit
-            </label>
-
-            <select
-              value={
-                form.delayUnit
-              }
-              onChange={(e) =>
-                updateField(
-                  "delayUnit",
-                  e.target.value
-                )
-              }
-              className={inputClass}
-            >
-              <option value="seconds">
-                Seconds
-              </option>
-
-              <option value="minutes">
-                Minutes
-              </option>
-
-              <option value="hours">
-                Hours
-              </option>
-
-              <option value="days">
-                Days
-              </option>
-            </select>
-          </div>
-
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-            <p className="text-[10px] font-bold uppercase text-orange-500">
-              Wait Time
-            </p>
-
-            <p className="mt-2 text-lg font-bold text-orange-700">
-              {form.delay}{" "}
-              {form.delayUnit}
-            </p>
-          </div>
-        </>
-      )}
+          <p className="mt-2 text-lg font-bold text-orange-700">
+            {form.delay}{" "}
+            {form.delayUnit}
+          </p>
+        </div>
+      </>
+    )}
 
       {/* =====================================================
           END
@@ -6670,7 +6927,7 @@ order_id={{order_id}}`}
    APP
 ========================================================= */
 
-const Home = () => {
+const WorkflowBuilder = () => {
 
     const navigate = useNavigate();
      /* =======================================================
@@ -6684,18 +6941,7 @@ const Home = () => {
       ) || ""
     );
 
-  const [login, setLogin] =
-    useState({
-      email:
-        "",
-      password:
-        "",
-    });
 
-  const [
-    loginLoading,
-    setLoginLoading,
-  ] = useState(false);
 
   /* =======================================================
      WORKFLOW
@@ -6940,7 +7186,7 @@ const onDrop = useCallback(
                     type === "message"
                         ? "Hello! Welcome."
                         : type === "button"
-                        ? "Please choose an option."
+                        ? "Button Text"
                         : type === "menu"
                         ? "Please select an option:"
                         : type === "userInput"
@@ -7875,74 +8121,7 @@ const onDrop = useCallback(
     setEdges,
   ]);
 
-  /* =======================================================
-     LOGIN
-  ======================================================= */
-
-  const doLogin =
-    async () => {
-      if (
-        !login.email ||
-        !login.password
-      ) {
-        toast.warning(
-          "Please enter email and password."
-        );
-
-        return;
-      }
-
-      setLoginLoading(
-        true
-      );
-
-      try {
-        const response =
-          await axios.post(
-            API + "/login",
-            login
-          );
-
-        const newToken =
-          response.data?.token;
-
-        if (!newToken) {
-          toast.error(
-            "Login token not received."
-          );
-
-          return;
-        }
-
-        localStorage.setItem(
-          "token",
-          newToken
-        );
-
-        setToken(
-          newToken
-        );
-
-        toast.success(
-          "Login successful."
-        );
-      } catch (error) {
-        console.error(
-          error
-        );
-
-        toast.error(
-          error?.response
-            ?.data?.message ||
-            "Login failed"
-        );
-      } finally {
-        setLoginLoading(
-          false
-        );
-      }
-    };
-
+ 
  /* =======================================================
    ADD NODE
 ======================================================= */
@@ -8630,163 +8809,6 @@ const save = async (publish = false) => {
   ]);
 
   /* =======================================================
-     LOGIN SCREEN
-  ======================================================= */
-
-  if (!token) {
-    return (
-      <>
-        <ToastContainer
-          position="top-right"
-          autoClose={3000}
-          newestOnTop
-          closeOnClick
-          pauseOnHover
-          theme="light"
-        />
-
-        <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-xl font-bold text-white shadow-lg shadow-indigo-500/20">
-                WF
-              </div>
-
-              <h1 className="text-2xl font-bold text-slate-900">
-                Workflow Builder
-              </h1>
-
-              <p className="mt-2 text-sm text-slate-500">
-                Build powerful
-                WhatsApp automation
-                workflows.
-              </p>
-            </div>
-
-            <div className="space-y-5">
-              {/* EMAIL */}
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Email
-                </label>
-
-                <input
-                  value={
-                    login.email
-                  }
-                  onChange={(e) =>
-                    setLogin({
-                      ...login,
-                      email:
-                        e.target.value,
-                    })
-                  }
-                  placeholder="Enter email"
-                  className="
-                    w-full
-                    rounded-xl
-                    border
-                    border-slate-200
-                    bg-slate-50
-                    px-4
-                    py-3
-                    text-sm
-                    outline-none
-                    transition
-                    focus:border-indigo-500
-                    focus:bg-white
-                    focus:ring-4
-                    focus:ring-indigo-500/10
-                  "
-                />
-              </div>
-
-              {/* PASSWORD */}
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Password
-                </label>
-
-                <input
-                  type="password"
-                  value={
-                    login.password
-                  }
-                  onChange={(e) =>
-                    setLogin({
-                      ...login,
-                      password:
-                        e.target.value,
-                    })
-                  }
-                  placeholder="Enter password"
-                  onKeyDown={(e) => {
-                    if (
-                      e.key ===
-                      "Enter"
-                    ) {
-                      doLogin();
-                    }
-                  }}
-                  className="
-                    w-full
-                    rounded-xl
-                    border
-                    border-slate-200
-                    bg-slate-50
-                    px-4
-                    py-3
-                    text-sm
-                    outline-none
-                    transition
-                    focus:border-indigo-500
-                    focus:bg-white
-                    focus:ring-4
-                    focus:ring-indigo-500/10
-                  "
-                />
-              </div>
-
-              {/* LOGIN */}
-
-              <button
-                onClick={
-                  doLogin
-                }
-                disabled={
-                  loginLoading
-                }
-                className="
-                  w-full
-                  rounded-xl
-                  bg-indigo-600
-                  px-5
-                  py-3.5
-                  text-sm
-                  font-bold
-                  text-white
-                  shadow-lg
-                  shadow-indigo-500/20
-                  transition
-                  hover:bg-indigo-700
-                  disabled:cursor-not-allowed
-                  disabled:opacity-60
-                "
-              >
-                {loginLoading
-                  ? "Signing in..."
-                  : "Sign In"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  /* =======================================================
      MAIN UI
   ======================================================= */
 
@@ -9195,11 +9217,13 @@ const save = async (publish = false) => {
 
             <button
               onClick={() => {
-                localStorage.removeItem(
-                  "token"
-                );
+
+                localStorage.removeItem("token");
 
                 setToken("");
+
+                navigate("/");
+
               }}
               className="
                 hidden
@@ -9733,4 +9757,4 @@ const save = async (publish = false) => {
   )
 }
 
-export default Home
+export default WorkflowBuilder

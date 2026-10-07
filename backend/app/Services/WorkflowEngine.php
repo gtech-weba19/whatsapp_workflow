@@ -1736,121 +1736,253 @@ private function replaceApiVariables(
             ->first();
     }
 
-    public function handleIncoming(
-        string $user,
-        string $message,
-        array $incoming = []
-    ): ?BotSession {
+        public function handleIncoming(
+            string $user,
+            string $message,
+            array $incoming = []
+        ): ?BotSession {
 
-        $user = trim($user);
-        $message = trim($message);
+            $user = trim($user);
+            $message = trim($message);
 
-        if ($user === '') {
-            return null;
-        }
-
-        $messageNormalized = mb_strtolower(
-            trim($message)
-        );
-
-        $exitCommands = [
-            'exit',
-            'stop',
-            'cancel',
-            'quit',
-            'end',
-        ];
-
-        if (in_array($messageNormalized, $exitCommands, true)) {
-
-            $session = $this->findActiveSession($user);
-
-            if ($session) {
-
-                $session->update([
-                    'status' => 'completed',
-                    'current_node_id' => null,
-                    'last_message_at' => now(),
-                ]);
-
-                $session->refresh();
-
-                $exitMessage =
-                    'You have exited the current journey. You can start again anytime.';
-
-                $output = $this->whatsapp->sendText(
-                    $user,
-                    $exitMessage
-                );
-
-                $this->saveOutbound(
-                    $session,
-                    'text',
-                    $exitMessage,
-                    $output
-                );
-
-                return $session;
+            if ($user === '') {
+                return null;
             }
 
-            return null;
-        }
+            $messageNormalized = mb_strtolower($message);
 
-        $existingSession = $this->findActiveSession($user);
+            /*
+            |--------------------------------------------------------------------------
+            | EXIT CURRENT JOURNEY
+            |--------------------------------------------------------------------------
+            */
 
-        if ($existingSession) {
+            $exitCommands = [
+                'exit',
+                'stop',
+                'cancel',
+                'quit',
+                'end',
+            ];
 
-            $workflow = Workflow::query()
-                ->where('id', $existingSession->workflow_id)
-                ->where('channel', 'whatsapp')
-                ->where('status', 'published')
-                ->first();
+            if (in_array($messageNormalized, $exitCommands, true)) {
 
-            if (! $workflow) {
+                $session = $this->findActiveSession($user);
 
-                return $existingSession;
+                if ($session) {
+
+                    $session->update([
+                        'status' => 'completed',
+                        'current_node_id' => null,
+                        'last_message_at' => now(),
+                    ]);
+
+                    $session->refresh();
+
+                    $exitMessage =
+                        'You have exited the current journey. You can start again anytime.';
+
+                    $output = $this->whatsapp->sendText(
+                        $user,
+                        $exitMessage
+                    );
+
+                    $this->saveOutbound(
+                        $session,
+                        'text',
+                        $exitMessage,
+                        $output
+                    );
+
+                    return $session;
+                }
+
+                return null;
             }
 
-            $currentNodeId = $existingSession->current_node_id;
+            /*
+            |--------------------------------------------------------------------------
+            | IMPORTANT:
+            | CHECK NEW TRIGGER FIRST
+            |--------------------------------------------------------------------------
+            |
+            | If user is already inside Journey A and sends the trigger
+            | of Journey B, Journey B must win.
+            |
+            */
 
-            if (! $currentNodeId) {
+            $triggerWorkflow = $this->findWorkflowByTrigger($message);
 
-                $startNode = $this->getStartNode($workflow);
+            if ($triggerWorkflow) {
 
-                if (! $startNode) {
+                $existingSession = $this->findActiveSession($user);
+
+                /*
+                |--------------------------------------------------------------------------
+                | SAME JOURNEY TRIGGER
+                |--------------------------------------------------------------------------
+                |
+                | If the same journey trigger is received again,
+                | do not create another session.
+                |
+                */
+
+                if (
+                    $existingSession
+                    &&
+                    (int) $existingSession->workflow_id ===
+                    (int) $triggerWorkflow->id
+                ) {
+
+                    Log::info(
+                        'WHATSAPP TRIGGER SAME JOURNEY',
+                        [
+                            'user' => $user,
+                            'workflow_id' => $triggerWorkflow->id,
+                            'session_id' => $existingSession->id,
+                            'message' => $message,
+                        ]
+                    );
 
                     return $existingSession;
                 }
 
-                $existingSession->update([
-                    'current_node_id' => $startNode->node_id,
-                    'status' => 'active',
-                    'last_message_at' => now(),
-                ]);
+                /*
+                |--------------------------------------------------------------------------
+                | DIFFERENT JOURNEY TRIGGER
+                |--------------------------------------------------------------------------
+                |
+                | Close old journey first.
+                |
+                */
 
-                $existingSession->refresh();
+                if ($existingSession) {
 
-                $this->execute(
-                    $workflow,
-                    $existingSession,
-                    (string) $startNode->node_id,
-                    []
+                    Log::info(
+                        'WHATSAPP JOURNEY SWITCH',
+                        [
+                            'user' => $user,
+                            'old_session_id' => $existingSession->id,
+            'old_workflow_id' => $existingSession->workflow_id,
+            'new_workflow_id' => $triggerWorkflow->id,
+            'trigger' => $message,
+        ]
+                    );
+
+            $existingSession->update([
+                'status' => 'completed',
+                'current_node_id' => null,
+                'last_message_at' => now(),
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | START NEW JOURNEY
+        |--------------------------------------------------------------------------
+        */
+
+        return $this->start(
+            $triggerWorkflow,
+            $user,
+            $incoming
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIND EXISTING ACTIVE SESSION
+    |--------------------------------------------------------------------------
+    */
+
+    $existingSession = $this->findActiveSession($user);
+
+    if ($existingSession) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOCK SESSION STATE
+        |--------------------------------------------------------------------------
+        |
+        | Refresh immediately so we don't execute an old node.
+        |
+        */
+
+        $existingSession->refresh();
+
+        $workflow = Workflow::query()
+            ->where('id', $existingSession->workflow_id)
+            ->where('channel', 'whatsapp')
+            ->where('status', 'published')
+            ->first();
+
+        if (! $workflow) {
+
+            Log::warning(
+                'WHATSAPP ACTIVE SESSION WORKFLOW NOT FOUND',
+                [
+                    'user' => $user,
+                    'session_id' => $existingSession->id,
+                    'workflow_id' => $existingSession->workflow_id,
+                ]
+            );
+
+            $existingSession->update([
+                'status' => 'completed',
+                'current_node_id' => null,
+                'last_message_at' => now(),
+            ]);
+
+            return null;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | CURRENT NODE
+        |--------------------------------------------------------------------------
+        */
+
+        $currentNodeId =
+            $existingSession->current_node_id;
+
+        /*
+        |--------------------------------------------------------------------------
+        | NO CURRENT NODE
+        |--------------------------------------------------------------------------
+        */
+
+        if (! $currentNodeId) {
+
+            $startNode =
+                $this->getStartNode($workflow);
+
+            if (! $startNode) {
+
+                Log::warning(
+                    'WHATSAPP START NODE NOT FOUND',
+                    [
+                        'user' => $user,
+                        'workflow_id' => $workflow->id,
+                        'session_id' => $existingSession->id,
+                    ]
                 );
-
-                $existingSession->refresh();
 
                 return $existingSession;
             }
 
-            $nodeInput = $incoming;
+            $existingSession->update([
+                'current_node_id' => $startNode->node_id,
+                'status' => 'active',
+                'last_message_at' => now(),
+            ]);
 
-            $nodeInput['text'] = $message;
+            $existingSession->refresh();
 
             $this->execute(
                 $workflow,
                 $existingSession,
-                (string) $currentNodeId,
-                $nodeInput
+                (string) $startNode->node_id,
+                []
             );
 
             $existingSession->refresh();
@@ -1858,19 +1990,99 @@ private function replaceApiVariables(
             return $existingSession;
         }
 
-        $workflow = $this->findWorkflowByTrigger($message);
+        /*
+        |--------------------------------------------------------------------------
+        | VERIFY CURRENT NODE STILL EXISTS
+        |--------------------------------------------------------------------------
+        */
 
-        if (! $workflow) {
+        $currentNodeExists =
+            $workflow->nodes()
+                ->where(
+                    'node_id',
+                    $currentNodeId
+                )
+                ->exists();
 
-            return null;
+        if (! $currentNodeExists) {
+
+            Log::warning(
+                'WHATSAPP CURRENT NODE NOT FOUND',
+                [
+                    'user' => $user,
+                    'workflow_id' => $workflow->id,
+                    'session_id' => $existingSession->id,
+                    'current_node_id' => $currentNodeId,
+                ]
+            );
+
+            $existingSession->update([
+                'status' => 'completed',
+                'current_node_id' => null,
+                'last_message_at' => now(),
+            ]);
+
+            return $existingSession;
         }
 
-        return $this->start(
-            $workflow,
-            $user,
-            $incoming
+        /*
+        |--------------------------------------------------------------------------
+        | PREPARE NODE INPUT
+        |--------------------------------------------------------------------------
+        */
+
+        $nodeInput = $incoming;
+
+        $nodeInput['text'] = $message;
+
+        /*
+        |--------------------------------------------------------------------------
+        | EXECUTE CURRENT NODE
+        |--------------------------------------------------------------------------
+        */
+
+        Log::info(
+            'WHATSAPP EXECUTE CURRENT NODE',
+            [
+                'user' => $user,
+                'workflow_id' => $workflow->id,
+                'session_id' => $existingSession->id,
+                'current_node_id' => $currentNodeId,
+                'message' => $message,
+                'message_type' => $incoming['message_type'] ?? null,
+                'external_message_id' =>
+                    $incoming['external_message_id'] ?? null,
+            ]
         );
+
+        $this->execute(
+            $workflow,
+            $existingSession,
+            (string) $currentNodeId,
+            $nodeInput
+        );
+
+        $existingSession->refresh();
+
+        return $existingSession;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NO ACTIVE SESSION + NO TRIGGER
+    |--------------------------------------------------------------------------
+    */
+
+    Log::info(
+        'WHATSAPP NO ACTIVE JOURNEY',
+        [
+            'user' => $user,
+            'message' => $message,
+        ]
+    );
+
+    return null;
+}
 
     public function start(
         Workflow $workflow,
@@ -2299,69 +2511,6 @@ private function replaceApiVariables(
             }
 
             /*
-|--------------------------------------------------------------------------
-| IMAGE
-|--------------------------------------------------------------------------
-*/
-
-            elseif ($type === 'image') {
-
-                $mediaUrl = $this->resolveMediaUrl(
-                    $cfg,
-                    $workflow
-                );
-
-                $caption = $cfg['caption']
-                    ?? $cfg['message']
-                    ?? $cfg['text']
-                    ?? '';
-
-                $mediaUrl = $this->resolve(
-                    (string) $mediaUrl,
-                    $session->variables ?? []
-                );
-
-                $caption = $this->resolve(
-                    (string) $caption,
-                    $session->variables ?? []
-                );
-
-                if ($mediaUrl === '') {
-
-                    throw new \RuntimeException(
-                        'Image media URL is empty.'
-                    );
-                }
-
-                $output = $this->whatsapp->sendImage(
-                    $session->user_identifier,
-                    $mediaUrl,
-                    $caption
-                );
-
-                $this->saveOutbound(
-                    $session,
-                    'image',
-                    $caption !== '' ? $caption : null,
-                    $output
-                );
-
-                $next = $this->nextNode(
-                    $workflow,
-                    $nodeId
-                );
-
-                if ($next) {
-
-                    $this->goToNode(
-                        $workflow,
-                        $session,
-                        $next
-                    );
-                }
-            }
-
-            /*
             |--------------------------------------------------------------------------
             | DOCUMENT / PDF
             |--------------------------------------------------------------------------
@@ -2531,11 +2680,7 @@ private function replaceApiVariables(
                     ?? $cfg['language']
                     ?? 'en';
 
-                /*
-                |--------------------------------------------------------------------------
-                | TEMPLATE BODY
-                |--------------------------------------------------------------------------
-                */
+
 
                 $templateBody = $cfg['templateBody']
                     ?? $cfg['template_body']
@@ -2544,14 +2689,6 @@ private function replaceApiVariables(
                     ?? $cfg['message']
                     ?? '';
 
-                /*
-                |--------------------------------------------------------------------------
-                | TEMPLATE IMAGE URL
-                |--------------------------------------------------------------------------
-                |
-                | Support all possible frontend/backend field names.
-                |
-                */
 
                 $templateImageUrl = $cfg['templateImageUrl']
                     ?? $cfg['template_image_url']
@@ -2564,11 +2701,6 @@ private function replaceApiVariables(
                     ?? $cfg['url']
                     ?? '';
 
-                /*
-                |--------------------------------------------------------------------------
-                | MEDIA UPLOAD ID
-                |--------------------------------------------------------------------------
-                */
 
                 $mediaUploadId = $cfg['media_upload_id']
                     ?? $cfg['mediaUploadId']
@@ -2576,11 +2708,7 @@ private function replaceApiVariables(
                     ?? $cfg['mediaId']
                     ?? null;
 
-                /*
-                |--------------------------------------------------------------------------
-                | TEMPLATE VARIABLES
-                |--------------------------------------------------------------------------
-                */
+
 
                 $templateVariables = $cfg['templateVariables']
                     ?? $cfg['template_variables']
@@ -2591,19 +2719,8 @@ private function replaceApiVariables(
                     $templateVariables = [];
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | SESSION VARIABLES
-                |--------------------------------------------------------------------------
-                */
 
                 $variables = $session->variables ?? [];
-
-                /*
-                |--------------------------------------------------------------------------
-                | RESOLVE TEMPLATE BASIC VALUES
-                |--------------------------------------------------------------------------
-                */
 
                 $templateName = $this->resolve(
                     (string) $templateName,
@@ -2630,15 +2747,6 @@ private function replaceApiVariables(
                     $variables
                 );
 
-                /*
-                |--------------------------------------------------------------------------
-                | RESOLVE IMAGE FROM MEDIA_UPLOADS
-                |--------------------------------------------------------------------------
-                |
-                | If image URL is not directly available but media_upload_id exists,
-                | get URL from media_uploads table.
-                |
-                */
 
                 if (
                     trim($templateImageUrl) === ''
@@ -2681,10 +2789,6 @@ private function replaceApiVariables(
 
                         $mediaConfig = $cfg;
 
-                        /*
-                         * Convert template-specific media ID
-                         * into the generic resolver fields.
-                         */
 
                         if (
                             empty($mediaConfig['media_upload_id'])
@@ -3386,6 +3490,46 @@ private function replaceApiVariables(
                         )
                     );
 
+
+                                    /*
+                |--------------------------------------------------------------------------
+                | DATE VALIDATION CONFIG
+                |--------------------------------------------------------------------------
+                */
+
+                $dateFormat =
+                    trim(
+                        (string) (
+                            $cfg['dateFormat']
+                            ??
+                            $cfg['date_format']
+                            ??
+                            'YYYY-MM-DD'
+                        )
+                    );
+
+                $minDate =
+                    trim(
+                        (string) (
+                            $cfg['minDate']
+                            ??
+                            $cfg['min_date']
+                            ??
+                            ''
+                        )
+                    );
+
+                $maxDate =
+                    trim(
+                        (string) (
+                            $cfg['maxDate']
+                            ??
+                            $cfg['max_date']
+                            ??
+                            ''
+                        )
+                    );
+
                 /*
                 |--------------------------------------------------------------------------
                 | INPUT RECEIVED
@@ -3696,20 +3840,443 @@ private function replaceApiVariables(
                             ) !== false;
                     }
 
-                    /*
+                  /*
                     |--------------------------------------------------------------------------
                     | DATE
                     |--------------------------------------------------------------------------
                     */
-
                     elseif ($validationType === 'date') {
 
-                        $timestamp =
-                            strtotime($value);
+                        $dateFormat = trim((string) (
+                            $cfg['dateFormat']
+                            ?? $cfg['date_format']
+                            ?? 'YYYY-MM-DD'
+                        ));
 
-                        $isValid =
-                            $timestamp !== false;
+                        $minDate = trim((string) (
+                            $cfg['minDate']
+                            ?? $cfg['min_date']
+                            ?? ''
+                        ));
+
+                        $maxDate = trim((string) (
+                            $cfg['maxDate']
+                            ?? $cfg['max_date']
+                            ?? ''
+                        ));
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | SELECTED FORMAT
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $dateFormatMap = [
+
+                            'YYYY-MM-DD' => [
+                                'php' => 'Y-m-d',
+                                'regex' => '/^\d{4}-\d{2}-\d{2}$/',
+                            ],
+
+                            'DD-MM-YYYY' => [
+                                'php' => 'd-m-Y',
+                                'regex' => '/^\d{2}-\d{2}-\d{4}$/',
+                            ],
+
+                            'MM-DD-YYYY' => [
+                                'php' => 'm-d-Y',
+                                'regex' => '/^\d{2}-\d{2}-\d{4}$/',
+                            ],
+
+                            'DD/MM/YYYY' => [
+                                'php' => 'd/m/Y',
+                                'regex' => '/^\d{2}\/\d{2}\/\d{4}$/',
+                            ],
+
+                            'MM/DD/YYYY' => [
+                                'php' => 'm/d/Y',
+                                'regex' => '/^\d{2}\/\d{2}\/\d{4}$/',
+                            ],
+
+                        ];
+
+                        $dateConfig =
+                            $dateFormatMap[$dateFormat]
+                            ?? $dateFormatMap['YYYY-MM-DD'];
+
+                        $phpDateFormat = $dateConfig['php'];
+                        $dateRegex = $dateConfig['regex'];
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | STEP 1: EXACT FORMAT CHECK
+                        |--------------------------------------------------------------------------
+                        */
+
+                        if (!preg_match($dateRegex, $value)) {
+
+                            $isValid = false;
+
+                        } else {
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | STEP 2: ACTUAL DATE CHECK
+                            |--------------------------------------------------------------------------
+                            */
+
+                            $date = \DateTime::createFromFormat(
+                                '!' . $phpDateFormat,
+                                $value
+                            );
+
+                            $errors = \DateTime::getLastErrors();
+
+                            $hasDateErrors =
+                                is_array($errors)
+                                &&
+                                (
+                                    $errors['warning_count'] > 0
+                                    ||
+                                    $errors['error_count'] > 0
+                                );
+
+                            if (
+                                $date === false
+                                ||
+                                $hasDateErrors
+                                ||
+                                $date->format($phpDateFormat) !== $value
+                            ) {
+
+                                $isValid = false;
+
+                            } else {
+
+                                $isValid = true;
+                            }
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | STEP 3: MINIMUM DATE
+                            |--------------------------------------------------------------------------
+                            */
+
+                            if (
+                                $isValid
+                                &&
+                                $minDate !== ''
+                            ) {
+
+                                $minDateObj = \DateTime::createFromFormat(
+                                    '!Y-m-d',
+                                    $minDate
+                                );
+
+                                if (
+                                    $minDateObj !== false
+                                    &&
+                                    $date < $minDateObj
+                                ) {
+
+                                    $isValid = false;
+                                }
+                            }
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | STEP 4: MAXIMUM DATE
+                            |--------------------------------------------------------------------------
+                            */
+
+                            if (
+                                $isValid
+                                &&
+                                $maxDate !== ''
+                            ) {
+
+                                $maxDateObj = \DateTime::createFromFormat(
+                                    '!Y-m-d',
+                                    $maxDate
+                                );
+
+                                if (
+                                    $maxDateObj !== false
+                                    &&
+                                    $date > $maxDateObj
+                                ) {
+
+                                    $isValid = false;
+                                }
+                            }
+                        }
                     }
+
+                elseif ($validationType === 'time') {
+
+                    $timeFormats = [
+                        'HH:mm' => 'H:i',
+                        'HH:mm:ss' => 'H:i:s',
+                        'hh:mm A' => 'h:i A',
+                    ];
+
+                    $format = $timeFormats[$timeFormat] ?? 'H:i';
+
+                    $date = \DateTime::createFromFormat(
+                        $format,
+                        $value
+                    );
+
+                    $errors = \DateTime::getLastErrors();
+
+                    if ($errors === false) {
+                        $errors = [
+                            'warning_count' => 0,
+                            'error_count' => 0,
+                        ];
+                    }
+
+                    $isValid =
+                        $date !== false &&
+                        $errors['warning_count'] === 0 &&
+                        $errors['error_count'] === 0 &&
+                        $date->format($format) === $value;
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MIN TIME
+                    |--------------------------------------------------------------------------
+                    */
+                    if ($isValid && trim((string) $minTime) !== '') {
+
+                        $inputTime = \DateTime::createFromFormat(
+                            $format,
+                            $value
+                        );
+
+                        $minimumTime = \DateTime::createFromFormat(
+                            $format,
+                            $minTime
+                        );
+
+                        if ($inputTime === false || $minimumTime === false) {
+                            $isValid = false;
+                        } elseif ($inputTime < $minimumTime) {
+                            $isValid = false;
+                        }
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MAX TIME
+                    |--------------------------------------------------------------------------
+                    */
+                    if ($isValid && trim((string) $maxTime) !== '') {
+
+                        $inputTime = \DateTime::createFromFormat(
+                            $format,
+                            $value
+                        );
+
+                        $maximumTime = \DateTime::createFromFormat(
+                            $format,
+                            $maxTime
+                        );
+
+                        if ($inputTime === false || $maximumTime === false) {
+                            $isValid = false;
+                        } elseif ($inputTime > $maximumTime) {
+                            $isValid = false;
+                        }
+                    }
+                }
+
+                elseif ($validationType === 'datetime') {
+
+                    $dateTimeFormats = [
+                        'YYYY-MM-DD HH:mm' => 'Y-m-d H:i',
+                        'YYYY-MM-DD HH:mm:ss' => 'Y-m-d H:i:s',
+
+                        'DD-MM-YYYY HH:mm' => 'd-m-Y H:i',
+                        'DD-MM-YYYY HH:mm:ss' => 'd-m-Y H:i:s',
+
+                        'MM-DD-YYYY HH:mm' => 'm-d-Y H:i',
+                        'MM-DD-YYYY HH:mm:ss' => 'm-d-Y H:i:s',
+
+                        'DD/MM/YYYY HH:mm' => 'd/m/Y H:i',
+                        'DD/MM/YYYY HH:mm:ss' => 'd/m/Y H:i:s',
+
+                        'MM/DD/YYYY HH:mm' => 'm/d/Y H:i',
+                        'MM/DD/YYYY HH:mm:ss' => 'm/d/Y H:i:s',
+                    ];
+
+                    $format = $dateTimeFormats[$dateTimeFormat]
+                        ?? 'Y-m-d H:i';
+
+                    $dateTime = \DateTime::createFromFormat(
+                        $format,
+                        $value
+                    );
+
+                    $errors = \DateTime::getLastErrors();
+
+                    if ($errors === false) {
+                        $errors = [
+                            'warning_count' => 0,
+                            'error_count' => 0,
+                        ];
+                    }
+
+                    $isValid =
+                        $dateTime !== false &&
+                        $errors['warning_count'] === 0 &&
+                        $errors['error_count'] === 0 &&
+                        $dateTime->format($format) === $value;
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MIN DATE & TIME
+                    |--------------------------------------------------------------------------
+                    */
+                    if ($isValid && trim((string) $minDateTime) !== '') {
+
+                        $minimumDateTime = \DateTime::createFromFormat(
+                            $format,
+                            $minDateTime
+                        );
+
+                        if (
+                            $minimumDateTime === false ||
+                            $dateTime < $minimumDateTime
+                        ) {
+                            $isValid = false;
+                        }
+                    }
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | MAX DATE & TIME
+                    |--------------------------------------------------------------------------
+                    */
+                    if ($isValid && trim((string) $maxDateTime) !== '') {
+
+                        $maximumDateTime = \DateTime::createFromFormat(
+                            $format,
+                            $maxDateTime
+                        );
+
+                        if (
+                            $maximumDateTime === false ||
+                            $dateTime > $maximumDateTime
+                        ) {
+                            $isValid = false;
+                        }
+                    }
+                }
+
+                elseif ($validationType === 'city') {
+
+                    $cityValidation = strtolower(trim((string) (
+                        $cfg['cityValidation']
+                        ?? $cfg['city_validation']
+                        ?? 'any'
+                    )));
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | NORMALIZE CITY INPUT
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $value = trim(
+                        preg_replace('/\s+/', ' ', $value)
+                    );
+
+
+                    $isValid = preg_match(
+                        "/^[\p{L}][\p{L}\s.'-]*$/u",
+                        $value
+                    ) === 1;
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | INDIAN CITY
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        $isValid
+                        &&
+                        $cityValidation === 'india'
+                    ) {
+
+                        $indianCities = [
+                            'ahmedabad',
+                            'amritsar',
+                            'aurangabad',
+                            'bangalore',
+                            'bengaluru',
+                            'bhopal',
+                            'bhubaneswar',
+                            'chandigarh',
+                            'chennai',
+                            'coimbatore',
+                            'dehradun',
+                            'delhi',
+                            'new delhi',
+                            'faridabad',
+                            'ghaziabad',
+                            'goa',
+                            'gurgaon',
+                            'gurugram',
+                            'guwahati',
+                            'hyderabad',
+                            'indore',
+                            'jaipur',
+                            'jalandhar',
+                            'jammu',
+                            'jodhpur',
+                            'kanpur',
+                            'kochi',
+                            'kolkata',
+                            'lucknow',
+                            'ludhiana',
+                            'madurai',
+                            'meerut',
+                            'mumbai',
+                            'mysore',
+                            'mysuru',
+                            'nagpur',
+                            'nashik',
+                            'noida',
+                            'patna',
+                            'pondicherry',
+                            'prayagraj',
+                            'pune',
+                            'rajkot',
+                            'ranchi',
+                            'surat',
+                            'thane',
+                            'thiruvananthapuram',
+                            'udaipur',
+                            'vadodara',
+                            'varanasi',
+                            'visakhapatnam',
+                        ];
+
+                        $cityKey = strtolower(
+                            trim(
+                                preg_replace('/\s+/', ' ', $value)
+                            )
+                        );
+
+                        $isValid = in_array(
+                            $cityKey,
+                            $indianCities,
+                            true
+                        );
+                    }
+                }
 
                     /*
                     |--------------------------------------------------------------------------
@@ -3768,72 +4335,101 @@ private function replaceApiVariables(
                     |--------------------------------------------------------------------------
                     */
 
-                    if (
-                        $isValid
-                        &&
-                        $minLength !== null
-                        &&
-                        $minLength !== ''
-                        &&
-                        is_numeric($minLength)
-                    ) {
+                   if (
+                            $isValid
+                            &&
+                            in_array(
+                                $validationType,
+                                [
+                                    'text',
+                                    'alpha',
+                                    'alphanumeric',
+                                    'mobile',
+                                ],
+                                true
+                            )
+                            &&
+                            $minLength !== null
+                            &&
+                            $minLength !== ''
+                            &&
+                            is_numeric($minLength)
+                        ) {
 
-                        $isValid =
-                            mb_strlen($value)
-                            >=
-                            (int) $minLength;
-                    }
+                            $isValid =
+                                mb_strlen($value)
+                                >=
+                                (int) $minLength;
+                        }
+                            /*
+                            |--------------------------------------------------------------------------
+                            | MAX LENGTH
+                            |--------------------------------------------------------------------------
+                            */
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | MAX LENGTH
-                    |--------------------------------------------------------------------------
-                    */
+                           if (
+                            $isValid
+                            &&
+                            in_array(
+                                $validationType,
+                                [
+                                    'text',
+                                    'alpha',
+                                    'alphanumeric',
+                                    'mobile',
+                                ],
+                                true
+                            )
+                            &&
+                            $maxLength !== null
+                            &&
+                            $maxLength !== ''
+                            &&
+                            is_numeric($maxLength)
+                        ) {
 
-                    if (
-                        $isValid
-                        &&
-                        $maxLength !== null
-                        &&
-                        $maxLength !== ''
-                        &&
-                        is_numeric($maxLength)
-                    ) {
-
-                        $isValid =
-                            mb_strlen($value)
-                            <=
-                            (int) $maxLength;
-                    }
+                            $isValid =
+                                mb_strlen($value)
+                                <=
+                                (int) $maxLength;
+                        }
 
                     /*
                     |--------------------------------------------------------------------------
                     | MIN VALUE
                     |--------------------------------------------------------------------------
                     */
+                        if (
+                            $isValid
+                            &&
+                            in_array(
+                                $validationType,
+                                [
+                                    'number',
+                                    'integer',
+                                ],
+                                true
+                            )
+                            &&
+                            $minValue !== null
+                            &&
+                            $minValue !== ''
+                            &&
+                            is_numeric($minValue)
+                        ) {
 
-                    if (
-                        $isValid
-                        &&
-                        $minValue !== null
-                        &&
-                        $minValue !== ''
-                        &&
-                        is_numeric($minValue)
-                    ) {
+                            if (is_numeric($value)) {
 
-                        if (is_numeric($value)) {
+                                $isValid =
+                                    (float) $value
+                                    >=
+                                    (float) $minValue;
 
-                            $isValid =
-                                (float) $value
-                                >=
-                                (float) $minValue;
+                            } else {
 
-                        } else {
-
-                            $isValid = false;
+                                $isValid = false;
+                            }
                         }
-                    }
 
                     /*
                     |--------------------------------------------------------------------------
@@ -3841,8 +4437,17 @@ private function replaceApiVariables(
                     |--------------------------------------------------------------------------
                     */
 
-                    if (
+                  if (
                         $isValid
+                        &&
+                        in_array(
+                            $validationType,
+                            [
+                                'number',
+                                'integer',
+                            ],
+                            true
+                        )
                         &&
                         $maxValue !== null
                         &&
@@ -3863,7 +4468,6 @@ private function replaceApiVariables(
                             $isValid = false;
                         }
                     }
-
                     /*
                     |--------------------------------------------------------------------------
                     | VALIDATION FAILED
@@ -3992,35 +4596,26 @@ private function replaceApiVariables(
                 ]);
             }
 
-    /*
-    |--------------------------------------------------------------------------
-    | API
-    |--------------------------------------------------------------------------
-    */
-    elseif ($type === 'api') {
 
-    $variables = $session->variables ?? [];
+            elseif ($type === 'api') {
 
-    if (is_string($variables)) {
-        $variables = json_decode($variables, true) ?? [];
-    }
+            $variables = $session->variables ?? [];
 
-    if (!is_array($variables)) {
-        $variables = [];
-    }
+            if (is_string($variables)) {
+                $variables = json_decode($variables, true) ?? [];
+            }
 
-    /*
-    |--------------------------------------------------------------------------
-    | OTP ENABLED?
-    |--------------------------------------------------------------------------
-    */
+            if (!is_array($variables)) {
+                $variables = [];
+            }
 
-    $otpEnabled = filter_var(
-        $cfg['otpEnabled']
-            ?? $cfg['otp_enabled']
-            ?? false,
-        FILTER_VALIDATE_BOOLEAN
-    );
+
+            $otpEnabled = filter_var(
+                $cfg['otpEnabled']
+                    ?? $cfg['otp_enabled']
+                    ?? false,
+                FILTER_VALIDATE_BOOLEAN
+            );
 
     /*
     |--------------------------------------------------------------------------
@@ -4942,11 +5537,7 @@ private function replaceApiVariables(
         ?? $cfg['api_response_variable']
         ?? 'api_response';
 
-    /*
-    |--------------------------------------------------------------------------
-    | STORE COMPLETE API RESULT
-    |--------------------------------------------------------------------------
-    */
+
 
     $variables[$responseVariable] =
         $apiResult;
@@ -4975,119 +5566,201 @@ private function replaceApiVariables(
         ] = $responseValue;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | BACKWARD COMPATIBILITY
-    |--------------------------------------------------------------------------
-    */
-
-    if (isset($apiResult['order_status'])) {
-
-        $variables['order_status'] =
-            $apiResult['order_status'];
-    }
-
-    if (isset($apiResult['status'])) {
-
-        $variables['status'] =
-            $apiResult['status'];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | API SUCCESS / FAILURE
-    |--------------------------------------------------------------------------
-    */
-
-    $apiSuccess =
-        $this->isApiSuccess(
-            $cfg,
-            $apiResult
-        );
-
-    /*
-    |--------------------------------------------------------------------------
-    | SAVE
-    |--------------------------------------------------------------------------
-    */
-
-    $session->update([
-        'variables' => $variables,
-        'status' => 'active',
-        'last_message_at' => now(),
-    ]);
-
-    /*
-    |--------------------------------------------------------------------------
-    | ================================================================
-    | API SUCCESS
-    | ================================================================
-    */
-
-    if ($apiSuccess) {
-
-        $message =
-            $cfg['apiSuccessMessage']
-            ?? $cfg['api_success_message']
-            ?? '';
-
-        if ($message !== '') {
-
-            $message =
-                $this->resolve(
-                    (string) $message,
-                    $variables
-                );
-
-            $output =
-                $this->whatsapp->sendText(
-                    $session->user_identifier,
-                    $message
-                );
-
-            $this->saveOutbound(
-                $session,
-                'text',
-                $message,
-                $output
-            );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | SUCCESS EDGE
-        |--------------------------------------------------------------------------
-        */
-
-        $next = $this->nextNode(
-            $workflow,
-            $nodeId,
-
-        );
-
         /*
         |--------------------------------------------------------------------------
         | BACKWARD COMPATIBILITY
         |--------------------------------------------------------------------------
         */
 
-        if (!$next) {
+        if (isset($apiResult['order_status'])) {
+
+            $variables['order_status'] =
+                $apiResult['order_status'];
+        }
+
+        if (isset($apiResult['status'])) {
+
+            $variables['status'] =
+                $apiResult['status'];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | API SUCCESS / FAILURE
+        |--------------------------------------------------------------------------
+        */
+
+        $apiSuccess =
+            $this->isApiSuccess(
+                $cfg,
+                $apiResult
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | SAVE
+        |--------------------------------------------------------------------------
+        */
+
+        $session->update([
+            'variables' => $variables,
+            'status' => 'active',
+            'last_message_at' => now(),
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | ================================================================
+        | API SUCCESS
+        | ================================================================
+        */
+
+        if ($apiSuccess) {
+
+            $message =
+                $cfg['apiSuccessMessage']
+                ?? $cfg['api_success_message']
+                ?? '';
+
+            if ($message !== '') {
+
+                $message =
+                    $this->resolve(
+                        (string) $message,
+                        $variables
+                    );
+
+                $output =
+                    $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $message
+                    );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $message,
+                    $output
+                );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | SUCCESS EDGE
+            |--------------------------------------------------------------------------
+            */
 
             $next = $this->nextNode(
                 $workflow,
-                $nodeId
+                $nodeId,
+
             );
+
+            /*
+            |--------------------------------------------------------------------------
+            | BACKWARD COMPATIBILITY
+            |--------------------------------------------------------------------------
+            */
+
+            if (!$next) {
+
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId
+                );
+            }
+
+            if ($next) {
+
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next
+                );
+
+            } else {
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'completed',
+                    'last_message_at' => now(),
+                ]);
+            }
+
+            return;
         }
 
-        if ($next) {
+            /*
+            |--------------------------------------------------------------------------
+            | ================================================================
+            | API FAILURE
+            | ================================================================
+            */
+
+            $message =
+                $cfg['apiFailureMessage']
+                ?? $cfg['api_failure_message']
+                ?? '';
+
+            if ($message !== '') {
+
+                $message =
+                    $this->resolve(
+                        (string) $message,
+                        $variables
+                    );
+
+                $output =
+                    $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $message
+                    );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $message,
+                    $output
+                );
+            }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NEXT NODE AFTER OTP VERIFICATION
+        |--------------------------------------------------------------------------
+        */
+
+        $nextNodeId = $this->nextNode(
+            $workflow,
+            $nodeId
+        );
+
+        Log::info('API OTP: SUCCESS NEXT NODE', [
+            'workflow_id' => $workflow->id ?? null,
+            'current_node_id' => $nodeId,
+            'next_node_id' => $nextNodeId,
+        ]);
+
+        if ($nextNodeId) {
+
+            Log::info('API OTP: GOING TO NEXT NODE', [
+                'workflow_id' => $workflow->id ?? null,
+                'from_node_id' => $nodeId,
+                'to_node_id' => $nextNodeId,
+            ]);
 
             $this->goToNode(
                 $workflow,
                 $session,
-                $next
+                $nextNodeId
             );
 
         } else {
+
+            Log::warning('API OTP: NEXT NODE NOT FOUND', [
+                'workflow_id' => $workflow->id ?? null,
+                'current_node_id' => $nodeId,
+            ]);
 
             $session->update([
                 'current_node_id' => $nodeId,
@@ -5097,91 +5770,108 @@ private function replaceApiVariables(
         }
 
         return;
-    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ================================================================
-    | API FAILURE
-    | ================================================================
-    */
+            }
 
-    $message =
-        $cfg['apiFailureMessage']
-        ?? $cfg['api_failure_message']
-        ?? '';
+            elseif ($type === 'delay') {
 
-    if ($message !== '') {
+                $delay = (int) (
+                    $cfg['delay']
+                    ?? $cfg['delay_value']
+                    ?? 1
+                );
 
-        $message =
-            $this->resolve(
-                (string) $message,
-                $variables
-            );
+                $delayUnit = strtolower(
+                    (string) (
+                        $cfg['delayUnit']
+                        ?? $cfg['delay_unit']
+                        ?? 'seconds'
+                    )
+                );
 
-        $output =
-            $this->whatsapp->sendText(
-                $session->user_identifier,
-                $message
-            );
+                $delay = max(1, $delay);
 
-        $this->saveOutbound(
-            $session,
-            'text',
-            $message,
-            $output
-        );
-    }
+                switch ($delayUnit) {
 
-/*
-|--------------------------------------------------------------------------
-| NEXT NODE AFTER OTP VERIFICATION
-|--------------------------------------------------------------------------
-*/
+                    case 'minutes':
+                        $delaySeconds = $delay * 60;
+                        break;
 
-$nextNodeId = $this->nextNode(
-    $workflow,
-    $nodeId
-);
+                    case 'hours':
+                        $delaySeconds = $delay * 60 * 60;
+                        break;
 
-Log::info('API OTP: SUCCESS NEXT NODE', [
-    'workflow_id' => $workflow->id ?? null,
-    'current_node_id' => $nodeId,
-    'next_node_id' => $nextNodeId,
-]);
+                    case 'days':
+                        $delaySeconds = $delay * 24 * 60 * 60;
+                        break;
 
-if ($nextNodeId) {
+                    case 'seconds':
+                    default:
+                        $delaySeconds = $delay;
+                        break;
+                }
 
-    Log::info('API OTP: GOING TO NEXT NODE', [
-        'workflow_id' => $workflow->id ?? null,
-        'from_node_id' => $nodeId,
-        'to_node_id' => $nextNodeId,
-    ]);
+                /*
+                |--------------------------------------------------------------------------
+                | FIND NEXT NODE
+                |--------------------------------------------------------------------------
+                */
 
-    $this->goToNode(
-        $workflow,
-        $session,
-        $nextNodeId
-    );
+                $nextNodeId = $this->nextNode(
+                    $workflow,
+                    $nodeId
+                );
 
-} else {
+                if (!$nextNodeId) {
 
-    Log::warning('API OTP: NEXT NODE NOT FOUND', [
-        'workflow_id' => $workflow->id ?? null,
-        'current_node_id' => $nodeId,
-    ]);
+                    $session->update([
+                        'status' => 'completed',
+                        'current_node_id' => null,
+                        'last_message_at' => now(),
+                    ]);
 
-    $session->update([
-        'current_node_id' => $nodeId,
-        'status' => 'completed',
-        'last_message_at' => now(),
-    ]);
-}
+                    Log::info('WHATSAPP DELAY NO NEXT NODE', [
+                        'workflow_id' => $workflow->id,
+                        'session_id' => $session->id,
+                        'delay_node_id' => $nodeId,
+                    ]);
 
-return;
+                    return;
+                }
 
-    }
 
+                $session->update([
+                    'status' => 'waiting',
+                    'current_node_id' => $nodeId,
+                    'last_message_at' => now(),
+                ]);
+
+
+
+                \App\Jobs\ExecuteDelayedWorkflow::dispatch(
+                    workflowId: (int) $workflow->id,
+                    sessionId: (int) $session->id,
+                    delayNodeId: (string) $nodeId,
+                    nextNodeId: (string) $nextNodeId
+                )->delay(
+                    now()->addSeconds($delaySeconds)
+                );
+
+                Log::info('WHATSAPP DELAY SCHEDULED', [
+                    'workflow_id' => $workflow->id,
+                    'session_id' => $session->id,
+                    'delay_node_id' => $nodeId,
+                    'next_node_id' => $nextNodeId,
+                    'delay' => $delay,
+                    'delay_unit' => $delayUnit,
+                    'delay_seconds' => $delaySeconds,
+                    'execute_at' => now()
+                        ->addSeconds($delaySeconds)
+                        ->toDateTimeString(),
+                ]);
+
+                return;
+            }
             /*
             |--------------------------------------------------------------------------
             | END

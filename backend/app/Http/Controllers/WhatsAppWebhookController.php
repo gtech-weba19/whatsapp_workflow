@@ -9,6 +9,7 @@ use App\Models\WorkflowExecution;
 use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class WhatsAppWebhookController extends Controller
 {
@@ -915,9 +916,7 @@ class WhatsAppWebhookController extends Controller
 
             'source' => $source,
 
-            /**
-             * Optional workflow selected from simulator
-             */
+
             'workflow_id' => $requestedWorkflowId,
         ];
 
@@ -933,38 +932,56 @@ class WhatsAppWebhookController extends Controller
             'source' => $source,
         ]);
 
-        /**
-         * ----------------------------------------------------------------------
-         * WORKFLOW ENGINE
-         * ----------------------------------------------------------------------
-         */
-        $session = $engine->handleIncoming(
-            $from,
-            $text,
-            $input
-        );
 
-        if (!$session) {
+        $lockKey = 'whatsapp_workflow_lock:' . $from;
 
-            return response()->json([
-                'success' => false,
-                'received' => true,
-                'started' => false,
-                'error' => true,
-                'error_code' => 'WORKFLOW_NOT_FOUND',
-                'message' =>
-                    'No active journey found and no matching trigger was found.',
-                'received_text' => $text,
-                'normalized_text' => $normalizedText,
-                'message_type' => $messageType,
-                'media_id' => $mediaId,
-                'media_url' => $mediaUrl,
-                'phone_number_id' => $phoneNumberId,
-                'whatsapp_to' => $whatsappTo,
-            ], 422);
-        }
+    $lock = Cache::lock($lockKey, 120);
 
-        /**
+if (! $lock->get()) {
+
+    Log::warning('WHATSAPP WORKFLOW ALREADY PROCESSING', [
+        'mobile' => $from,
+        'external_message_id' => $externalMessageId,
+        'message_type' => $messageType,
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'received' => true,
+        'processing' => true,
+        'message' => 'Another WhatsApp request is already being processed.',
+    ], 200);
+}
+
+try {
+
+    $session = $engine->handleIncoming(
+        $from,
+        $text,
+        $input
+    );
+
+    if (!$session) {
+        return response()->json([
+            'success' => false,
+            'received' => true,
+            'started' => false,
+            'error' => true,
+            'error_code' => 'WORKFLOW_NOT_FOUND',
+            'message' =>
+                'No active journey found and no matching trigger was found.',
+            'received_text' => $text,
+            'normalized_text' => $normalizedText,
+            'message_type' => $messageType,
+            'media_id' => $mediaId,
+            'media_url' => $mediaUrl,
+            'phone_number_id' => $phoneNumberId,
+            'whatsapp_to' => $whatsappTo,
+        ], 422);
+
+    }
+
+     /**
          * ----------------------------------------------------------------------
          * REFRESH SESSION
          * ----------------------------------------------------------------------
@@ -1001,10 +1018,7 @@ class WhatsAppWebhookController extends Controller
                     : 'text'
             );
 
-        /**
-         * For media message, save caption/text.
-         * Original media data remains inside payload.
-         */
+
         $botMessage->text =
             $text
             ?:
@@ -1093,8 +1107,19 @@ class WhatsAppWebhookController extends Controller
 
             'messages' => $messages,
         ]);
-    }
 
+
+
+
+   } finally {
+
+    $lock->release();
+}
+
+
+
+
+    }
     /**
      * ==========================================================================
      * GET TRIGGER
