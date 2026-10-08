@@ -7,145 +7,30 @@ use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\BotSessionController;
 use App\Http\Controllers\MediaUploadController;
-
-
-/*
-|--------------------------------------------------------------------------
-| AUTH
-|--------------------------------------------------------------------------
-*/
-
-Route::post('/login', [
-    AuthController::class,
-    'login'
-]);
+use App\Http\Controllers\BotController;
+use App\Http\Controllers\ClientController;
 
 
 
-/*
-|--------------------------------------------------------------------------
-| META WEBHOOK VERIFICATION
-|--------------------------------------------------------------------------
-*/
-
-Route::get('/webhooks/whatsapp', [
-    WhatsAppWebhookController::class,
-    'verify'
-]);
-
-
-
-
-Route::post('/webhooks/whatsapp', [
-    WhatsAppWebhookController::class,
-    'handle'
-]);
-
-
-/*
-|--------------------------------------------------------------------------
-| SIMULATOR RESET
-|--------------------------------------------------------------------------
-*/
-
-Route::post('/webhooks/whatsapp/reset', [
-    WhatsAppWebhookController::class,
-    'reset'
-]);
-
-
-/*
-|--------------------------------------------------------------------------
-| SIMULATOR JOURNEYS
-|--------------------------------------------------------------------------
-*/
-
-Route::get('/webhooks/whatsapp/journeys', [
-    WhatsAppWebhookController::class,
-    'journeys'
-]);
-
-
-/*
-|--------------------------------------------------------------------------
-| AUTHENTICATED API
-|--------------------------------------------------------------------------
-*/
+Route::post('/login', [ AuthController::class,'login']);
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class,'verify']);
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class,'handle']);
+Route::post('/webhooks/whatsapp/reset', [WhatsAppWebhookController::class,'reset']);
+Route::get('/webhooks/whatsapp/journeys', [WhatsAppWebhookController::class,'journeys']);
 
 Route::middleware('auth:sanctum')->group(function () {
+Route::post('/logout', [AuthController::class,'logout']);
+Route::get('/me', [AuthController::class,'me']);
+Route::apiResource('workflows',WorkflowController::class);
+Route::get('/bots/clients', [BotController::class,'clients']);
+Route::patch('/bots/{bot}/status', [BotController::class,'status']);
+Route::apiResource('bots',BotController::class);
+Route::patch('/clients/{client}/status',[ClientController::class, 'status']);
+Route::apiResource('clients',ClientController::class);
+Route::post('/workflows/{workflow}/publish',[WorkflowController::class, 'publish']);
+Route::post('/workflows/{workflow}/duplicate',[WorkflowController::class, 'duplicate']);
+Route::get('/sessions', [BotSessionController::class,'index']);
+Route::get('/sessions/{session}', [BotSessionController::class,'show']);
+Route::post('/upload/media', [MediaUploadController::class,'upload'])->name('upload.media');
 
-    /*
-    |--------------------------------------------------------------------------
-    | AUTH
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post('/logout', [
-        AuthController::class,
-        'logout'
-    ]);
-
-    Route::get('/me', [
-        AuthController::class,
-        'me'
-    ]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | WORKFLOWS
-    |--------------------------------------------------------------------------
-    */
-
-    Route::apiResource(
-        'workflows',
-        WorkflowController::class
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | PUBLISH WORKFLOW
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/workflows/{workflow}/publish',
-        [WorkflowController::class, 'publish']
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | DUPLICATE WORKFLOW
-    |--------------------------------------------------------------------------
-    */
-
-    Route::post(
-        '/workflows/{workflow}/duplicate',
-        [WorkflowController::class, 'duplicate']
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BOT SESSIONS
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/sessions', [
-        BotSessionController::class,
-        'index'
-    ]);
-
-    Route::get('/sessions/{session}', [
-        BotSessionController::class,
-        'show'
-    ]);
-
-
-       Route::post('/upload/media', [
-        MediaUploadController::class,
-        'upload'
-    ])->name('upload.media');
 });

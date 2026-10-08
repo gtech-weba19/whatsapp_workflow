@@ -600,6 +600,8 @@ class WhatsAppService
         );
     }
 
+
+
     /*
     |--------------------------------------------------------------------------
     | INTERACTIVE BUTTON
@@ -705,6 +707,463 @@ class WhatsAppService
             $originalTo
         );
     }
+
+
+public function sendInteractiveWithMedia(
+    string $to,
+    string $mediaType,
+    string $mediaUrl,
+    string $body,
+    array $buttons,
+    string $footer = '',
+    string $fileName = ''
+): array {
+
+    $originalTo = $to;
+
+    // =====================================================
+    // NORMALIZE MOBILE
+    // =====================================================
+
+    $to = $this->normalizeMobile($to);
+
+    if ($to === '') {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'Invalid WhatsApp mobile number.',
+        ];
+    }
+
+    // =====================================================
+    // CHECK CONFIGURATION
+    // =====================================================
+
+    if (!$this->hasConfiguration()) {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'WhatsApp API configuration missing.',
+        ];
+    }
+
+    // =====================================================
+    // NORMALIZE MEDIA TYPE
+    // =====================================================
+
+    $mediaType = strtolower(
+        trim($mediaType)
+    );
+
+    // PDF = DOCUMENT
+    if ($mediaType === 'pdf') {
+        $mediaType = 'document';
+    }
+
+    // =====================================================
+    // SUPPORTED MEDIA TYPES
+    // =====================================================
+
+    if (!in_array(
+        $mediaType,
+        [
+            'image',
+            'video',
+            'document',
+        ],
+        true
+    )) {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' =>
+                'Unsupported interactive media type: '
+                . $mediaType,
+        ];
+    }
+
+    // =====================================================
+    // MEDIA URL
+    // =====================================================
+
+    $mediaUrl = trim($mediaUrl);
+
+    if ($mediaUrl === '') {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' =>
+                'Interactive media URL is empty.',
+        ];
+    }
+
+    // =====================================================
+    // BODY
+    // =====================================================
+
+    $body = trim($body);
+
+    if ($body === '') {
+
+        $body = 'Please select an option.';
+    }
+
+    // =====================================================
+    // FOOTER
+    // =====================================================
+
+    $footer = trim($footer);
+
+    // =====================================================
+    // FILE NAME
+    // =====================================================
+
+    $fileName = trim($fileName);
+
+    // =====================================================
+    // NORMALIZE BUTTONS
+    // =====================================================
+
+    $interactiveButtons = [];
+
+    foreach ($buttons as $index => $button) {
+
+        // ---------------------------------------------
+        // ONLY ARRAY BUTTONS
+        // ---------------------------------------------
+
+        if (!is_array($button)) {
+            continue;
+        }
+
+        // ---------------------------------------------
+        // BUTTON TYPE
+        // ---------------------------------------------
+        //
+        // Currently provider-confirmed format is:
+        //
+        // "type": "reply"
+        //
+        // We keep reply as default.
+        //
+
+        $buttonType = strtolower(
+            trim(
+                (string) (
+                    $button['type']
+                    ?? $button['buttonType']
+                    ?? 'reply'
+                )
+            )
+        );
+
+        // -------------------------------------------------
+        // ONLY REPLY IS CURRENTLY SUPPORTED
+        // -------------------------------------------------
+        //
+        // URL / LINK / DOWNLOAD buttons should NOT be
+        // converted to an unconfirmed provider format.
+        //
+
+        if ($buttonType !== 'reply') {
+
+            Log::warning(
+                'UNSUPPORTED WHATSAPP MEDIA BUTTON TYPE',
+                [
+                    'button_index' => $index,
+                    'button_type' => $buttonType,
+                    'button' => $button,
+                ]
+            );
+
+            continue;
+        }
+
+        // ---------------------------------------------
+        // BUTTON ID
+        // ---------------------------------------------
+
+        $id = (string) (
+            $button['id']
+            ?? $button['source_handle']
+            ?? $button['sourceHandle']
+            ?? 'source-option-' . $index
+        );
+
+        $id = trim($id);
+
+        // ---------------------------------------------
+        // BUTTON TITLE
+        // ---------------------------------------------
+
+        $title = trim(
+            (string) (
+                $button['title']
+                ?? $button['label']
+                ?? $button['text']
+                ?? 'Option ' . ($index + 1)
+            )
+        );
+
+        // ---------------------------------------------
+        // FALLBACK ID
+        // ---------------------------------------------
+
+        if ($id === '') {
+
+            $id = 'source-option-' . $index;
+        }
+
+        // ---------------------------------------------
+        // IGNORE EMPTY TITLE
+        // ---------------------------------------------
+
+        if ($title === '') {
+
+            continue;
+        }
+
+        // ---------------------------------------------
+        // PROVIDER CONFIRMED REPLY BUTTON FORMAT
+        // ---------------------------------------------
+
+        $interactiveButtons[] = [
+
+            'type' => 'reply',
+
+            'reply' => [
+
+                'id' => $id,
+
+                'title' => $title,
+            ],
+        ];
+
+        // ---------------------------------------------
+        // MAX 3
+        // ---------------------------------------------
+
+        if (count($interactiveButtons) >= 3) {
+            break;
+        }
+    }
+
+    // =====================================================
+    // BUTTON VALIDATION
+    // =====================================================
+
+    if (empty($interactiveButtons)) {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' =>
+                'No valid WhatsApp reply buttons found.',
+        ];
+    }
+
+    // =====================================================
+    // BUILD MEDIA HEADER
+    // =====================================================
+
+    $header = [];
+
+    // =====================================================
+    // IMAGE
+    // =====================================================
+
+    if ($mediaType === 'image') {
+
+        $header = [
+
+            'type' => 'image',
+
+            'image' => [
+
+                'link' => $mediaUrl,
+            ],
+        ];
+    }
+
+    // =====================================================
+    // VIDEO
+    // =====================================================
+
+    elseif ($mediaType === 'video') {
+
+        $header = [
+
+            'type' => 'video',
+
+            'video' => [
+
+                'link' => $mediaUrl,
+            ],
+        ];
+    }
+
+    // =====================================================
+    // DOCUMENT / PDF
+    // =====================================================
+
+    elseif ($mediaType === 'document') {
+
+        $document = [
+
+            'link' => $mediaUrl,
+        ];
+
+        // ---------------------------------------------
+        // DOCUMENT FILENAME
+        // ---------------------------------------------
+
+        if ($fileName !== '') {
+
+            $document['filename'] = $fileName;
+        }
+
+        $header = [
+
+            'type' => 'document',
+
+            'document' => $document,
+        ];
+    }
+
+    // =====================================================
+    // HEADER VALIDATION
+    // =====================================================
+
+    if (empty($header)) {
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' =>
+                'Unable to build interactive media header.',
+        ];
+    }
+
+    // =====================================================
+    // BUILD INTERACTIVE
+    // =====================================================
+
+    $interactive = [
+
+        'type' => 'button',
+
+        // ---------------------------------------------
+        // MEDIA HEADER
+        // ---------------------------------------------
+
+        'header' => $header,
+
+        // ---------------------------------------------
+        // BODY
+        // ---------------------------------------------
+
+        'body' => [
+
+            'text' => $body,
+        ],
+
+        // ---------------------------------------------
+        // ACTION
+        // ---------------------------------------------
+
+        'action' => [
+
+            'buttons' => $interactiveButtons,
+        ],
+    ];
+
+    // =====================================================
+    // FOOTER
+    // =====================================================
+
+    if ($footer !== '') {
+
+        $interactive['footer'] = [
+
+            'text' => $footer,
+        ];
+    }
+
+    // =====================================================
+    // CONTENT
+    // =====================================================
+
+    $content = [
+
+        'preview_url' => false,
+
+        'shorten_url' => false,
+
+        'type' => 'INTERACTIVE',
+
+        'interactive' => $interactive,
+    ];
+
+    // =====================================================
+    // BUILD COMMON PAYLOAD
+    // =====================================================
+
+    $payload = $this->buildPayload(
+        $content,
+        $to
+    );
+
+    // =====================================================
+    // DEBUG LOG
+    // =====================================================
+
+    Log::info(
+        'WHATSAPP INTERACTIVE MEDIA PAYLOAD',
+        [
+
+            'type' => strtoupper(
+                $mediaType
+            ),
+
+            'to' => $to,
+
+            'media_url' => $mediaUrl,
+
+            'file_name' => $fileName,
+
+            'body' => $body,
+
+            'footer' => $footer,
+
+            'buttons_count' =>
+                count($interactiveButtons),
+
+            'buttons' =>
+                $interactiveButtons,
+
+            'payload' => $payload,
+        ]
+    );
+
+    // =====================================================
+    // SEND REQUEST
+    // =====================================================
+
+    return $this->sendRequest(
+
+        $payload,
+
+        'INTERACTIVE_' .
+        strtoupper($mediaType) .
+        '_BUTTON',
+
+        $originalTo
+    );
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -876,11 +1335,7 @@ class WhatsAppService
             ];
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Build List Rows
-        |--------------------------------------------------------------------------
-        */
+
 
         $rows = [];
 
@@ -964,71 +1419,276 @@ class WhatsAppService
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | IMAGE
-    |--------------------------------------------------------------------------
-    */
 
-    public function sendImage(
-        string $to,
-        string $mediaUrl,
-        string $caption = ''
-    ): array {
-        $originalTo = $to;
+public function sendImage(
+    string $to,
+    string $mediaUrl,
+    string $caption = ''
+): array {
 
-        $to = $this->normalizeMobile($to);
+    $originalTo = $to;
 
-        if ($to === '') {
-            return [
-                'success' => false,
-                'error' => true,
-                'message' => 'Invalid WhatsApp mobile number.',
-            ];
-        }
+    // =====================================================
+    // NORMALIZE MOBILE
+    // =====================================================
 
-        if (!$this->hasConfiguration()) {
-            return [
-                'success' => false,
-                'error' => true,
-                'message' => 'WhatsApp API configuration missing.',
-            ];
-        }
+    $to = $this->normalizeMobile($to);
 
-        $mediaUrl = trim($mediaUrl);
-
-        if ($mediaUrl === '') {
-            return [
-                'success' => false,
-                'error' => true,
-                'message' => 'Image URL is empty.',
-            ];
-        }
-
-        $content = [
-            'preview_url' => false,
-            'shorten_url' => false,
-            'type' => 'IMAGE',
-            'image' => [
-                'url' => $mediaUrl,
-            ],
+    if ($to === '') {
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'Invalid WhatsApp mobile number.',
         ];
+    }
 
-        if ($caption !== '') {
-            $content['image']['caption'] = $caption;
+    // =====================================================
+    // CHECK CONFIGURATION
+    // =====================================================
+
+    if (!$this->hasConfiguration()) {
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'WhatsApp API configuration missing.',
+        ];
+    }
+
+    // =====================================================
+    // MEDIA URL
+    // =====================================================
+
+    $mediaUrl = trim($mediaUrl);
+    $caption = trim($caption);
+
+    if ($mediaUrl === '') {
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'Image URL is empty.',
+        ];
+    }
+
+    // =====================================================
+    // VALIDATE URL
+    // =====================================================
+
+    if (!filter_var($mediaUrl, FILTER_VALIDATE_URL)) {
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'Invalid image URL.',
+        ];
+    }
+
+    try {
+
+        $imageResponse = Http::timeout(30)
+            ->connectTimeout(10)
+            ->get($mediaUrl);
+
+        if (!$imageResponse->successful()) {
+
+            Log::error(
+                'WHATSAPP IMAGE DOWNLOAD FAILED',
+                [
+                    'url' => $mediaUrl,
+                    'status' => $imageResponse->status(),
+                    'body' => $imageResponse->body(),
+                ]
+            );
+
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Unable to download image.',
+                'status' => $imageResponse->status(),
+            ];
         }
 
-        $payload = $this->buildPayload(
-            $content,
-            $to
+        $imageBinary = $imageResponse->body();
+
+        if ($imageBinary === '') {
+
+            return [
+                'success' => false,
+                'error' => true,
+                'message' => 'Downloaded image is empty.',
+            ];
+        }
+
+        // =================================================
+        // DETECT MIME TYPE
+        // =================================================
+
+        $mimeType = $imageResponse->header('Content-Type');
+
+        if (is_string($mimeType)) {
+            $mimeType = strtolower(
+                trim(
+                    explode(';', $mimeType)[0]
+                )
+            );
+        }
+
+        // =================================================
+        // FALLBACK MIME TYPE
+        // =================================================
+
+        if (!in_array(
+            $mimeType,
+            [
+                'image/jpeg',
+                'image/png',
+            ],
+            true
+        )) {
+
+            $extension = strtolower(
+                pathinfo(
+                    parse_url(
+                        $mediaUrl,
+                        PHP_URL_PATH
+                    ) ?? '',
+                    PATHINFO_EXTENSION
+                )
+            );
+
+            $mimeType = match ($extension) {
+
+                'png' => 'image/png',
+
+                default => 'image/jpeg',
+            };
+        }
+
+        // =================================================
+        // BASE64
+        // =================================================
+
+        $attachmentData = base64_encode(
+            $imageBinary
         );
 
-        return $this->sendRequest(
-            $payload,
-            'IMAGE',
-            $originalTo
+    } catch (\Throwable $e) {
+
+        Log::error(
+            'WHATSAPP IMAGE DOWNLOAD ERROR',
+            [
+                'url' => $mediaUrl,
+                'message' => $e->getMessage(),
+            ]
         );
+
+        return [
+            'success' => false,
+            'error' => true,
+            'message' => 'Unable to download image.',
+        ];
     }
+
+    // =====================================================
+    // BUILD ATTACHMENT
+    // =====================================================
+
+    $attachment = [
+        'type' => 'image',
+        'mimeType' => $mimeType,
+        'attachmentData' => $attachmentData,
+    ];
+
+    // =====================================================
+    // CAPTION
+    // =====================================================
+
+    if ($caption !== '') {
+        $attachment['caption'] = $caption;
+    }
+
+    // =====================================================
+    // CONTENT
+    // =====================================================
+
+    $content = [
+        'preview_url' => false,
+        'shorten_url' => false,
+        'type' => 'ATTACHMENT',
+        'attachment' => $attachment,
+    ];
+
+    // =====================================================
+    // BUILD COMMON PAYLOAD
+    // =====================================================
+
+    $payload = $this->buildPayload(
+        $content,
+        $to
+    );
+
+    // =====================================================
+    // DEBUG
+    // =====================================================
+
+    Log::info(
+        'WHATSAPP IMAGE ATTACHMENT PAYLOAD',
+        [
+            'type' => 'IMAGE',
+            'to' => $to,
+            'media_url' => $mediaUrl,
+            'mime_type' => $mimeType,
+            'caption' => $caption,
+            'binary_size' => strlen($imageBinary),
+            'base64_size' => strlen($attachmentData),
+
+            // Don't log full Base64 payload
+            'payload' => [
+                'message' => [
+                    'channel' => $payload['message']['channel'] ?? null,
+                    'content' => [
+                        'preview_url' =>
+                            $payload['message']['content']['preview_url'] ?? null,
+
+                        'shorten_url' =>
+                            $payload['message']['content']['shorten_url'] ?? null,
+
+                        'type' =>
+                            $payload['message']['content']['type'] ?? null,
+
+                        'attachment' => [
+                            'type' =>
+                                $payload['message']['content']['attachment']['type']
+                                ?? null,
+
+                            'mimeType' =>
+                                $payload['message']['content']['attachment']['mimeType']
+                                ?? null,
+
+                            'has_attachmentData' =>
+                                !empty(
+                                    $payload['message']['content']['attachment']['attachmentData']
+                                    ?? ''
+                                ),
+
+                            'caption' =>
+                                $payload['message']['content']['attachment']['caption']
+                                ?? null,
+                        ],
+                    ],
+                ],
+            ],
+        ]
+    );
+
+    // =====================================================
+    // SEND
+    // =====================================================
+
+    return $this->sendRequest(
+        $payload,
+        'IMAGE',
+        $originalTo
+    );
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -1319,23 +1979,7 @@ public function sendMediaTemplate(
 
     $mediaType = $this->detectMediaType($mediaUrl);
 
-    /*
-    |--------------------------------------------------------------------------
-    | DEBUG INPUT
-    |--------------------------------------------------------------------------
-    */
 
-    Log::info('🔥 NEW MEDIA TEMPLATE METHOD RUNNING', [
-        'file' => __FILE__,
-        'to' => $to,
-        'template_name' => $templateName,
-        'template_id' => $templateId,
-        'language' => $language,
-        'body' => $body,
-        'media_url' => $mediaUrl,
-        'media_type' => $mediaType,
-        'variables' => $variables,
-    ]);
 
     /*
     |--------------------------------------------------------------------------

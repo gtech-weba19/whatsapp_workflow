@@ -786,6 +786,24 @@ class WhatsAppWebhookController extends Controller
                 'entry.0.changes.0.value.messages.0.interactive.list_reply.id'
             );
 
+            if (!empty($sourceHandle)) {
+
+                $text = trim(
+                    (string) $sourceHandle
+                );
+
+            } elseif (
+                empty($text)
+                &&
+                !empty($interactiveTitle)
+            ) {
+
+                $text = trim(
+                    (string) $interactiveTitle
+                );
+            }
+
+
         /**
          * ----------------------------------------------------------------------
          * INTERACTIVE TITLE

@@ -4,40 +4,78 @@ import {
 } from "react-toastify";
 
 import {
+  Workflow,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+
+import {
   useState,
+  useEffect,
 } from "react";
 
 import {
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 
 import axios from "axios";
+
 
 const API =
   import.meta.env.VITE_API_URL ||
   "http://localhost:8000/api";
 
+
 const Login = () => {
 
   const navigate = useNavigate();
 
+  const location = useLocation();
+
+
   /* =======================================================
      AUTH
   ======================================================= */
-
-  const [token, setToken] = useState(
-    localStorage.getItem("token") || ""
-  );
 
   const [login, setLogin] = useState({
     email: "",
     password: "",
   });
 
+
   const [
     loginLoading,
     setLoginLoading,
   ] = useState(false);
+
+
+  /* =======================================================
+     PASSWORD VISIBILITY
+  ======================================================= */
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+
+useEffect(() => {
+
+  const logoutMessage =
+    sessionStorage.getItem("logoutMessage");
+
+  if (!logoutMessage) {
+    return;
+  }
+
+  // Show notification
+  toast.success(logoutMessage);
+
+  // Remove after reading
+  sessionStorage.removeItem("logoutMessage");
+
+}, []);
 
 
   /* =======================================================
@@ -93,7 +131,7 @@ const Login = () => {
 
       /*
       |--------------------------------------------------------------------------
-      | TOKEN
+      | GET TOKEN
       |--------------------------------------------------------------------------
       */
 
@@ -102,6 +140,12 @@ const Login = () => {
         response.data?.access_token ||
         response.data?.data?.token;
 
+
+      /*
+      |--------------------------------------------------------------------------
+      | TOKEN NOT FOUND
+      |--------------------------------------------------------------------------
+      */
 
       if (!newToken) {
 
@@ -113,18 +157,34 @@ const Login = () => {
       }
 
 
+      /*
+      |--------------------------------------------------------------------------
+      | SAVE TOKEN
+      |--------------------------------------------------------------------------
+      */
+
       localStorage.setItem(
         "token",
         newToken
       );
 
-      setToken(newToken);
 
+      /*
+      |--------------------------------------------------------------------------
+      | SET AXIOS AUTHORIZATION
+      |--------------------------------------------------------------------------
+      */
 
       axios.defaults.headers.common[
         "Authorization"
       ] = `Bearer ${newToken}`;
 
+
+      /*
+      |--------------------------------------------------------------------------
+      | LOGIN SUCCESS
+      |--------------------------------------------------------------------------
+      */
 
       toast.success(
         response.data?.message ||
@@ -132,9 +192,17 @@ const Login = () => {
       );
 
 
+      /*
+      |--------------------------------------------------------------------------
+      | GO TO DASHBOARD
+      |--------------------------------------------------------------------------
+      */
+
       setTimeout(() => {
 
-        navigate("/workflow-builder");
+        navigate("/dashboard", {
+          replace: true,
+        });
 
       }, 500);
 
@@ -168,7 +236,9 @@ const Login = () => {
         "Login failed.";
 
 
-      toast.error(message);
+      toast.error(
+        message
+      );
 
 
     } finally {
@@ -176,6 +246,7 @@ const Login = () => {
       setLoginLoading(false);
 
     }
+
   };
 
 
@@ -193,15 +264,20 @@ const Login = () => {
       doLogin();
 
     }
+
   };
 
+
+  /* =======================================================
+     UI
+  ======================================================= */
 
   return (
     <>
 
       {/* ===================================================
           TOAST
-      =================================================== */}
+      ==================================================== */}
 
       <ToastContainer
         position="top-right"
@@ -215,7 +291,7 @@ const Login = () => {
 
       {/* ===================================================
           PAGE
-      =================================================== */}
+      ==================================================== */}
 
       <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
 
@@ -228,19 +304,17 @@ const Login = () => {
 
           <div className="mb-8 text-center">
 
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-xl font-bold text-white shadow-lg shadow-indigo-500/20">
 
-              WF
+            {/* =================================================
+                LOGO
+            ================================================= */}
 
-            </div>
+            <img src="/gtech-logo.png" alt="Logo" className="mx-auto mb-4 h-24 w-24 rounded-2xl" />
 
 
-            <h1 className="text-2xl font-bold text-slate-900">
-
-              Workflow Builder
-
-            </h1>
-
+            {/* =================================================
+                DESCRIPTION
+            ================================================= */}
 
             <p className="mt-2 text-sm text-slate-500">
 
@@ -321,40 +395,104 @@ const Login = () => {
               </label>
 
 
-              <input
-                type="password"
-                value={login.password}
-                onChange={(e) =>
-                  setLogin({
-                    ...login,
-                    password: e.target.value,
-                  })
-                }
-                placeholder="Enter password"
-                autoComplete="current-password"
-                disabled={loginLoading}
-                onKeyDown={
-                  handlePasswordKeyDown
-                }
-                className="
-                  w-full
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-slate-50
-                  px-4
-                  py-3
-                  text-sm
-                  outline-none
-                  transition
-                  focus:border-indigo-500
-                  focus:bg-white
-                  focus:ring-4
-                  focus:ring-indigo-500/10
-                  disabled:cursor-not-allowed
-                  disabled:opacity-60
-                "
-              />
+              <div className="relative">
+
+
+                {/* =================================================
+                    PASSWORD INPUT
+                ================================================== */}
+
+                <input
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={login.password}
+                  onChange={(e) =>
+                    setLogin({
+                      ...login,
+                      password: e.target.value,
+                    })
+                  }
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  disabled={loginLoading}
+                  onKeyDown={
+                    handlePasswordKeyDown
+                  }
+                  className="
+                    w-full
+                    rounded-xl
+                    border
+                    border-slate-200
+                    bg-slate-50
+                    px-4
+                    py-3
+                    pr-12
+                    text-sm
+                    outline-none
+                    transition
+                    focus:border-indigo-500
+                    focus:bg-white
+                    focus:ring-4
+                    focus:ring-indigo-500/10
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                />
+
+
+                {/* =================================================
+                    SHOW / HIDE PASSWORD BUTTON
+                ================================================== */}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword(
+                      !showPassword
+                    )
+                  }
+                  disabled={loginLoading}
+                  className="
+                    absolute
+                    right-3
+                    top-1/2
+                    flex
+                    -translate-y-1/2
+                    items-center
+                    justify-center
+                    rounded-lg
+                    p-1.5
+                    text-slate-400
+                    transition
+                    hover:bg-slate-100
+                    hover:text-slate-600
+                    disabled:cursor-not-allowed
+                    disabled:opacity-50
+                  "
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  title={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                >
+
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+
+                </button>
+
+              </div>
 
             </div>
 
@@ -399,6 +537,8 @@ const Login = () => {
 
     </>
   );
+
 };
+
 
 export default Login;

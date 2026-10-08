@@ -11,6 +11,7 @@ import {
   X,
   Plug,
   ChevronDown,
+  ArrowLeft,
 
   // Workflow node icons
   Play,
@@ -658,10 +659,9 @@ const UserInputNode = (props) => (
   <Node {...props} type="userInput" />
 );
 
-// const ConditionNode = (props) => (
-//   <Node {...props} type="condition" />
-// );
-
+const MediaNode = (props) => (
+  <Node {...props} type="media" />
+);
 
 
 const ImageNode = (props) => (
@@ -711,12 +711,9 @@ const nodeTypes = {
   button: ButtonNode,
   menu: MenuNode,
   userInput: UserInputNode,
-  // condition: ConditionNode,
-
-
+  media: MediaNode,
   image: ImageNode,
   media_template: MediaTemplateNode,
-
   video: VideoNode,
   document: DocumentNode,
   pdf: PdfNode,
@@ -735,18 +732,9 @@ const palette = [
   ["button", "Button"],
   ["menu", "Menu"],
   ["userInput", "User Input"],
-
-  // ["condition", "Condition"],
-
   ["api", "API"],
-
-  // ["image", "Image"],
+  ["media", "Media"],
   ["media_template", "Media Template"],
-  // ["video", "Video"],
-  // ["document", "Document"],
-  // ["pdf", "PDF"],
-  // ["audio", "Audio"],
-
   ["delay", "Delay"],
   ["end", "End"],
 ];
@@ -758,15 +746,12 @@ const paletteIcons = {
   button: MousePointerClick,
   menu: MenuIcon,
   userInput: Keyboard,
-
   condition: GitBranch,
-
   // API
   api: Plug,
-
+  media: ImageIcon,
   // MEDIA
   media_template: ImageIcon,
-
   delay: Clock3,
   end: Square,
 };
@@ -913,29 +898,24 @@ const [form, setForm] = useState({
   apiTimeout: 30,
 
 
-  // =====================================================
-  // MEDIA
-  // =====================================================
-
   mediaId: "",
-
-  imageUrl: "",
-
-  videoUrl: "",
-
-  documentUrl: "",
-
-  audioUrl: "",
-
+  mediaType: "image",
   mediaUrl: "",
+  mediaName: "",
+  mediaMimeType: "",
 
+  // Document filename
+  mediaFilename: "",
   fileName: "",
 
-  caption: "",
+  // Upload state
+  mediaUploading: false,
 
-  mediaType: "",
-
-
+  // Interactive media
+  mediaBody: "",
+  mediaFooter: "",
+  mediaButtons: [],
+  
   // =====================================================
   // TEMPLATE
   // =====================================================
@@ -1495,37 +1475,133 @@ otpVerifiedVariable:
   node.data?.otpVerifiedVariable ??
   node.data?.otp_verified_variable ??
   "otp_verified",
+
       // ===================================================
       // MEDIA
       // ===================================================
 
-      mediaId:
-        node.data?.mediaId || "",
+      // mediaId:
+      //   node.data?.mediaId || "",
 
-      imageUrl:
-        node.data?.imageUrl || "",
+      // imageUrl:
+      //   node.data?.imageUrl || "",
 
-      videoUrl:
-        node.data?.videoUrl || "",
+      // videoUrl:
+      //   node.data?.videoUrl || "",
 
-      documentUrl:
-        node.data?.documentUrl || "",
+      // documentUrl:
+      //   node.data?.documentUrl || "",
 
-      audioUrl:
-        node.data?.audioUrl || "",
+      // audioUrl:
+      //   node.data?.audioUrl || "",
 
-      mediaUrl:
-        node.data?.mediaUrl || "",
+      // mediaUrl:
+      //   node.data?.mediaUrl || "",
 
-      fileName:
-        node.data?.fileName || "",
+      // fileName:
+      //   node.data?.fileName || "",
 
-      caption:
-        node.data?.caption || "",
+      // caption:
+      //   node.data?.caption || "",
 
-      mediaType:
-        node.data?.mediaType || "",
+      // mediaType:
+      //   node.data?.mediaType || "",
 
+  
+  // ===================================================
+// NORMAL MEDIA
+// ===================================================
+
+mediaId:
+  node.data?.mediaId ??
+  node.data?.media_id ??
+  "",
+
+mediaType:
+  node.data?.mediaType ??
+  node.data?.media_type ??
+  "image",
+
+mediaUrl:
+  node.data?.mediaUrl ??
+  node.data?.media_url ??
+  node.data?.url ??
+  "",
+
+mediaName:
+  node.data?.mediaName ??
+  node.data?.media_name ??
+  node.data?.fileName ??
+  node.data?.file_name ??
+  "",
+
+mediaMimeType:
+  node.data?.mediaMimeType ??
+  node.data?.media_mime_type ??
+  node.data?.mimeType ??
+  node.data?.mime_type ??
+  "",
+
+// ===================================================
+// DOCUMENT FILENAME
+// ===================================================
+
+mediaFilename:
+  node.data?.mediaFilename ??
+  node.data?.media_filename ??
+  node.data?.fileName ??
+  node.data?.file_name ??
+  node.data?.mediaName ??
+  node.data?.media_name ??
+  "",
+
+fileName:
+  node.data?.fileName ??
+  node.data?.file_name ??
+  node.data?.mediaFilename ??
+  node.data?.media_filename ??
+  node.data?.mediaName ??
+  node.data?.media_name ??
+  "",
+
+// ===================================================
+// UPLOAD STATE
+// ===================================================
+
+mediaUploading: false,
+
+// ===================================================
+// INTERACTIVE MEDIA BODY
+// ===================================================
+
+mediaBody:
+  node.data?.mediaBody ??
+  node.data?.media_body ??
+  node.data?.body ??
+  "",
+
+// ===================================================
+// INTERACTIVE MEDIA FOOTER
+// ===================================================
+
+mediaFooter:
+  node.data?.mediaFooter ??
+  node.data?.media_footer ??
+  node.data?.footer ??
+  "",
+
+// ===================================================
+// INTERACTIVE MEDIA BUTTONS
+// ===================================================
+
+mediaButtons:
+  Array.isArray(node.data?.mediaButtons)
+    ? node.data.mediaButtons
+    : Array.isArray(node.data?.media_buttons)
+    ? node.data.media_buttons
+    : Array.isArray(node.data?.buttons)
+    ? node.data.buttons
+    : [],
 
 // ===================================================
 // MEDIA TEMPLATE
@@ -2171,6 +2247,345 @@ const uploadTemplateMedia = async (file) => {
       </div>
     );
   };
+
+
+
+  // =======================================================
+// DETECT NORMAL MEDIA TYPE
+// =======================================================
+
+const detectMediaType = (file) => {
+  const mime = String(file?.type || "").toLowerCase();
+
+  if (mime.startsWith("image/")) {
+    return "image";
+  }
+
+  if (mime.startsWith("video/")) {
+    return "video";
+  }
+
+  if (mime.startsWith("audio/")) {
+    return "audio";
+  }
+
+  if (
+    mime === "application/pdf"
+  ) {
+    return "document";
+  }
+
+  if (
+    mime.includes("msword") ||
+    mime.includes("wordprocessingml") ||
+    mime.includes("ms-excel") ||
+    mime.includes("spreadsheet") ||
+    mime.includes("ms-powerpoint") ||
+    mime.includes("presentation") ||
+    mime.startsWith("text/")
+  ) {
+    return "document";
+  }
+
+  return "document";
+};
+
+
+// =======================================================
+// DETECT NORMAL MEDIA TYPE FROM URL
+// =======================================================
+
+const detectMediaTypeFromUrl = (url) => {
+  if (!url) {
+    return "";
+  }
+
+  const cleanUrl = String(url)
+    .split("?")[0]
+    .split("#")[0]
+    .toLowerCase();
+
+  if (
+    /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
+      cleanUrl
+    )
+  ) {
+    return "image";
+  }
+
+  if (
+    /\.(mp4|3gp|mov|webm|mkv)$/i.test(
+      cleanUrl
+    )
+  ) {
+    return "video";
+  }
+
+  if (
+    /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(
+      cleanUrl
+    )
+  ) {
+    return "audio";
+  }
+
+  if (
+    /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$/i.test(
+      cleanUrl
+    )
+  ) {
+    return "document";
+  }
+
+  return "";
+};
+
+
+// =======================================================
+// UPLOAD NORMAL MEDIA
+// =======================================================
+
+const uploadMedia = async (
+  file,
+  selectedMediaType = ""
+) => {
+  if (!file) {
+    return;
+  }
+
+  // =====================================================
+  // MAX FILE SIZE
+  // =====================================================
+
+  const maxSize = 50 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    toast.error(
+      "Maximum file size is 50 MB."
+    );
+    return;
+  }
+
+  try {
+    // ===================================================
+    // UPLOAD STATE
+    // ===================================================
+
+    setUploadingMedia(
+      selectedMediaType || "document"
+    );
+
+    updateField(
+      "mediaUploading",
+      true
+    );
+
+    // ===================================================
+    // DETECT MEDIA TYPE
+    // ===================================================
+
+    const detectedMediaType =
+      detectMediaType(file);
+
+    const mediaType =
+      selectedMediaType ||
+      detectedMediaType;
+
+    // ===================================================
+    // FORM DATA
+    // ===================================================
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      "media",
+      file
+    );
+
+    formData.append(
+      "media_type",
+      mediaType
+    );
+
+    // ===================================================
+    // WORKFLOW ID
+    // ===================================================
+
+    const workflowId =
+      node?.data?.workflow_id ||
+      node?.data?.workflowId ||
+      null;
+
+    if (workflowId) {
+      formData.append(
+        "workflow_id",
+        String(workflowId)
+      );
+    }
+
+    // ===================================================
+    // API TOKEN
+    // ===================================================
+
+    const token =
+      localStorage.getItem("token");
+
+    // ===================================================
+    // API CALL
+    // ===================================================
+
+    const response =
+      await axios.post(
+        `${API}/upload/media`,
+        formData,
+        {
+          headers: {
+            Accept:
+              "application/json",
+
+            ...(token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {}),
+          },
+        }
+      );
+
+    // ===================================================
+    // RESPONSE
+    // ===================================================
+
+    const media =
+      response?.data?.media;
+
+    if (!media?.url) {
+      throw new Error(
+        "Upload response URL missing."
+      );
+    }
+
+    // ===================================================
+    // UPLOADED URL
+    // ===================================================
+
+    const uploadedUrl =
+      media.url;
+
+    // ===================================================
+    // FILE NAME
+    // ===================================================
+
+    const uploadedFileName =
+      media.original_name ||
+      media.file_name ||
+      file.name;
+
+    // ===================================================
+    // MEDIA ID
+    // ===================================================
+
+    const uploadedMediaId =
+      media.id || "";
+
+    // ===================================================
+    // MEDIA MIME TYPE
+    // ===================================================
+
+    const uploadedMimeType =
+      media.mime_type ||
+      media.mimeType ||
+      file.type ||
+      "";
+
+    // ===================================================
+    // MEDIA TYPE FROM RESPONSE
+    // ===================================================
+
+    const uploadedMediaType =
+      media.media_type ||
+      media.mediaType ||
+      mediaType;
+
+    // ===================================================
+    // SAVE NORMAL MEDIA DATA
+    // ===================================================
+
+    setForm((previous) => ({
+      ...previous,
+
+      mediaId:
+        uploadedMediaId,
+
+      mediaType:
+        uploadedMediaType,
+
+      mediaUrl:
+        uploadedUrl,
+
+      mediaName:
+        uploadedFileName,
+
+      mediaMimeType:
+        uploadedMimeType,
+
+      fileName:
+        uploadedFileName,
+
+      mediaUploading:
+        false,
+    }));
+
+    // ===================================================
+    // SUCCESS
+    // ===================================================
+
+    toast.success(
+      `${uploadedMediaType.toUpperCase()} uploaded successfully.`
+    );
+
+  } catch (error) {
+
+    // ===================================================
+    // ERROR LOG
+    // ===================================================
+
+    console.error(
+      "NORMAL MEDIA UPLOAD ERROR:",
+      error
+    );
+
+    // ===================================================
+    // RESET UPLOAD STATE
+    // ===================================================
+
+    updateField(
+      "mediaUploading",
+      false
+    );
+
+    // ===================================================
+    // ERROR MESSAGE
+    // ===================================================
+
+    toast.error(
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message ||
+      "Media upload failed."
+    );
+
+  } finally {
+
+    // ===================================================
+    // RESET UPLOADING TYPE
+    // ===================================================
+
+    setUploadingMedia(null);
+  }
+};
 
   // =======================================================
   // MENU OPTION UPDATE
@@ -4637,12 +5052,12 @@ const update = () => {
                 }
                 rows={12}
                 placeholder={`{
-  "mobile": "{{mobile}}",
-  "name": "{{name}}",
-  "email": "{{email}}",
-  "order_id": "{{order_id}}",
-  "source": "whatsapp"
-}`}
+                "mobile": "{{mobile}}",
+                "name": "{{name}}",
+                "email": "{{email}}",
+                "order_id": "{{order_id}}",
+                "source": "whatsapp"
+              }`}
                 className={`${textareaClass} font-mono text-xs`}
               />
 
@@ -4676,11 +5091,11 @@ const update = () => {
                 }
                 rows={12}
                 placeholder={`{
-  "mobile": "{{mobile}}",
-  "name": "{{name}}",
-  "email": "{{email}}",
-  "order_id": "{{order_id}}"
-}`}
+                  "mobile": "{{mobile}}",
+                  "name": "{{name}}",
+                  "email": "{{email}}",
+                  "order_id": "{{order_id}}"
+                }`}
                 className={`${textareaClass} font-mono text-xs`}
               />
 
@@ -4991,8 +5406,8 @@ order_id={{order_id}}`}
                 }
                 rows={5}
                 placeholder={`{
-  "source": "whatsapp"
-}`}
+                  "source": "whatsapp"
+                }`}
                 className={`${textareaClass} font-mono text-xs`}
               />
 
@@ -5984,6 +6399,1271 @@ order_id={{order_id}}`}
 
           </div>
         )}
+
+      </div>
+
+    </div>
+
+  </>
+)}
+
+
+{/* =====================================================
+    NORMAL MEDIA NODE
+====================================================== */}
+
+{node?.type === "media" && (
+  <>
+
+    {/* =================================================
+        MEDIA TYPE
+    ================================================== */}
+
+    <div>
+      <label className={labelClass}>
+        Media Type
+      </label>
+
+      <select
+        value={form.mediaType || "image"}
+        onChange={(e) => {
+          const type = e.target.value;
+
+          updateField(
+            "mediaType",
+            type
+          );
+
+          // ---------------------------------------------
+          // AUDIO DOES NOT SUPPORT INTERACTIVE BUTTONS
+          // ---------------------------------------------
+          if (type === "audio") {
+            updateField(
+              "mediaButtons",
+              []
+            );
+
+            updateField(
+              "mediaBody",
+              ""
+            );
+
+            updateField(
+              "mediaFooter",
+              ""
+            );
+          }
+        }}
+        className={inputClass}
+      >
+        <option value="image">
+          Image
+        </option>
+
+        <option value="document">
+          Document
+        </option>
+
+        <option value="video">
+          Video
+        </option>
+
+        <option value="audio">
+          Audio
+        </option>
+      </select>
+
+      <p className="mt-2 text-[11px] text-slate-400">
+        Select the type of media you want to send through WhatsApp.
+      </p>
+    </div>
+
+
+    {/* =================================================
+        MEDIA UPLOAD
+    ================================================== */}
+
+    <div>
+      <label className={labelClass}>
+        Upload Media
+      </label>
+
+      <div
+        className="
+          mt-2
+          rounded-xl
+          border
+          border-dashed
+          border-fuchsia-300
+          bg-fuchsia-50/50
+          p-4
+        "
+      >
+
+        <label
+          className={`
+            flex
+            cursor-pointer
+            flex-col
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-fuchsia-200
+            bg-white
+            px-4
+            py-6
+            text-center
+            transition
+            hover:border-fuchsia-400
+            hover:bg-fuchsia-50
+            ${
+              form.mediaUploading
+                ? "pointer-events-none opacity-60"
+                : ""
+            }
+          `}
+        >
+
+          {form.mediaUploading ? (
+            <>
+              <Loader2
+                className="
+                  h-8
+                  w-8
+                  animate-spin
+                  text-fuchsia-600
+                "
+              />
+
+              <span
+                className="
+                  mt-2
+                  text-sm
+                  font-semibold
+                  text-fuchsia-700
+                "
+              >
+                Uploading...
+              </span>
+            </>
+          ) : (
+            <>
+              <Upload
+                className="
+                  h-8
+                  w-8
+                  text-fuchsia-600
+                "
+              />
+
+              <span
+                className="
+                  mt-2
+                  text-sm
+                  font-semibold
+                  text-slate-700
+                "
+              >
+                Upload Media
+              </span>
+
+              <span
+                className="
+                  mt-1
+                  text-[11px]
+                  text-slate-400
+                "
+              >
+                Image, Document, Audio or Video
+              </span>
+            </>
+          )}
+
+          <input
+            type="file"
+            className="hidden"
+            disabled={form.mediaUploading}
+            accept="
+              image/*
+              ,application/pdf
+              ,application/msword
+              ,application/vnd.openxmlformats-officedocument.wordprocessingml.document
+              ,application/vnd.ms-excel
+              ,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+              ,application/vnd.ms-powerpoint
+              ,application/vnd.openxmlformats-officedocument.presentationml.presentation
+              ,text/plain
+              ,text/csv
+              ,audio/*
+              ,video/*
+            "
+            onChange={(e) => {
+
+              const file =
+                e.target.files?.[0];
+
+              if (file) {
+                uploadMedia(file);
+              }
+
+              e.target.value = "";
+            }}
+          />
+
+        </label>
+
+
+        {/* =================================================
+            UPLOADED MEDIA
+        ================================================== */}
+
+        {form.mediaUrl && (
+          <div
+            className="
+              mt-3
+              rounded-xl
+              border
+              border-slate-200
+              bg-white
+              p-3
+            "
+          >
+
+            <div
+              className="
+                flex
+                items-start
+                gap-3
+              "
+            >
+
+              {/* =========================================
+                  MEDIA PREVIEW ICON
+              ========================================== */}
+
+              <div
+                className="
+                  flex
+                  h-14
+                  w-14
+                  shrink-0
+                  items-center
+                  justify-center
+                  overflow-hidden
+                  rounded-lg
+                  bg-fuchsia-50
+                "
+              >
+
+                {/* IMAGE */}
+
+                {(
+                  form.mediaMimeType === "image" ||
+                  form.mediaMimeType?.startsWith("image/")
+                ) ? (
+
+                  <img
+                    src={form.mediaUrl}
+                    alt={
+                      form.mediaName ||
+                      "Uploaded media"
+                    }
+                    className="
+                      h-full
+                      w-full
+                      object-cover
+                    "
+                  />
+
+                ) : (
+
+                  /* VIDEO */
+
+                  form.mediaMimeType === "video" ||
+                  form.mediaMimeType?.startsWith("video/")
+                ) ? (
+
+                  <Video
+                    className="
+                      h-7
+                      w-7
+                      text-fuchsia-600
+                    "
+                  />
+
+                ) : (
+
+                  /* AUDIO */
+
+                  form.mediaMimeType === "audio" ||
+                  form.mediaMimeType?.startsWith("audio/")
+                ) ? (
+
+                  <Volume2
+                    className="
+                      h-7
+                      w-7
+                      text-fuchsia-600
+                    "
+                  />
+
+                ) : (
+
+                  /* DOCUMENT */
+
+                  <FileText
+                    className="
+                      h-7
+                      w-7
+                      text-fuchsia-600
+                    "
+                  />
+
+                )}
+
+              </div>
+
+
+              {/* =========================================
+                  FILE INFO
+              ========================================== */}
+
+              <div
+                className="
+                  min-w-0
+                  flex-1
+                "
+              >
+
+                <p
+                  className="
+                    truncate
+                    text-sm
+                    font-semibold
+                    text-slate-700
+                  "
+                >
+                  {form.mediaName ||
+                    "Uploaded Media"}
+                </p>
+
+
+                <p
+                  className="
+                    mt-1
+                    text-[11px]
+                    text-slate-400
+                  "
+                >
+                  Type:{" "}
+                  {form.mediaMimeType ||
+                    form.mediaType ||
+                    "media"}
+                </p>
+
+
+                {form.mediaId && (
+                  <p
+                    className="
+                      mt-1
+                      text-[10px]
+                      text-slate-400
+                    "
+                  >
+                    Media ID: {form.mediaId}
+                  </p>
+                )}
+
+
+                <p
+                  className="
+                    mt-1
+                    truncate
+                    text-[10px]
+                    text-slate-400
+                  "
+                >
+                  {form.mediaUrl}
+                </p>
+
+              </div>
+
+
+              {/* =========================================
+                  REMOVE MEDIA
+              ========================================== */}
+
+              <button
+                type="button"
+                onClick={() => {
+
+                  setForm((previous) => ({
+                    ...previous,
+
+                    mediaId: "",
+                    mediaUrl: "",
+                    mediaName: "",
+                    mediaMimeType: "",
+                    mediaFilename: "",
+                    fileName: "",
+                  }));
+
+                }}
+                className="
+                  rounded-lg
+                  p-2
+                  text-slate-400
+                  transition
+                  hover:bg-red-50
+                  hover:text-red-500
+                "
+                title="Remove media"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+
+      <p
+        className="
+          mt-2
+          text-[11px]
+          text-slate-400
+        "
+      >
+        Maximum file size: 50 MB.
+      </p>
+
+    </div>
+
+
+    {/* =================================================
+        MEDIA URL
+    ================================================== */}
+
+    <div>
+      <label className={labelClass}>
+        Media URL
+      </label>
+
+      <input
+        type="url"
+        value={form.mediaUrl || ""}
+        onChange={(e) =>
+          updateField(
+            "mediaUrl",
+            e.target.value
+          )
+        }
+        placeholder="https://example.com/media.jpg"
+        className={inputClass}
+      />
+
+      <p
+        className="
+          mt-2
+          text-[11px]
+          text-slate-400
+        "
+      >
+        Upload a file above or enter a public HTTPS URL manually.
+      </p>
+
+    </div>
+
+
+    {/* =================================================
+        DOCUMENT FILENAME
+    ================================================== */}
+
+    {form.mediaType === "document" && (
+      <div>
+
+        <label className={labelClass}>
+          Filename
+        </label>
+
+        <input
+          type="text"
+          value={
+            form.mediaFilename ||
+            form.fileName ||
+            ""
+          }
+          onChange={(e) => {
+
+            updateField(
+              "mediaFilename",
+              e.target.value
+            );
+
+            updateField(
+              "fileName",
+              e.target.value
+            );
+
+          }}
+          placeholder="Jaquar-Catalog.pdf"
+          className={inputClass}
+        />
+
+        <p
+          className="
+            mt-2
+            text-[11px]
+            text-slate-400
+          "
+        >
+          Filename shown to the WhatsApp user.
+        </p>
+
+      </div>
+    )}
+
+
+    {/* =================================================
+        INTERACTIVE BODY
+        IMAGE / VIDEO / DOCUMENT ONLY
+    ================================================== */}
+
+    {(
+      form.mediaType === "image" ||
+      form.mediaType === "video" ||
+      form.mediaType === "document"
+    ) && (
+
+      <div>
+
+        <label className={labelClass}>
+          Message Body
+        </label>
+
+        <textarea
+          value={
+            form.mediaBody || ""
+          }
+          onChange={(e) =>
+            updateField(
+              "mediaBody",
+              e.target.value
+            )
+          }
+          rows={3}
+          placeholder="Enter message body..."
+          className={textareaClass}
+        />
+
+        <p
+          className="
+            mt-2
+            text-[11px]
+            text-slate-400
+          "
+        >
+          This text is used with WhatsApp interactive buttons.
+        </p>
+
+      </div>
+    )}
+
+
+    {/* =================================================
+        FOOTER
+        IMAGE / VIDEO / DOCUMENT ONLY
+    ================================================== */}
+
+    {(
+      form.mediaType === "image" ||
+      form.mediaType === "video" ||
+      form.mediaType === "document"
+    ) && (
+
+      <div>
+
+        <label className={labelClass}>
+          Footer
+        </label>
+
+        <input
+          type="text"
+          value={
+            form.mediaFooter || ""
+          }
+          onChange={(e) =>
+            updateField(
+              "mediaFooter",
+              e.target.value
+            )
+          }
+          placeholder="Optional footer text"
+          className={inputClass}
+        />
+
+        <p
+          className="
+            mt-2
+            text-[11px]
+            text-slate-400
+          "
+        >
+          Optional footer shown below the message body.
+        </p>
+
+      </div>
+    )}
+
+
+    {/* =================================================
+        BUTTONS
+        IMAGE / VIDEO / DOCUMENT ONLY
+    ================================================== */}
+
+    {(
+      form.mediaType === "image" ||
+      form.mediaType === "video" ||
+      form.mediaType === "document"
+    ) && (
+
+      <div>
+
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+          "
+        >
+
+          <label className={labelClass}>
+            Buttons
+          </label>
+
+          <span
+            className="
+              text-[10px]
+              text-slate-400
+            "
+          >
+            Maximum 3
+          </span>
+
+        </div>
+
+
+        <div className="mt-2 space-y-2">
+
+          {(
+            Array.isArray(form.mediaButtons)
+              ? form.mediaButtons
+              : []
+          ).map((button, index) => (
+
+            <div
+              key={index}
+              className="
+                rounded-xl
+                border
+                border-slate-200
+                bg-white
+                p-3
+              "
+            >
+
+              <div className="flex gap-2">
+
+                {/* BUTTON ID */}
+
+                <input
+                  type="text"
+                  value={
+                    button?.id || ""
+                  }
+                  onChange={(e) => {
+
+                    const buttons = [
+                      ...(form.mediaButtons || [])
+                    ];
+
+                    buttons[index] = {
+                      ...buttons[index],
+                      id: e.target.value,
+                    };
+
+                    updateField(
+                      "mediaButtons",
+                      buttons
+                    );
+
+                  }}
+                  placeholder="Button ID"
+                  className={inputClass}
+                />
+
+
+                {/* BUTTON TITLE */}
+
+                <input
+                  type="text"
+                  value={
+                    button?.title || ""
+                  }
+                  onChange={(e) => {
+
+                    const buttons = [
+                      ...(form.mediaButtons || [])
+                    ];
+
+                    buttons[index] = {
+                      ...buttons[index],
+                      title: e.target.value,
+                    };
+
+                    updateField(
+                      "mediaButtons",
+                      buttons
+                    );
+
+                  }}
+                  placeholder="Button title"
+                  className={inputClass}
+                />
+
+
+                {/* REMOVE BUTTON */}
+
+                <button
+                  type="button"
+                  onClick={() => {
+
+                    const buttons = [
+                      ...(form.mediaButtons || [])
+                    ];
+
+                    buttons.splice(
+                      index,
+                      1
+                    );
+
+                    updateField(
+                      "mediaButtons",
+                      buttons
+                    );
+
+                  }}
+                  className="
+                    shrink-0
+                    rounded-lg
+                    p-2
+                    text-slate-400
+                    hover:bg-red-50
+                    hover:text-red-500
+                  "
+                  title="Remove button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+              </div>
+
+            </div>
+
+          ))}
+
+
+          {/* ADD BUTTON */}
+
+          {(
+            Array.isArray(form.mediaButtons)
+              ? form.mediaButtons
+              : []
+          ).length < 3 && (
+
+            <button
+              type="button"
+              onClick={() => {
+
+                const buttons = [
+                  ...(form.mediaButtons || [])
+                ];
+
+                buttons.push({
+                  id:
+                    `source-option-${buttons.length}`,
+                  title:
+                    `Option ${buttons.length + 1}`,
+                });
+
+                updateField(
+                  "mediaButtons",
+                  buttons
+                );
+
+              }}
+              className="
+                w-full
+                rounded-xl
+                border
+                border-dashed
+                border-fuchsia-300
+                bg-fuchsia-50
+                px-3
+                py-3
+                text-xs
+                font-semibold
+                text-fuchsia-700
+                hover:bg-fuchsia-100
+              "
+            >
+              + Add Button
+            </button>
+
+          )}
+
+        </div>
+
+
+        <p
+          className="
+            mt-2
+            text-[11px]
+            text-slate-400
+          "
+        >
+          Maximum 3 WhatsApp interactive reply buttons.
+        </p>
+
+      </div>
+
+    )}
+
+
+    {/* =================================================
+        AUDIO INFORMATION
+    ================================================== */}
+
+    {form.mediaType === "audio" && (
+
+      <div
+        className="
+          rounded-xl
+          border
+          border-amber-200
+          bg-amber-50
+          p-4
+        "
+      >
+
+        <div className="flex items-start gap-3">
+
+          <Volume2
+            className="
+              mt-0.5
+              h-5
+              w-5
+              shrink-0
+              text-amber-600
+            "
+          />
+
+          <div>
+
+            <p
+              className="
+                text-xs
+                font-bold
+                text-amber-700
+              "
+            >
+              Audio Message
+            </p>
+
+            <p
+              className="
+                mt-1
+                text-[11px]
+                leading-5
+                text-amber-700
+              "
+            >
+              Audio is sent as a normal WhatsApp audio
+              message. Interactive buttons are not available
+              for audio.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    )}
+
+
+    {/* =================================================
+        PREVIEW
+    ================================================== */}
+
+    <div
+      className="
+        rounded-xl
+        border
+        border-fuchsia-200
+        bg-fuchsia-50
+        p-4
+      "
+    >
+
+      <div className="flex items-center gap-2">
+
+        <ImageIcon
+          className="
+            h-4
+            w-4
+            text-fuchsia-600
+          "
+        />
+
+        <p
+          className="
+            text-[10px]
+            font-bold
+            uppercase
+            tracking-wide
+            text-fuchsia-600
+          "
+        >
+          Media Preview
+        </p>
+
+      </div>
+
+
+      <div
+        className="
+          mt-3
+          overflow-hidden
+          rounded-xl
+          bg-white
+          shadow-sm
+        "
+      >
+
+        {/* =================================================
+            IMAGE PREVIEW
+        ================================================== */}
+
+        {form.mediaUrl &&
+        (
+          form.mediaMimeType === "image" ||
+          form.mediaMimeType?.startsWith("image/") ||
+          form.mediaType === "image"
+        ) ? (
+
+          <img
+            src={form.mediaUrl}
+            alt={
+              form.mediaName ||
+              "Media"
+            }
+            className="
+              max-h-64
+              w-full
+              object-contain
+            "
+          />
+
+        ) : form.mediaUrl &&
+          (
+            form.mediaMimeType === "video" ||
+            form.mediaMimeType?.startsWith("video/") ||
+            form.mediaType === "video"
+          ) ? (
+
+          /* =================================================
+              VIDEO PREVIEW
+          ================================================== */
+
+          <div className="bg-black p-2">
+
+            <video
+              src={form.mediaUrl}
+              controls
+              className="
+                max-h-64
+                w-full
+                rounded-lg
+              "
+            />
+
+          </div>
+
+        ) : form.mediaUrl &&
+          (
+            form.mediaMimeType === "audio" ||
+            form.mediaMimeType?.startsWith("audio/") ||
+            form.mediaType === "audio"
+          ) ? (
+
+          /* =================================================
+              AUDIO PREVIEW
+          ================================================== */
+
+          <div
+            className="
+              flex
+              flex-col
+              items-center
+              justify-center
+              p-6
+            "
+          >
+
+            <Volume2
+              className="
+                h-10
+                w-10
+                text-fuchsia-600
+              "
+            />
+
+            <p
+              className="
+                mt-2
+                text-xs
+                font-semibold
+                text-slate-700
+              "
+            >
+              {form.mediaName ||
+                "Audio File"}
+            </p>
+
+            <audio
+              src={form.mediaUrl}
+              controls
+              className="mt-3 w-full"
+            />
+
+          </div>
+
+        ) : form.mediaUrl ? (
+
+          /* =================================================
+              DOCUMENT PREVIEW
+          ================================================== */
+
+          <div
+            className="
+              flex
+              flex-col
+              items-center
+              justify-center
+              p-8
+            "
+          >
+
+            <FileText
+              className="
+                h-10
+                w-10
+                text-fuchsia-500
+              "
+            />
+
+            <p
+              className="
+                mt-2
+                text-xs
+                font-semibold
+                text-slate-700
+              "
+            >
+              {form.mediaName ||
+                form.mediaFilename ||
+                form.fileName ||
+                "Document"}
+            </p>
+
+            <a
+              href={form.mediaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="
+                mt-3
+                rounded-lg
+                bg-fuchsia-100
+                px-3
+                py-2
+                text-[11px]
+                font-bold
+                text-fuchsia-700
+                hover:bg-fuchsia-200
+              "
+            >
+              Open Media
+            </a>
+
+          </div>
+
+        ) : (
+
+          /* =================================================
+              EMPTY PREVIEW
+          ================================================== */
+
+          <div
+            className="
+              flex
+              h-32
+              items-center
+              justify-center
+              bg-slate-100
+            "
+          >
+
+            <ImageIcon
+              className="
+                h-8
+                w-8
+                text-slate-300
+              "
+            />
+
+          </div>
+
+        )}
+
+      </div>
+
+    </div>
+
+
+    {/* =================================================
+        CONFIGURATION INFO
+    ================================================== */}
+
+    <div
+      className="
+        rounded-xl
+        border
+        border-fuchsia-200
+        bg-fuchsia-50
+        p-4
+      "
+    >
+
+      <p
+        className="
+          text-[10px]
+          font-bold
+          uppercase
+          tracking-wide
+          text-fuchsia-600
+        "
+      >
+        Media Configuration
+      </p>
+
+
+      <div className="mt-3 space-y-2 text-xs">
+
+        {/* TYPE */}
+
+        <div className="flex justify-between gap-3">
+
+          <span className="text-slate-500">
+            Type
+          </span>
+
+          <span
+            className="
+              font-bold
+              uppercase
+              text-slate-700
+            "
+          >
+            {form.mediaType || "image"}
+          </span>
+
+        </div>
+
+
+        {/* FILE */}
+
+        <div className="flex justify-between gap-3">
+
+          <span className="text-slate-500">
+            File
+          </span>
+
+          <span
+            className="
+              max-w-[60%]
+              truncate
+              font-bold
+              text-slate-700
+            "
+          >
+            {form.mediaName ||
+              "Not uploaded"}
+          </span>
+
+        </div>
+
+
+        {/* MEDIA ID */}
+
+        <div className="flex justify-between gap-3">
+
+          <span className="text-slate-500">
+            Media ID
+          </span>
+
+          <span
+            className="
+              max-w-[60%]
+              truncate
+              font-bold
+              text-slate-700
+            "
+          >
+            {form.mediaId || "—"}
+          </span>
+
+        </div>
+
+
+        {/* BUTTON COUNT */}
+
+        <div className="flex justify-between gap-3">
+
+          <span className="text-slate-500">
+            Buttons
+          </span>
+
+          <span
+            className="
+              font-bold
+              text-slate-700
+            "
+          >
+            {form.mediaType === "audio"
+              ? "Not available"
+              : `${(
+                  Array.isArray(form.mediaButtons)
+                    ? form.mediaButtons
+                    : []
+                ).length}/3`}
+          </span>
+
+        </div>
 
       </div>
 
@@ -8848,9 +10528,36 @@ const save = async (publish = false) => {
           {/* LEFT */}
 
           <div className="flex min-w-0 items-center gap-3">
-            {/* LOGO */}
-
-            <div
+        
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard")}
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-xl
+                border
+                border-slate-200
+                bg-white
+                text-slate-600
+                shadow-sm
+                transition
+                hover:border-indigo-300
+                hover:bg-indigo-50
+                hover:text-indigo-600
+                focus:outline-none
+                focus:ring-4
+                focus:ring-indigo-500/10
+              "
+              title="Back to Admin Panel"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            {/* <div
               className="
                 hidden
                 h-10
@@ -8869,7 +10576,7 @@ const save = async (publish = false) => {
               <WorkflowIcon className="h-5 w-5" />
             </div>
 
-            {/* TITLE */}
+        
 
             <div className="hidden min-w-0 sm:block">
               <h1 className="truncate text-sm font-bold text-slate-900 md:text-base">
@@ -8880,7 +10587,7 @@ const save = async (publish = false) => {
               <p className="hidden text-xs text-slate-400 md:block">
                 Automation workspace
               </p>
-            </div>
+            </div> */}
 
             {/* WORKFLOW SELECT */}
 
@@ -9062,7 +10769,13 @@ const save = async (publish = false) => {
 
           </div>
 
-          {/* CENTER UNDO REDO */}
+       
+
+          {/* ACTIONS */}
+
+          <div className="flex items-center gap-2">
+
+               {/* CENTER UNDO REDO */}
 
           <div className="flex items-center gap-1.5">
             <button
@@ -9145,10 +10858,7 @@ const save = async (publish = false) => {
               <Redo2 className="h-4 w-4" />
             </button>
           </div>
-
-          {/* ACTIONS */}
-
-          <div className="flex items-center gap-2">
+          
             {/* SAVE */}
 
             <button
@@ -9215,7 +10925,7 @@ const save = async (publish = false) => {
 
             {/* LOGOUT */}
 
-            <button
+            {/* <button
               onClick={() => {
 
                 localStorage.removeItem("token");
@@ -9246,7 +10956,7 @@ const save = async (publish = false) => {
               <LogOut className="h-4 w-4" />
 
               Logout
-            </button>
+            </button> */}
           </div>
         </header>
 
