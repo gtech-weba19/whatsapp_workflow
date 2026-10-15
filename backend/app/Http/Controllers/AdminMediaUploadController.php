@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class MediaUploadController extends Controller
+class AdminMediaUploadController extends Controller
 {
     public function upload(Request $request)
     {

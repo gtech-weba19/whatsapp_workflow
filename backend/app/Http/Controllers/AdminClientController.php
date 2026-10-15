@@ -5,20 +5,28 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-class ClientController extends Controller
+class AdminClientController extends Controller
 {
-    /**
-     * GET /api/admin/clients
-     */
+
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'status' => [
+                'sometimes',
+                'nullable',
+                Rule::in(['active', 'inactive', 'suspended']),
+            ],
+        ]);
+
         $query = Tenant::query();
 
-        if ($request->filled('search')) {
-            $search = trim($request->search);
+        if (!empty($validated['search'])) {
+            $search = trim($validated['search']);
 
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -28,18 +36,12 @@ class ClientController extends Controller
             });
         }
 
-        if ($request->filled('status')) {
-            $query->where(
-                'status',
-                $request->status
-            );
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
         }
 
         $clients = $query
-            ->withCount([
-                'users',
-                'bots',
-            ])
+            ->withCount(['users', 'bots'])
             ->latest()
             ->get();
 
@@ -47,20 +49,15 @@ class ClientController extends Controller
             'success' => true,
             'message' => 'Clients fetched successfully.',
             'data' => $clients->map(
-                fn ($client) => $this->formatClient($client)
-            ),
+                fn (Tenant $client) => $this->formatClient($client)
+            )->values(),
         ]);
     }
 
-    /**
-     * GET /api/admin/clients/{client}
-     */
+
     public function show(Tenant $client): JsonResponse
     {
-        $client->loadCount([
-            'users',
-            'bots',
-        ]);
+        $client->loadCount(['users', 'bots']);
 
         return response()->json([
             'success' => true,
@@ -69,15 +66,14 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * POST /api/admin/clients
-     */
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => [
                 'required',
                 'string',
+                'min:2',
                 'max:255',
             ],
 
@@ -91,42 +87,57 @@ class ClientController extends Controller
 
             'email' => [
                 'nullable',
-                'email',
+                'email:rfc',
                 'max:255',
+                'unique:tenants,email',
             ],
 
             'mobile' => [
                 'nullable',
-                'string',
-                'max:20',
+                'regex:/^[6-9][0-9]{9}$/',
+                'unique:tenants,mobile',
             ],
 
             'status' => [
-                'nullable',
-                Rule::in([
-                    'active',
-                    'inactive',
-                    'suspended',
-                ]),
+                'sometimes',
+                'required',
+                Rule::in(['active', 'inactive', 'suspended']),
             ],
         ]);
 
         $name = trim($validated['name']);
 
-        $slug = !empty($validated['slug'])
-            ? Str::slug($validated['slug'])
-            : Str::slug($name);
+        if (mb_strlen($name) < 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Client name must contain at least 2 characters.',
+                'errors' => [
+                    'name' => ['Client name must contain at least 2 characters.'],
+                ],
+            ], 422);
+        }
 
-        /*
-         * Ensure slug is unique even when
-         * generated automatically.
-         */
-        $originalSlug = $slug;
+        $slugInput = trim((string) ($validated['slug'] ?? ''));
+
+        $originalSlug = Str::slug(
+            $slugInput !== '' ? $slugInput : $name
+        );
+
+        if ($originalSlug === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a name that can generate a valid slug.',
+                'errors' => [
+                    'slug' => ['A valid slug could not be generated.'],
+                ],
+            ], 422);
+        }
+
+
+        $slug = $originalSlug;
         $counter = 1;
 
-        while (
-            Tenant::where('slug', $slug)->exists()
-        ) {
+        while (Tenant::where('slug', $slug)->exists()) {
             $slug = $originalSlug . '-' . $counter;
             $counter++;
         }
@@ -139,10 +150,7 @@ class ClientController extends Controller
             'status' => $validated['status'] ?? 'active',
         ]);
 
-        $client->loadCount([
-            'users',
-            'bots',
-        ]);
+        $client->loadCount(['users', 'bots']);
 
         return response()->json([
             'success' => true,
@@ -151,18 +159,30 @@ class ClientController extends Controller
         ], 201);
     }
 
-    /**
-     * PUT/PATCH /api/admin/clients/{client}
-     */
+
     public function update(
         Request $request,
         Tenant $client
     ): JsonResponse {
+
+        $input = $request->all();
+
+        if (isset($input['slug']) && is_string($input['slug'])) {
+            $input['slug'] = Str::slug(trim($input['slug']));
+        }
+
+        if (isset($input['name']) && is_string($input['name'])) {
+            $input['name'] = trim($input['name']);
+        }
+
+        $request->replace($input);
+
         $validated = $request->validate([
             'name' => [
                 'sometimes',
                 'required',
                 'string',
+                'min:2',
                 'max:255',
             ],
 
@@ -172,50 +192,44 @@ class ClientController extends Controller
                 'string',
                 'max:255',
                 'alpha_dash',
-                Rule::unique('tenants', 'slug')
-                    ->ignore($client->id),
+                Rule::unique('tenants', 'slug')->ignore($client->id),
             ],
 
             'email' => [
+                'sometimes',
                 'nullable',
-                'email',
+                'email:rfc',
                 'max:255',
+                Rule::unique('tenants', 'email')->ignore($client->id),
             ],
 
             'mobile' => [
+                'sometimes',
                 'nullable',
-                'string',
-                'max:20',
+                'regex:/^[6-9][0-9]{9}$/',
+                Rule::unique('tenants', 'mobile')->ignore($client->id),
             ],
 
             'status' => [
                 'sometimes',
-                Rule::in([
-                    'active',
-                    'inactive',
-                    'suspended',
-                ]),
+                'required',
+                Rule::in(['active', 'inactive', 'suspended']),
             ],
         ]);
 
-        if (isset($validated['name'])) {
-            $validated['name'] = trim(
-                $validated['name']
-            );
-        }
-
-        if (isset($validated['slug'])) {
-            $validated['slug'] = Str::slug(
-                $validated['slug']
-            );
+        if (isset($validated['slug']) && $validated['slug'] === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Slug cannot be empty.',
+                'errors' => [
+                    'slug' => ['Slug cannot be empty.'],
+                ],
+            ], 422);
         }
 
         $client->update($validated);
 
-        $client->loadCount([
-            'users',
-            'bots',
-        ]);
+        $client->loadCount(['users', 'bots']);
 
         return response()->json([
             'success' => true,
@@ -224,9 +238,7 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * PATCH /api/admin/clients/{client}/status
-     */
+
     public function status(
         Request $request,
         Tenant $client
@@ -234,11 +246,7 @@ class ClientController extends Controller
         $validated = $request->validate([
             'status' => [
                 'required',
-                Rule::in([
-                    'active',
-                    'inactive',
-                    'suspended',
-                ]),
+                Rule::in(['active', 'inactive', 'suspended']),
             ],
         ]);
 
@@ -246,10 +254,7 @@ class ClientController extends Controller
             'status' => $validated['status'],
         ]);
 
-        $client->loadCount([
-            'users',
-            'bots',
-        ]);
+        $client->loadCount(['users', 'bots']);
 
         return response()->json([
             'success' => true,
@@ -258,23 +263,17 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * DELETE /api/admin/clients/{client}
-     */
+
     public function destroy(Tenant $client): JsonResponse
     {
-        /*
-         * Prevent accidental deletion when
-         * client still has users or bots.
-         */
+
         if (
             $client->users()->exists() ||
             $client->bots()->exists()
         ) {
             return response()->json([
                 'success' => false,
-                'message' =>
-                    'Client cannot be deleted because it has users or bots.',
+                'message' => 'Client cannot be deleted because it has users or bots.',
             ], 422);
         }
 
@@ -286,39 +285,22 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * Format client response.
-     */
+
     private function formatClient(Tenant $client): array
     {
         return [
             'id' => $client->id,
-
             'name' => $client->name,
-
             'slug' => $client->slug,
-
             'email' => $client->email,
-
             'mobile' => $client->mobile,
-
             'status' => $client->status,
 
-            'users_count' => isset($client->users_count)
-                ? (int) $client->users_count
-                : 0,
+            'users_count' => (int) ($client->users_count ?? 0),
+            'bots_count' => (int) ($client->bots_count ?? 0),
 
-            'bots_count' => isset($client->bots_count)
-                ? (int) $client->bots_count
-                : 0,
-
-            'created_at' => $client->created_at
-                ? $client->created_at->toISOString()
-                : null,
-
-            'updated_at' => $client->updated_at
-                ? $client->updated_at->toISOString()
-                : null,
+            'created_at' => $client->created_at?->toISOString(),
+            'updated_at' => $client->updated_at?->toISOString(),
         ];
     }
 }

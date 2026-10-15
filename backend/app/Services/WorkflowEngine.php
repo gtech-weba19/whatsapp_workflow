@@ -7317,27 +7317,21 @@ elseif (
         return $input['title'] ?? null;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SEND INPUT PROMPT
-    |--------------------------------------------------------------------------
-    */
-
-  private function sendInputPrompt(
+/*
+|--------------------------------------------------------------------------
+| SEND INPUT PROMPT
+|--------------------------------------------------------------------------
+*/
+private function sendInputPrompt(
     BotSession $session,
     array $cfg
 ): void {
 
-    $prompt =
-        $cfg['prompt']
-        ??
-        $cfg['message']
-        ??
-        '';
+    $prompt = $cfg['prompt']
+        ?? $cfg['message']
+        ?? '';
 
-    if (
-        trim((string) $prompt) === ''
-    ) {
+    if (trim((string) $prompt) === '') {
         return;
     }
 
@@ -7347,12 +7341,10 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $variables =
-        $session->variables ?? [];
+    $variables = $session->variables ?? [];
 
     if (is_string($variables)) {
-        $variables =
-            json_decode($variables, true) ?? [];
+        $variables = json_decode($variables, true) ?? [];
     }
 
     /*
@@ -7361,11 +7353,10 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $prompt =
-        $this->resolve(
-            (string) $prompt,
-            $variables
-        );
+    $prompt = $this->resolve(
+        (string) $prompt,
+        $variables
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7373,67 +7364,42 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $rawAllowSkip =
-        $cfg['allow_skip']
-        ??
-        $cfg['allowSkip']
-        ??
-        $cfg['skip']
-        ??
-        $cfg['is_optional']
-        ??
-        $cfg['optional']
-        ??
-        false;
+    $rawAllowSkip = $cfg['allow_skip']
+        ?? $cfg['allowSkip']
+        ?? $cfg['skip']
+        ?? $cfg['is_optional']
+        ?? $cfg['optional']
+        ?? false;
 
     if (is_bool($rawAllowSkip)) {
-
-        $allowSkip =
-            $rawAllowSkip;
-
+        $allowSkip = $rawAllowSkip;
     } elseif (is_numeric($rawAllowSkip)) {
-
-        $allowSkip =
-            ((int) $rawAllowSkip) === 1;
-
+        $allowSkip = ((int) $rawAllowSkip) === 1;
     } else {
-
-        $allowSkip =
-            in_array(
-                strtolower(
-                    trim(
-                        (string) $rawAllowSkip
-                    )
-                ),
-                [
-                    '1',
-                    'true',
-                    'yes',
-                    'on',
-                    'enabled',
-                    'allow',
-                    'allowed',
-                ],
-                true
-            );
+        $allowSkip = in_array(
+            strtolower(trim((string) $rawAllowSkip)),
+            [
+                '1',
+                'true',
+                'yes',
+                'on',
+                'enabled',
+                'allow',
+                'allowed',
+            ],
+            true
+        );
     }
 
     /*
     |--------------------------------------------------------------------------
-    | BUTTONS
+    | BUTTONS - NO EXIT BUTTON
     |--------------------------------------------------------------------------
     */
 
     $buttons = [];
 
-    /*
-    |--------------------------------------------------------------------------
-    | SKIP BUTTON
-    |--------------------------------------------------------------------------
-    */
-
     if ($allowSkip) {
-
         $buttons[] = [
             'id' => 'skip',
             'title' => 'Skip',
@@ -7442,27 +7408,31 @@ elseif (
 
     /*
     |--------------------------------------------------------------------------
-    | EXIT BUTTON
+    | SEND MESSAGE
     |--------------------------------------------------------------------------
     */
 
-    $buttons[] = [
-        'id' => 'exit',
-        'title' => 'Exit',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | SEND INTERACTIVE MESSAGE
-    |--------------------------------------------------------------------------
-    */
-
-    $output =
-        $this->whatsapp->sendInteractive(
+    if (empty($buttons)) {
+        $output = $this->whatsapp->sendText(
             $session->user_identifier,
-            $prompt,
-            $buttons
+            $prompt
         );
+
+        $this->saveOutbound(
+            $session,
+            'text',
+            $prompt,
+            $output
+        );
+
+        return;
+    }
+
+    $output = $this->whatsapp->sendInteractive(
+        $session->user_identifier,
+        $prompt,
+        $buttons
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7477,7 +7447,6 @@ elseif (
         $output
     );
 }
-
     /*
     |--------------------------------------------------------------------------
     | SAVE OUTBOUND
@@ -7504,13 +7473,13 @@ elseif (
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SEND MENU
-    |--------------------------------------------------------------------------
-    */
 
-   private function sendMenu(
+/*
+|--------------------------------------------------------------------------
+| SEND MENU
+|--------------------------------------------------------------------------
+*/
+private function sendMenu(
     BotSession $session,
     array $cfg
 ): void {
@@ -7528,19 +7497,28 @@ elseif (
         ??
         'Please select an option.';
 
-    $variables =
-        $session->variables ?? [];
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $variables = $session->variables ?? [];
 
     if (is_string($variables)) {
-        $variables =
-            json_decode($variables, true) ?? [];
+        $variables = json_decode($variables, true) ?? [];
     }
 
-    $message =
-        $this->resolve(
-            (string) $message,
-            $variables
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $message = $this->resolve(
+        (string) $message,
+        $variables
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7557,7 +7535,7 @@ elseif (
         ??
         [];
 
-    if (! is_array($options)) {
+    if (!is_array($options)) {
         $options = [];
     }
 
@@ -7565,12 +7543,11 @@ elseif (
 
     foreach ($options as $index => $option) {
 
-        if (! is_array($option)) {
+        if (!is_array($option)) {
             continue;
         }
 
-        $sourceHandle =
-            "source-option-{$index}";
+        $sourceHandle = "source-option-{$index}";
 
         $label =
             $option['label']
@@ -7581,10 +7558,7 @@ elseif (
             ??
             'Option ' . ($index + 1);
 
-        $label =
-            trim(
-                (string) $label
-            );
+        $label = trim((string) $label);
 
         if ($label === '') {
             continue;
@@ -7600,18 +7574,23 @@ elseif (
 
     /*
     |--------------------------------------------------------------------------
-    | SEND MENU OPTIONS
+    | SEND MENU OPTIONS ONLY - NO EXIT BUTTON
     |--------------------------------------------------------------------------
     */
 
-    if (! empty($normalizedOptions)) {
+    if (!empty($normalizedOptions)) {
 
-        $whatsappResponse =
-            $this->whatsapp->sendMenuButtons(
-                $session->user_identifier,
-                $message,
-                $normalizedOptions
-            );
+        $whatsappResponse = $this->whatsapp->sendMenuButtons(
+            $session->user_identifier,
+            $message,
+            $normalizedOptions
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | SAVE OUTBOUND MENU MESSAGE
+        |--------------------------------------------------------------------------
+        */
 
         $payload = [
             'type' => 'menu',
@@ -7628,65 +7607,6 @@ elseif (
             'payload' => $payload,
         ]);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | EXIT BUTTON
-    |--------------------------------------------------------------------------
-    |
-    | WhatsApp allows only 3 reply buttons.
-    | Therefore Exit is sent as a separate interactive message.
-    |
-    */
-
-    $exitMessage =
-        $cfg['exit_message']
-        ??
-        $cfg['exitMessage']
-        ??
-        'You can exit this journey anytime.';
-
-    $exitMessage =
-        $this->resolve(
-            (string) $exitMessage,
-            $variables
-        );
-
-    $exitResponse =
-        $this->whatsapp->sendInteractive(
-            $session->user_identifier,
-            $exitMessage,
-            [
-                [
-                    'id' => 'exit',
-                    'title' => 'Exit',
-                ],
-            ]
-        );
-
-    /*
-    |--------------------------------------------------------------------------
-    | SAVE EXIT MESSAGE
-    |--------------------------------------------------------------------------
-    */
-
-    BotMessage::create([
-        'bot_session_id' => $session->id,
-        'direction' => 'outbound',
-        'message_type' => 'interactive',
-        'text' => $exitMessage,
-        'payload' => [
-            'type' => 'interactive',
-            'message' => $exitMessage,
-            'buttons' => [
-                [
-                    'id' => 'exit',
-                    'title' => 'Exit',
-                ],
-            ],
-            'whatsapp_response' => $exitResponse,
-        ],
-    ]);
 }
 
     /*
@@ -8004,32 +7924,26 @@ elseif (
  * SEND TEXT WITH EXIT BUTTON
  * =====================================================
  */
+
 private function sendTextWithExit(
     BotSession $session,
     string $text
 ): array {
 
-    $output = $this->whatsapp->sendInteractive(
+    $output = $this->whatsapp->sendText(
         $session->user_identifier,
-        $text,
-        [
-            [
-                'id' => 'exit',
-                'title' => 'Exit',
-            ],
-        ]
+        $text
     );
 
     $this->saveOutbound(
         $session,
-        'interactive',
+        'text',
         $text,
         $output
     );
 
     return $output;
 }
-
 
 
 }

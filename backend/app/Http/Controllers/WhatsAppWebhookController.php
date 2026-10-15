@@ -74,7 +74,7 @@ class WhatsAppWebhookController extends Controller
         Request $request,
         WorkflowEngine $engine
     ) {
-           Log::info('🔥 WEBHOOK HANDLE ENTERED');
+           Log::info('ðŸ”¥ WEBHOOK HANDLE ENTERED');
 
                 $payload = $request->all();
 

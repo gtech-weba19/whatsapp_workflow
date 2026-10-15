@@ -31,6 +31,7 @@ import {
   Loader2,
   Upload,
   Zap
+
 } from "lucide-react";
 
 import ReactFlow, {
@@ -3253,31 +3254,28 @@ const update = () => {
 
       {node?.type === "menu" && (
         <>
-          <div>
-            <label className={labelClass}>
-              Main Menu Message
-            </label>
+        <div>
+  <label className={labelClass}>
+    Main Menu Message
+  </label>
 
-            <textarea
-              value={form.message}
-              onChange={(e) =>
-                updateField(
-                  "message",
-                  e.target.value
-                )
-              }
-              rows={5}
-              placeholder="Please select an option:"
-              className={
-                textareaClass
-              }
-            />
+  <textarea
+    value={form.message}
+    onChange={(e) =>
+      updateField("message", e.target.value)
+    }
+    rows={5}
+    placeholder="Please select an option:"
+    className={textareaClass}
+  />
 
-            <p className="mt-2 text-[11px] text-slate-400">
-              This message will be shown
-              above the menu options.
-            </p>
-          </div>
+  <div className="mt-2 flex items-center justify-between gap-3">
+    <p className="text-[11px] text-slate-400">
+      This message will be shown above the menu options.
+    </p>
+
+  </div>
+</div>
 
           {/* VARIABLE */}
 
@@ -3307,155 +3305,108 @@ const update = () => {
 
           {/* OPTIONS */}
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
-                Menu Options
-              </label>
+        
 
-              <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-600">
-                {form.menuOptions?.length ||
-                  0}
-                /10
-              </span>
+<div>
+  <div className="mb-2 flex items-center justify-between">
+    <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+      Menu Options
+    </label>
+
+    <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-600">
+      {form.menuOptions?.length || 0}/10
+    </span>
+  </div>
+
+  <div className="space-y-3">
+    {(form.menuOptions || []).map((option, index) => {
+      const label = option.label || "";
+      const length = Array.from(label).length;
+      const isTooLong = length > 24;
+
+      return (
+        <div
+          key={option.id || index}
+          className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-xs font-bold text-purple-600">
+              {index + 1}
             </div>
 
-            <div className="space-y-2">
-              {(form.menuOptions || []).map(
-                (option, index) => (
-                  <div
-                    key={
-                      option.id ||
-                      index
-                    }
-                    className="
-                      flex
-                      items-center
-                      gap-2
-                      rounded-xl
-                      border
-                      border-slate-200
-                      bg-slate-50
-                      p-2
-                    "
-                  >
-                    <div
-                      className="
-                        flex
-                        h-9
-                        w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-lg
-                        bg-purple-100
-                        text-xs
-                        font-bold
-                        text-purple-600
-                      "
-                    >
-                      {index + 1}
-                    </div>
-
-                    <input
-                      type="text"
-                      value={
-                        option.label ||
-                        ""
-                      }
-                      onChange={(e) =>
-                        updateMenuOption(
-                          index,
-                          e.target.value
-                        )
-                      }
-                      placeholder={`Option ${
-                        index + 1
-                      }`}
-                      className="
-                        min-w-0
-                        flex-1
-                        rounded-lg
-                        border
-                        border-slate-200
-                        bg-white
-                        px-3
-                        py-2.5
-                        text-sm
-                        text-slate-800
-                        outline-none
-                        focus:border-purple-500
-                        focus:ring-4
-                        focus:ring-purple-500/10
-                      "
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        removeMenuOption(
-                          index
-                        )
-                      }
-                      className="
-                        flex
-                        h-9
-                        w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-lg
-                        text-slate-400
-                        transition
-                        hover:bg-red-50
-                        hover:text-red-500
-                      "
-                      title="Remove option"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )
-              )}
-            </div>
+            <input
+              type="text"
+              value={label}
+              onChange={(e) =>
+                updateMenuOption(index, e.target.value)
+              }
+              placeholder={`Option ${index + 1}`}
+              className={`min-w-0 flex-1 rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-4 ${
+                isTooLong
+                  ? "border-amber-400 focus:border-amber-500 focus:ring-amber-500/10"
+                  : "border-slate-200 focus:border-purple-500 focus:ring-purple-500/10"
+              }`}
+            />
 
             <button
               type="button"
-              onClick={
-                addMenuOption
-              }
-              disabled={
-                (form.menuOptions || [])
-                  .length >= 10
-              }
-              className="
-                mt-3
-                flex
-                w-full
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                border
-                border-dashed
-                border-purple-300
-                bg-purple-50
-                px-4
-                py-3
-                text-xs
-                font-bold
-                text-purple-700
-                transition
-                hover:bg-purple-100
-                disabled:cursor-not-allowed
-                disabled:opacity-50
-              "
+              onClick={() => removeMenuOption(index)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+              title="Remove option"
             >
-              <Plus className="h-4 w-4" />
-
-              Add Menu Option
+              <X className="h-4 w-4" />
             </button>
           </div>
+
+          {/* CHARACTER VALIDATION */}
+          <div className="mt-2 flex items-start justify-between gap-2 pl-11">
+            {isTooLong ? (
+              <p className="text-[11px] leading-4 text-amber-700">
+                <span className="font-bold">Warning:</span>{" "}
+                WhatsApp row title maximum 24 characters hai.
+                API ke liye short title use karein.
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400">
+                WhatsApp title limit: 24 characters
+              </p>
+            )}
+
+            <span
+              className={`shrink-0 text-[11px] font-bold ${
+                isTooLong ? "text-amber-700" : "text-slate-500"
+              }`}
+            >
+              {length}/24
+            </span>
+          </div>
+
+          {/* PROVIDER TITLE PREVIEW */}
+          {isTooLong && (
+            <div className="mt-2 ml-11 rounded-lg border border-amber-200 bg-amber-50 p-2">
+              <p className="text-[10px] font-semibold uppercase text-amber-700">
+                Suggested WhatsApp title
+              </p>
+              <p className="mt-1 break-words text-xs text-slate-700">
+                {Array.from(label).slice(0, 24).join("")}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+
+  <button
+    type="button"
+    onClick={addMenuOption}
+    disabled={(form.menuOptions || []).length >= 10}
+    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-4 py-3 text-xs font-bold text-purple-700 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    <Plus className="h-4 w-4" />
+    Add Menu Option
+  </button>
+</div>
 
           {/* PREVIEW */}
 
@@ -8654,6 +8605,30 @@ const WorkflowBuilder = () => {
   const [saving, setSaving] =
     useState(false);
 
+    /* =======================================================
+   TENANT / BOT SELECTION
+======================================================= */
+
+const [tenants, setTenants] = useState([]);
+const [bots, setBots] = useState([]);
+
+const [selectedTenantId, setSelectedTenantId] = useState(
+  localStorage.getItem("workflow_tenant_id") || ""
+);
+
+const [selectedBotId, setSelectedBotId] = useState(
+  localStorage.getItem("workflow_bot_id") || ""
+);
+
+const [loadingTenants, setLoadingTenants] = useState(false);
+const [loadingBots, setLoadingBots] = useState(false);
+
+const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
+const [workflowFormName, setWorkflowFormName] = useState("");
+const [workflowFormDescription, setWorkflowFormDescription] = useState("");
+const [workflowModalMode, setWorkflowModalMode] = useState("add");
+
+
   /* =======================================================
      REACT FLOW
   ======================================================= */
@@ -8679,6 +8654,23 @@ const WorkflowBuilder = () => {
 
 const [reactFlowInstance, setReactFlowInstance] =
   useState(null);
+
+
+  const openUpdateWorkflowModal = () => {
+  const workflow = workflows.find(
+    (item) => String(item.id) === String(workflowId)
+  );
+
+  if (!workflow) {
+    toast.error("Please select a workflow first.");
+    return;
+  }
+
+  setWorkflowModalMode("update");
+  setWorkflowFormName(workflow.name || "");
+  setWorkflowFormDescription(workflow.description || "");
+  setWorkflowModalOpen(true);
+};
 
 
     /* =======================================================
@@ -9440,64 +9432,262 @@ const onDrop = useCallback(
       ]
     );
 
+
+/* =======================================================
+   LOAD TENANTS / CLIENTS
+======================================================= */
+
+useEffect(() => {
+  if (!token) return;
+
+  let cancelled = false;
+
+  const loadTenants = async () => {
+    setLoadingTenants(true);
+
+    try {
+      const response = await axios.get(
+        `${API}/bots/clients`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const payload = response.data?.data ?? response.data;
+      const list = Array.isArray(payload)
+        ? payload
+        : payload?.data ?? [];
+
+      if (!cancelled) {
+        setTenants(Array.isArray(list) ? list : []);
+      }
+    } catch (error) {
+      console.error("TENANT LOAD ERROR:", error);
+
+      if (!cancelled) {
+        toast.error(
+          error.response?.data?.message ||
+          "Unable to load clients."
+        );
+      }
+    } finally {
+      if (!cancelled) setLoadingTenants(false);
+    }
+  };
+
+  loadTenants();
+
+  return () => {
+    cancelled = true;
+  };
+}, [token]);
+
+/* =======================================================
+   LOAD BOTS FOR SELECTED TENANT
+======================================================= */
+
+useEffect(() => {
+  if (!token || !selectedTenantId) {
+    setBots([]);
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadBots = async () => {
+    setLoadingBots(true);
+
+    try {
+      const response = await axios.get(
+        `${API}/bots`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const payload = response.data?.data ?? response.data;
+      const list = Array.isArray(payload)
+        ? payload
+        : payload?.data ?? [];
+
+      const tenantBots = (Array.isArray(list) ? list : [])
+        .filter(
+          (bot) =>
+            String(bot.tenant_id ?? bot.client?.id) ===
+            String(selectedTenantId)
+        );
+
+      if (!cancelled) {
+        setBots(tenantBots);
+
+        // Clear a previously selected bot if it belongs
+        // to a different tenant.
+        setSelectedBotId((currentId) => {
+          const stillExists = tenantBots.some(
+            (bot) => String(bot.id) === String(currentId)
+          );
+
+          if (!stillExists) {
+            localStorage.removeItem("workflow_bot_id");
+            return "";
+          }
+
+          return currentId;
+        });
+      }
+    } catch (error) {
+      console.error("BOT LOAD ERROR:", error);
+
+      if (!cancelled) {
+        setBots([]);
+        toast.error(
+          error.response?.data?.message ||
+          "Unable to load bots."
+        );
+      }
+    } finally {
+      if (!cancelled) setLoadingBots(false);
+    }
+  };
+
+  loadBots();
+
+  return () => {
+    cancelled = true;
+  };
+}, [token, selectedTenantId]);
+
+/* =======================================================
+   LOAD BOTS FOR SELECTED TENANT
+======================================================= */
+
+useEffect(() => {
+  if (!token || !selectedTenantId) {
+    setBots([]);
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadBots = async () => {
+    setLoadingBots(true);
+
+    try {
+      const response = await axios.get(
+        `${API}/bots`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const payload = response.data?.data ?? response.data;
+      const list = Array.isArray(payload)
+        ? payload
+        : payload?.data ?? [];
+
+      const tenantBots = (Array.isArray(list) ? list : [])
+        .filter(
+          (bot) =>
+            String(bot.tenant_id ?? bot.client?.id) ===
+            String(selectedTenantId)
+        );
+
+      if (!cancelled) {
+        setBots(tenantBots);
+
+        // Clear a previously selected bot if it belongs
+        // to a different tenant.
+        setSelectedBotId((currentId) => {
+          const stillExists = tenantBots.some(
+            (bot) => String(bot.id) === String(currentId)
+          );
+
+          if (!stillExists) {
+            localStorage.removeItem("workflow_bot_id");
+            return "";
+          }
+
+          return currentId;
+        });
+      }
+    } catch (error) {
+      console.error("BOT LOAD ERROR:", error);
+
+      if (!cancelled) {
+        setBots([]);
+        toast.error(
+          error.response?.data?.message ||
+          "Unable to load bots."
+        );
+      }
+    } finally {
+      if (!cancelled) setLoadingBots(false);
+    }
+  };
+
+  loadBots();
+
+  return () => {
+    cancelled = true;
+  };
+}, [token, selectedTenantId]);
+
+
   /* =======================================================
      LOAD WORKFLOWS
   ======================================================= */
-
-  useEffect(() => {
-    if (!token) {
+useEffect(() => {
+  const loadWorkflows = async () => {
+    if (!token || !selectedTenantId || !selectedBotId) {
+      setWorkflows([]);
       return;
     }
 
-    const loadWorkflows =
-      async () => {
-        try {
-          setLoadingWorkflows(
-            true
-          );
+    try {
+      setLoadingWorkflows(true);
 
-          const response =
-            await axios.get(
-              API +
-                "/workflows",
-              {
-                headers: {
-                  Authorization:
-                    "Bearer " +
-                    token,
-                },
-              }
-            );
+      const response = await axios.get(`${API}/workflows`, {
+        params: {
+          tenant_id: selectedTenantId,
+          bot_id: selectedBotId,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
 
-          const list =
-            response.data?.data ||
-            [];
+      const payload = response.data?.data ?? response.data;
 
-          setWorkflows(
-            Array.isArray(list)
-              ? list
-              : []
-          );
-        } catch (error) {
-          console.error(
-            "WORKFLOW LIST ERROR:",
-            error
-          );
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
 
-          toast.error(
-            error?.response
-              ?.data?.message ||
-              "Unable to load workflows."
-          );
-        } finally {
-          setLoadingWorkflows(
-            false
-          );
-        }
-      };
+      setWorkflows(list);
 
-    loadWorkflows();
-  }, [token]);
+      console.log("Workflow API response:", response.data);
+      console.log("Loaded workflows:", list);
+    } catch (error) {
+      console.error(
+        "Workflow loading error:",
+        error.response?.data || error.message
+      );
+      setWorkflows([]);
+    } finally {
+      setLoadingWorkflows(false);
+    }
+  };
+
+  loadWorkflows();
+}, [token, selectedTenantId, selectedBotId]);
 
   /* =======================================================
      SELECT WORKFLOW
@@ -10199,13 +10389,12 @@ const save = async (publish = false) => {
         await axios.post(
           API + "/workflows",
 
-          {
+         {
             name,
-
-            channel:
-              "whatsapp",
+            channel: "whatsapp",
+            tenant_id: selectedTenantId,
+            bot_id: selectedBotId,
           },
-
           {
             headers,
           }
@@ -10557,161 +10746,456 @@ const save = async (publish = false) => {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            {/* <div
-              className="
-                hidden
-                h-10
-                w-10
-                shrink-0
-                items-center
-                justify-center
-                rounded-xl
-                bg-indigo-600
-                font-bold
-                text-white
-                shadow-sm
-                sm:flex
-              "
-            >
-              <WorkflowIcon className="h-5 w-5" />
-            </div>
 
-        
+            {/* =======================================================
+            TENANT SELECT
+        ======================================================= */}
 
-            <div className="hidden min-w-0 sm:block">
-              <h1 className="truncate text-sm font-bold text-slate-900 md:text-base">
-              Workflow
-                Builder
-              </h1>
+        <select
+          value={selectedTenantId}
+          disabled={loadingTenants}
+          onChange={(e) => {
+            const id = e.target.value;
 
-              <p className="hidden text-xs text-slate-400 md:block">
-                Automation workspace
-              </p>
-            </div> */}
+            setSelectedTenantId(id);
+            setSelectedBotId("");
 
-            {/* WORKFLOW SELECT */}
+            localStorage.removeItem("workflow_bot_id");
+            localStorage.setItem("workflow_tenant_id", id);
 
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  value={
-                    workflowId ||
-                    ""
-                  }
-                  onChange={(e) => {
-                    const id =
-                      e.target.value;
+            // Reset workflow selection when changing tenant.
+            localStorage.removeItem("workflow_id");
+            setWorkflowId(null);
+            setWorkflows([]);
+            setNodes([]);
+            setEdges([]);
+            setSelected(null);
+            setHistory([]);
+            setFuture([]);
+          }}
+          className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+        >
+          <option value="">
+            {loadingTenants ? "Loading clients..." : "Select Client"}
+          </option>
 
-                    if (!id) {
-                      return;
-                    }
+          {tenants.map((tenant) => (
+            <option key={tenant.id} value={String(tenant.id)}>
+              {tenant.name}
+            </option>
+          ))}
+        </select>
 
-                    selectWorkflow(
-                      id
-                    );
-                  }}
-                  className="
-                    h-10
-                    w-[220px]
-                    appearance-none
-                    rounded-xl
-                    border
-                    border-slate-200
-                    bg-white
-                    pl-4
-                    pr-10
-                    text-sm
-                    font-semibold
-                    text-slate-700
-                    shadow-sm
-                    outline-none
-                    transition
-                    hover:border-indigo-300
-                    focus:border-indigo-500
-                    focus:ring-4
-                    focus:ring-indigo-500/10
-                    md:w-[200px]
-                  "
-                >
-                  <option
-                    value=""
-                    disabled
-                  >
-                    {loadingWorkflows
-                      ? "Loading workflows..."
-                      : "Select Workflow"}
-                  </option>
+    {/* =======================================================
+        BOT SELECT
+    ======================================================= */}
 
-                  {workflows.map(
-                    (
-                      workflow
-                    ) => (
-                      <option
-                        key={
-                          workflow.id
-                        }
-                        value={
-                          workflow.id
-                        }
-                      >
-                        {
-                          workflow.name
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
+    <select
+      value={selectedBotId}
+      disabled={!selectedTenantId || loadingBots}
+      onChange={(e) => {
+        const id = e.target.value;
 
-                <div
-                  className="
-                    pointer-events-none
-                    absolute
-                    right-3
-                    top-1/2
-                    -translate-y-1/2
-                    text-slate-400
-                  "
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </div>
-              </div>
+        setSelectedBotId(id);
 
-              {/* NEW WORKFLOW */}
+        if (id) {
+          localStorage.setItem("workflow_bot_id", id);
+        } else {
+          localStorage.removeItem("workflow_bot_id");
+        }
 
-              <button
-                type="button"
-                onClick={
-                  newWorkflow
-                }
+        // Prevent editing a workflow from the previous bot.
+        localStorage.removeItem("workflow_id");
+        setWorkflowId(null);
+        setWorkflows([]);
+        setNodes([]);
+        setEdges([]);
+        setSelected(null);
+        setHistory([]);
+        setFuture([]);
+      }}
+      className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+    >
+      <option value="">
+        {!selectedTenantId
+          ? "Select client first"
+          : loadingBots
+          ? "Loading bots..."
+          : "Select Bot"}
+      </option>
+
+      {bots.map((bot) => (
+        <option key={bot.id} value={String(bot.id)}>
+          {bot.name}
+        </option>
+      ))}
+    </select>
+          
+         {/* WORKFLOW SELECT + DELETE */}
+
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+              <select
+                value={workflowId || ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id) selectWorkflow(id);
+                }}
+                disabled={loadingWorkflows || saving}
                 className="
-                  hidden
-                  h-10
-                  items-center
-                  gap-2
-                  rounded-xl
-                  border
-                  border-indigo-200
-                  bg-indigo-50
-                  px-4
-                  text-sm
-                  font-bold
-                  text-indigo-700
-                  transition
-                  hover:bg-indigo-100
-                  md:flex
+                  h-10 w-[220px] appearance-none
+                  rounded-xl border border-slate-200
+                  bg-white pl-4 pr-10 text-sm
+                  font-semibold text-slate-700
+                  shadow-sm outline-none transition
+                  hover:border-indigo-300
+                  focus:border-indigo-500
+                  focus:ring-4 focus:ring-indigo-500/10
+                  disabled:cursor-not-allowed
+                  disabled:bg-slate-100
+                  md:w-[200px]
                 "
               >
-                <Plus className="h-4 w-4" />
+                <option value="">
+                  {loadingWorkflows
+                    ? "Loading workflows..."
+                    : workflows.length
+                      ? "Select Workflow"
+                      : "No workflows found"}
+                </option>
 
-                New Workflow
-              </button>
+                {workflows.map((workflow) => (
+                  <option key={workflow.id} value={String(workflow.id)}>
+                    {workflow.name}
+                  </option>
+                ))}
+              </select>
+
+              <ChevronDown
+                className="
+                  pointer-events-none absolute right-3 top-1/2
+                  h-4 w-4 -translate-y-1/2 text-slate-400
+                "
+              />
             </div>
 
-           
+          
+
+            {/* NEW WORKFLOW */}
+
+         <button
+              type="button"
+              onClick={() => {
+                setWorkflowModalMode("add");
+                setWorkflowFormName("");
+                setWorkflowFormDescription("");
+                setWorkflowModalOpen(true);
+              }}
+              className="
+                inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60
+              "
+            >
+              <Plus className="h-4 w-4" />
+              New Add
+            </button>
+          </div>
+
+          {/* ADD / UPDATE WORKFLOW MODAL */}
+
+{workflowModalOpen && (
+  <div
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4"
+    onClick={() => setWorkflowModalOpen(false)}
+  >
+    <div
+      className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">
+            {workflowModalMode === "add"
+              ? "Add New Workflow"
+              : "Update Workflow"}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Enter your workflow details below.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setWorkflowModalOpen(false)}
+          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <form
+     onSubmit={async (e) => {
+  e.preventDefault();
+
+  const workflowName = workflowFormName.trim();
+
+  if (!workflowName) {
+    toast.error("Please enter workflow name.");
+    return;
+  }
+
+  if (!selectedTenantId || !selectedBotId) {
+    toast.error("Please select a tenant and bot first.");
+    return;
+  }
+
+  const isUpdate = workflowModalMode === "update";
+
+  if (isUpdate && !workflowId) {
+    toast.error("Please select a workflow to update.");
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const payload = {
+      name: workflowName,
+      description: workflowFormDescription.trim() || null,
+      channel: "whatsapp",
+      tenant_id: selectedTenantId,
+      bot_id: selectedBotId,
+    };
+
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    };
+
+    // ADD = POST, UPDATE = PUT
+    const response = isUpdate
+      ? await axios.put(
+          `${API}/workflows/${workflowId}`,
+          payload,
+          config
+        )
+      : await axios.post(
+          `${API}/workflows`,
+          payload,
+          config
+        );
+
+    const savedWorkflow =
+      response.data?.data?.data ??
+      response.data?.data ??
+      response.data;
+
+    if (!savedWorkflow?.id && !isUpdate) {
+      console.error("Unexpected API response:", response.data);
+      throw new Error("Server did not return the new workflow ID.");
+    }
+
+    const savedId = String(savedWorkflow.id ?? workflowId);
+
+    // Refresh workflow list in state
+    setWorkflows((previous) => {
+      if (isUpdate) {
+        return previous.map((item) =>
+          String(item.id) === savedId
+            ? { ...item, ...savedWorkflow, ...payload }
+            : item
+        );
+      }
+
+      return [
+        { ...savedWorkflow, ...payload },
+        ...previous.filter(
+          (item) => String(item.id) !== savedId
+        ),
+      ];
+    });
+
+    // Select saved workflow
+    setWorkflowId(savedId);
+    localStorage.setItem("workflow_id", savedId);
+
+    setName(savedWorkflow.name || workflowName);
+
+    setWorkflowModalOpen(false);
+
+    toast.success(
+      isUpdate
+        ? "Workflow updated successfully."
+        : "New workflow created successfully."
+    );
+  } catch (error) {
+    console.error(
+      "Save workflow error:",
+      error.response?.data || error.message
+    );
+
+    toast.error(
+      error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save workflow."
+    );
+  } finally {
+    setSaving(false);
+  }
+}}
+        className="space-y-5"
+      >
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Workflow Name
+          </label>
+
+          <input
+            type="text"
+            value={workflowFormName}
+            onChange={(e) => setWorkflowFormName(e.target.value)}
+            placeholder="Enter workflow name"
+            maxLength={150}
+            required
+            autoFocus
+            className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Description
+          </label>
+
+          <textarea
+            value={workflowFormDescription}
+            onChange={(e) =>
+              setWorkflowFormDescription(e.target.value)
+            }
+            placeholder="Enter workflow description (optional)"
+            rows={3}
+            className="w-full rounded-xl border border-slate-200 p-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setWorkflowModalOpen(false)}
+            className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "Saving..." : "Add Workflow"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+<button
+  type="button"
+  onClick={openUpdateWorkflowModal}
+  disabled={!workflowId || saving}
+  className="
+    hidden h-10 shrink-0 items-center gap-2
+    rounded-xl border border-amber-200 bg-amber-50
+    px-4 text-sm font-bold text-amber-700
+    transition hover:bg-amber-100
+    disabled:cursor-not-allowed disabled:opacity-40
+    md:flex
+  "
+>
+  <Save className="h-4 w-4" />
+  Update
+</button>
+
+  {/* DELETE SELECTED WORKFLOW */}
+
+            <button
+              type="button"
+              title="Delete selected workflow"
+              aria-label="Delete selected workflow"
+              disabled={!workflowId || saving}
+              onClick={async () => {
+                const selectedWorkflow = workflows.find(
+                  (workflow) => String(workflow.id) === String(workflowId)
+                );
+
+                if (!selectedWorkflow) {
+                  toast.error("Please select a workflow first.");
+                  return;
+                }
+
+                const confirmed = window.confirm(
+                  `Are you sure you want to delete "${selectedWorkflow.name}"?`
+                );
+
+                if (!confirmed) return;
+
+                try {
+                  setSaving(true);
+
+                  await axios.delete(`${API}/workflows/${workflowId}`, {
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      Accept: "application/json",
+                    },
+                  });
+
+                  setWorkflows((previous) =>
+                    previous.filter(
+                      (workflow) => String(workflow.id) !== String(workflowId)
+                    )
+                  );
+
+                  setWorkflowId(null);
+                  localStorage.removeItem("workflow_id");
+                  setNodes([]);
+                  setEdges([]);
+                  setSelected(null);
+                  setName("New WhatsApp Workflow");
+
+                  toast.success("Workflow deleted successfully.");
+                } catch (error) {
+                  console.error(
+                    "Delete workflow error:",
+                    error.response?.data || error.message
+                  );
+
+                  toast.error(
+                    error.response?.data?.message || "Failed to delete workflow."
+                  );
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="
+                inline-flex h-10 shrink-0 items-center justify-center
+                rounded-xl border border-red-200 bg-white px-3
+                text-red-600 shadow-sm transition
+                hover:border-red-300 hover:bg-red-50
+                disabled:cursor-not-allowed disabled:opacity-40
+              "
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+                    
 
             {/* NAME */}
 
-            <input
+            {/* <input
               className="
                 hidden
                 w-[180px]
@@ -10737,7 +11221,7 @@ const save = async (publish = false) => {
                 )
               }
               placeholder="Workflow name"
-            />
+            /> */}
 
              {/* SIMULATOR */}
 
@@ -10745,21 +11229,7 @@ const save = async (publish = false) => {
                 type="button"
                 onClick={() => navigate("/whatsapp-simulator")}
                 className="
-                    hidden
-                    h-10
-                    items-center
-                    gap-2
-                    rounded-xl
-                    border
-                    border-violet-200
-                    bg-violet-50
-                    px-4
-                    text-sm
-                    font-bold
-                    text-violet-700
-                    transition
-                    hover:bg-violet-100
-                    md:flex
+            inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60
                 "
                 >
                 <Play className="h-4 w-4" />
@@ -10900,63 +11370,14 @@ const save = async (publish = false) => {
                 save(true)
               }
               disabled={saving}
-              className="
-                flex
-                items-center
-                gap-2
-                rounded-lg
-                bg-indigo-600
-                px-3
-                py-2
-                text-sm
-                font-semibold
-                text-white
-                shadow-sm
-                transition
-                hover:bg-indigo-700
-                disabled:opacity-50
-                md:px-4
-              "
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 curosr-pointer"
             >
               <Send className="h-4 w-4" />
 
               Publish
             </button>
 
-            {/* LOGOUT */}
-
-            {/* <button
-              onClick={() => {
-
-                localStorage.removeItem("token");
-
-                setToken("");
-
-                navigate("/");
-
-              }}
-              className="
-                hidden
-                items-center
-                gap-2
-                rounded-lg
-                border
-                border-slate-200
-                bg-white
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-slate-600
-                transition
-                hover:bg-slate-50
-                sm:flex
-              "
-            >
-              <LogOut className="h-4 w-4" />
-
-              Logout
-            </button> */}
+         
           </div>
         </header>
 
@@ -10966,55 +11387,143 @@ const save = async (publish = false) => {
 
         <div className="border-b border-slate-200 bg-white p-3 md:hidden">
           <div className="flex gap-2">
-            <select
-              value={
-                workflowId ||
-                ""
-              }
-              onChange={(e) =>
-                selectWorkflow(
-                  e.target.value
-                )
-              }
-              className="
-                min-w-0
-                flex-1
-                rounded-lg
-                border
-                border-slate-200
-                bg-slate-50
-                px-3
-                py-2
-                text-sm
-                font-semibold
-                outline-none
-                focus:border-indigo-500
-              "
-            >
-              <option
-                value=""
-                disabled
-              >
-                Select Workflow
-              </option>
+        <select
+  value={workflowId || ""}
+  onChange={async (e) => {
+    const value = e.target.value;
 
-              {workflows.map(
-                (workflow) => (
-                  <option
-                    key={
-                      workflow.id
-                    }
-                    value={
-                      workflow.id
-                    }
-                  >
-                    {
-                      workflow.name
-                    }
-                  </option>
-                )
-              )}
-            </select>
+    // =====================================
+    // DELETE SELECTED WORKFLOW
+    // =====================================
+    if (value === "__delete_workflow__") {
+      if (!workflowId) {
+        toast.error("Please select a workflow first.");
+        return;
+      }
+
+      const selectedWorkflow = workflows.find(
+        (workflow) =>
+          String(workflow.id) === String(workflowId)
+      );
+
+      if (!selectedWorkflow) {
+        toast.error("Selected workflow not found.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Are you sure you want to delete "${selectedWorkflow.name}"?`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setSaving(true);
+
+        await axios.delete(
+          `${API}/workflows/${workflowId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        toast.success("Workflow deleted successfully.");
+
+        setWorkflows((previous) =>
+          previous.filter(
+            (workflow) =>
+              String(workflow.id) !== String(workflowId)
+          )
+        );
+
+        setWorkflowId(null);
+        localStorage.removeItem("workflow_id");
+
+        setNodes([]);
+        setEdges([]);
+        setName("New WhatsApp Workflow");
+      } catch (error) {
+        console.error(
+          "Delete workflow error:",
+          error.response?.data || error.message
+        );
+
+        toast.error(
+          error.response?.data?.message ||
+            "Failed to delete workflow."
+        );
+      } finally {
+        setSaving(false);
+      }
+
+      return;
+    }
+
+      // =====================================
+      // NORMAL WORKFLOW SELECTION
+      // =====================================
+      selectWorkflow(value);
+    }}
+    disabled={loadingWorkflows || saving}
+    className="
+      min-w-0
+      flex-1
+      rounded-lg
+      border
+      border-slate-200
+      bg-white
+      px-3
+      py-2
+      text-sm
+      font-semibold
+      text-slate-700
+      outline-none
+      transition
+      focus:border-indigo-500
+      focus:ring-2
+      focus:ring-indigo-100
+      disabled:cursor-not-allowed
+      disabled:bg-slate-100
+      disabled:text-slate-400
+    "
+  >
+    <option value="">
+      {!selectedTenantId
+        ? "Select Client First"
+        : !selectedBotId
+          ? "Select Bot First"
+          : loadingWorkflows
+            ? "Loading Workflows..."
+            : workflows.length === 0
+              ? "No Workflows Found"
+              : "Select Workflow"}
+    </option>
+
+    {/* WORKFLOW LIST */}
+    {workflows.map((workflow) => (
+      <option
+        key={workflow.id}
+        value={String(workflow.id)}
+      >
+        {workflow.name || `Workflow #${workflow.id}`}
+      </option>
+    ))}
+
+    {/* DELETE OPTION — ALWAYS VISIBLE */}
+    <option
+      value="__delete_workflow__"
+      disabled={!workflowId || workflows.length === 0}
+    >
+      🗑 Delete Selected Workflow
+    </option>
+  </select>
+
+          
 
             <button
               type="button"
