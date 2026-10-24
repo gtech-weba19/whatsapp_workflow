@@ -192,22 +192,9 @@ class WalletService
             $wallet->available_credits = $balanceAfter;
             $wallet->save();
 
-            // Link active subscription if available and decrement credits_remaining
-            $activeSub = UserSubscription::where('user_id', $userId)
-                ->where('status', 'active')
-                ->where(function ($q) {
-                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })
-                ->orderByDesc('id')
-                ->first();
-
-            if ($activeSub && isset($activeSub->credits_remaining) && (int) $activeSub->credits_remaining > 0) {
-                $activeSub->decrement('credits_remaining', 1);
-            }
-
             CreditTransaction::create([
                 'user_id' => $userId,
-                'subscription_id' => $activeSub?->id,
+                'subscription_id' => null,
                 'transaction_type' => 'debit',
                 'credits' => -$amount,
                 'balance_after' => $balanceAfter,
@@ -275,33 +262,30 @@ class WalletService
             $currentRate = $this->getUserRate($userId);
 
             // Create notification for admin
-            try {
-                AdminNotification::create([
+            AdminNotification::create([
+                'user_id' => $userId,
+                'type' => 'plan_subscription',
+                'title' => "Plan Activated: {$plan->name}",
+                'message' => "Client {$userName} ({$userEmail}) just subscribed to {$plan->name} for ₹" . number_format($plan->selling_price, 2) . ". Current rate: ₹" . number_format($currentRate, 4) . "/msg. Please review and set their per-message rate if needed.",
+                'data' => [
                     'user_id' => $userId,
-                    'type' => 'plan_subscription',
-                    'title' => "Plan Activated: {$plan->name}",
-                    'message' => "Client {$userName} ({$userEmail}) just subscribed to {$plan->name} for ₹" . number_format($plan->selling_price, 2) . ". Current rate: ₹" . number_format($currentRate, 4) . "/msg. Please review and set their per-message rate if needed.",
-                    'data' => [
-                        'user_id' => $userId,
-                        'user_name' => $userName,
-                        'user_email' => $userEmail,
-                        'plan_id' => $plan->id,
-                        'plan_name' => $plan->name,
-                        'amount_paid' => (float) $plan->selling_price,
-                        'credits_granted' => (int) $plan->message_credits,
-                        'current_rate' => $currentRate,
-                        'validity_days' => $plan->validity_days,
-                        'wallet_balance' => (float) $wallet->available_credits,
-                    ],
-                    'is_read' => false,
-                ]);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('AdminNotification log skipped: ' . $e->getMessage());
-            }
+                    'user_name' => $userName,
+                    'user_email' => $userEmail,
+                    'plan_id' => $plan->id,
+                    'plan_name' => $plan->name,
+                    'amount_paid' => (float) $plan->selling_price,
+                    'credits_granted' => (int) $plan->message_credits,
+                    'current_rate' => $currentRate,
+                    'validity_days' => $plan->validity_days,
+                    'wallet_balance' => (float) $wallet->available_credits,
+                ],
+                'is_read' => false,
+            ]);
 
             // Optional audit log
             try {
                 AuditLog::create([
+                    'tenant_id' => $user?->tenant_id,
                     'user_id' => $userId,
                     'action' => 'plan_subscribed',
                     'entity_type' => 'user_subscription',

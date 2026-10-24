@@ -21,11 +21,6 @@ class BusinessProfile extends Model
         'address',
     ];
 
-
-    protected $casts = [
-        'user_id' => 'integer',
-    ];
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
