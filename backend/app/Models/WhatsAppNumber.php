@@ -10,7 +10,7 @@ class WhatsAppNumber extends Model
     protected $table = 'whatsapp_numbers';
 
     protected $fillable = [
-        'tenant_id',
+        'user_id',
         'whatsapp_account_id',
         'phone_number',
         'display_name',
@@ -29,9 +29,9 @@ class WhatsAppNumber extends Model
         ];
     }
 
-    public function tenant(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->belongsTo(User::class);
     }
 
     public function whatsappAccount(): BelongsTo

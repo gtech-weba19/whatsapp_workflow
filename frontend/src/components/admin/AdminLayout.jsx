@@ -4,10 +4,43 @@ import { Menu, X } from "lucide-react";
 
 import AdminSidebar from "./AdminSidebar";
 import AdminHeader from "./AdminHeader";
+import axios from "axios";
+
+const API = (
+  import.meta.env.VITE_API_URL || "http://localhost:8000/api"
+).replace(/\/+$/, "");
 
 const AdminLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+
+  // Background sync user & permissions from /api/me
+  useEffect(() => {
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("auth_token") ||
+      sessionStorage.getItem("token");
+    if (!token) return;
+
+    axios
+      .get(`${API}/me`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      .then((res) => {
+        if (res.data?.user) {
+          const isLocal = Boolean(localStorage.getItem("token"));
+          if (isLocal) {
+            localStorage.setItem("user", JSON.stringify(res.data.user));
+          } else {
+            sessionStorage.setItem("user", JSON.stringify(res.data.user));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Route change hone par mobile sidebar close karein
   useEffect(() => {
@@ -27,7 +60,7 @@ const AdminLayout = () => {
   }, [mobileMenuOpen]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f5f9f7]">
       {/* MOBILE OVERLAY */}
       {mobileMenuOpen && (
         <button
@@ -70,31 +103,7 @@ const AdminLayout = () => {
 
         {/* STICKY HEADER */}
         <div className="sticky top-0 z-30">
-
-          {/* MOBILE HEADER: MENU LEFT + PROFILE RIGHT */}
-          <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-3 lg:hidden">
-            {/* MENU BUTTON */}
-            <button
-              type="button"
-              aria-label="Open navigation menu"
-              aria-expanded={mobileMenuOpen}
-              onClick={() => setMobileMenuOpen(true)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-700 transition hover:bg-slate-100"
-            >
-              <Menu size={23} />
-            </button>
-
-            {/* PROFILE */}
-            <div className="min-w-0">
-              <AdminHeader />
-            </div>
-          </div>
-
-          {/* DESKTOP HEADER */}
-          <div className="hidden lg:block">
-            <AdminHeader />
-          </div>
-
+          <AdminHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />
         </div>
 
         {/* PAGE CONTENT */}

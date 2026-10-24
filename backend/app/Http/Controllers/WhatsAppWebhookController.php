@@ -10,6 +10,7 @@ use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Models\WhatsAppAccount;
 
 class WhatsAppWebhookController extends Controller
 {
@@ -18,52 +19,109 @@ class WhatsAppWebhookController extends Controller
      * JOURNEYS
      * ==========================================================================
      */
-    public function journeys()
-    {
-        $journeys = Workflow::query()
-            ->where('channel', 'whatsapp')
-            ->where('status', 'published')
-            ->with([
-                'nodes' => function ($query) {
-                    $query->where('node_type', 'start');
-                },
-            ])
-            ->orderBy('name')
-            ->get();
+    // public function journeys()
+    // {
+    //     $journeys = Workflow::query()
+    //         ->where('channel', 'whatsapp')
+    //         ->where('status', 'published')
+    //         ->with([
+    //             'nodes' => function ($query) {
+    //                 $query->where('node_type', 'start');
+    //             },
+    //         ])
+    //         ->orderBy('name')
+    //         ->get();
 
-        $journeys->transform(function ($workflow) {
+    //     $journeys->transform(function ($workflow) {
 
-            $startNode = $workflow->nodes->first();
+    //         $startNode = $workflow->nodes->first();
 
-            $config = $startNode?->configuration ?? [];
+    //         $config = $startNode?->configuration ?? [];
 
-            if (is_string($config)) {
-                $decoded = json_decode($config, true);
+    //         if (is_string($config)) {
+    //             $decoded = json_decode($config, true);
 
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $config = $decoded;
-                }
-            }
+    //             if (json_last_error() === JSON_ERROR_NONE) {
+    //                 $config = $decoded;
+    //             }
+    //         }
 
-            if (!is_array($config)) {
-                $config = [];
-            }
+    //         if (!is_array($config)) {
+    //             $config = [];
+    //         }
 
-            $trigger = $this->getTriggerFromConfig($config);
+    //         $trigger = $this->getTriggerFromConfig($config);
 
-            return [
-                'id' => $workflow->id,
-                'name' => $workflow->name,
-                'description' => $workflow->description,
-                'status' => $workflow->status,
-                'version' => $workflow->version,
-                'published_at' => $workflow->published_at,
-                'trigger' => $trigger,
-            ];
-        });
+    //         return [
+    //             'id' => $workflow->id,
+    //             'name' => $workflow->name,
+    //             'description' => $workflow->description,
+    //             'status' => $workflow->status,
+    //             'version' => $workflow->version,
+    //             'published_at' => $workflow->published_at,
+    //             'trigger' => $trigger,
+    //         ];
+    //     });
 
-        return response()->json($journeys);
+    //     return response()->json($journeys);
+    // }
+
+public function journeys(Request $request)
+{
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401);
     }
+
+    $journeys = Workflow::query()
+        ->where('user_id', $user->id)
+        ->where('channel', 'whatsapp')
+        ->whereHas('bot', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })
+        ->with([
+            'nodes' => function ($query) {
+                $query->where('node_type', 'start');
+            },
+        ])
+        ->orderBy('name')
+        ->get();
+
+    $journeys->transform(function ($workflow) {
+        $startNode = $workflow->nodes->first();
+
+        $config = $startNode?->configuration ?? [];
+
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $config = $decoded;
+            }
+        }
+
+        if (!is_array($config)) {
+            $config = [];
+        }
+
+        return [
+            'id' => $workflow->id,
+            'bot_id' => $workflow->bot_id,
+            'user_id' => $workflow->user_id,
+            'name' => $workflow->name,
+            'description' => $workflow->description,
+            'status' => $workflow->status,
+            'version' => $workflow->version,
+            'published_at' => $workflow->published_at,
+            'trigger' => $this->getTriggerFromConfig($config),
+        ];
+    });
+
+    return response()->json($journeys);
+}
 
     /**
      * ==========================================================================
@@ -74,13 +132,26 @@ class WhatsAppWebhookController extends Controller
         Request $request,
         WorkflowEngine $engine
     ) {
-           Log::info('ðŸ”¥ WEBHOOK HANDLE ENTERED');
+if (empty($payload)) {
+    $rawBody = $request->getContent();
+    $decodedPayload = json_decode($rawBody, true);
 
-                $payload = $request->all();
+    if (
+        json_last_error() === JSON_ERROR_NONE
+        && is_array($decodedPayload)
+    ) {
+        $payload = $decodedPayload;
+    }
+        }
 
-                Log::info('WHATSAPP WEBHOOK RECEIVED', [
-                    'payload' => $payload,
-                ]);
+        Log::info('WHATSAPP WEBHOOK PARSED', [
+            'content_type' => $request->header('Content-Type'),
+            'payload_keys' => array_keys($payload),
+            'event_type' => data_get($payload, 'events.eventType'),
+            'has_message' => is_array(
+                data_get($payload, 'eventContent.message')
+            ),
+        ]);
 
         /**
          * ----------------------------------------------------------------------
@@ -972,6 +1043,56 @@ if (! $lock->get()) {
 }
 
 try {
+ if ($source !== 'simulator') {
+
+        if (empty($whatsappTo)) {
+            Log::warning('WHATSAPP BUSINESS NUMBER NOT FOUND', [
+                'source' => $source,
+                'phone_number_id' => $phoneNumberId,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => true,
+                'error_code' => 'WHATSAPP_ACCOUNT_NUMBER_NOT_FOUND',
+                'message' => 'Business WhatsApp number could not be identified.',
+            ], 422);
+        }
+
+        $account = WhatsAppAccount::query()
+            ->where('waba_id', $whatsappTo)
+            ->whereIn('status', ['active', 'connected'])
+            ->first();
+
+        if (!$account) {
+            Log::warning('WHATSAPP_ACCOUNT_NOT_FOUND', [
+                'whatsapp_to' => $whatsappTo,
+                'source' => $source,
+                'phone_number_id' => $phoneNumberId,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => true,
+                'error_code' => 'WHATSAPP_ACCOUNT_NOT_FOUND',
+                'message' => 'No active WhatsApp account matches this business number.',
+            ], 422);
+        }
+
+        // Account credentials ko WorkflowEngine ki WhatsAppService
+        // instance mein set karna zaroori hai.
+        $engine->useWhatsAppAccount(
+            (int) $account->user_id,
+            $whatsappTo
+        );
+
+        $input['whatsapp_account_id'] = (int) $account->id;
+        Log::info('WHATSAPP_ACCOUNT_SELECTED', [
+            'account_id' => $account->id,
+            'user_id' => $account->user_id,
+            'whatsapp_to' => $whatsappTo,
+        ]);
+    }
 
     $session = $engine->handleIncoming(
         $from,

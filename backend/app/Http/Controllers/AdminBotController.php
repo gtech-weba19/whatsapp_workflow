@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bot;
-use App\Models\Tenant;
+use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WhatsAppAccount;
 use Illuminate\Http\Request;
@@ -14,27 +14,54 @@ use Illuminate\Validation\Rule;
 class AdminBotController extends Controller
 {
     /**
-     * List all bots.
+     * Check Super Admin role.
+     */
+    private function isSuperAdmin(User $user): bool
+    {
+        if (strtolower((string) $user->role) === 'super_admin') {
+            return true;
+        }
+
+        return method_exists($user, 'hasRole')
+            && $user->hasRole('super_admin');
+    }
+
+    /**
+     * GET /bots
+     * Super Admin: all bots.
+     * Normal user: own bots only.
      */
     public function index(Request $request): JsonResponse
     {
-        $bots = Bot::with('tenant')
-            ->with('workflows:id,tenant_id,bot_id,name,status,channel')
-            ->withCount('workflows')
-            ->latest()
-            ->get();
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        $query = Bot::query()
+            ->with([
+                'user:id,name,email',
+                'workflows:id,user_id,bot_id,name,status,channel',
+                'whatsappAccount',
+            ])
+            ->withCount('workflows');
+
+        if (!$this->isSuperAdmin($user)) {
+            $query->where('user_id', $user->id);
+        }
+
+        $bots = $query->latest()->get();
 
         return response()->json([
             'success' => true,
             'message' => 'Bots fetched successfully.',
             'data' => $bots->map(
-                fn ($bot) => $this->formatBot($bot)
+                fn (Bot $bot) => $this->formatBot($bot)
             )->values(),
         ]);
     }
 
     /**
-     * Frontend handles the create form.
+     * Create form is handled by React.
      */
     public function create(): JsonResponse
     {
@@ -45,38 +72,38 @@ class AdminBotController extends Controller
     }
 
     /**
-     * Create bot and optionally assign existing workflows.
+     * POST /bots
+     *
+     * Super Admin can assign a bot to a selected registered user.
+     * Normal users can create bots only for themselves.
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        $isSuperAdmin = $this->isSuperAdmin($user);
+
         $validated = $request->validate([
-            'tenant_id' => [
-                'required',
-                'integer',
-                'exists:tenants,id',
-            ],
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-            'description' => [
-                'nullable',
-                'string',
-            ],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
             'status' => [
-                'nullable',
+                'sometimes',
                 Rule::in(['draft', 'active', 'inactive']),
             ],
+            'user_id' => [
+                'nullable',
+                'integer',
+                'exists:users,id',
+            ],
             'whatsapp_account_id' => [
+                'sometimes',
                 'nullable',
                 'integer',
                 'exists:whatsapp_accounts,id',
             ],
-            'workflow_ids' => [
-                'sometimes',
-                'array',
-            ],
+            'workflow_ids' => ['sometimes', 'array'],
             'workflow_ids.*' => [
                 'integer',
                 'distinct',
@@ -84,77 +111,106 @@ class AdminBotController extends Controller
             ],
         ]);
 
-        $tenant = Tenant::find($validated['tenant_id']);
+        /*
+         * Select bot owner.
+         * Never trust a normal user's submitted user_id.
+         */
+        if ($isSuperAdmin) {
+            $ownerId = $validated['user_id'] ?? null;
 
-        if (!$tenant || $tenant->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Selected client does not exist or is not active.',
-            ], 422);
-        }
-
-        // Validate the WhatsApp account belongs to this client.
-        if (!empty($validated['whatsapp_account_id'])) {
-            $account = WhatsAppAccount::query()
-                ->where('id', $validated['whatsapp_account_id'])
-                ->where('tenant_id', $tenant->id)
-                ->first();
-
-            if (!$account) {
+            if (!$ownerId) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Selected WhatsApp account does not belong to this client.',
+                    'message' => 'Please select a user for this bot.',
+                ], 422);
+            }
+
+            // Do not assign bots to another Super Admin.
+            $owner = User::query()
+                ->whereKey($ownerId)
+                ->first();
+
+            if (!$owner || $this->isSuperAdmin($owner)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please select a valid registered user.',
+                ], 422);
+            }
+        } else {
+            $ownerId = $user->id;
+        }
+
+        $workflowIds = $validated['workflow_ids'] ?? [];
+        $accountId = $validated['whatsapp_account_id'] ?? null;
+
+        /*
+         * The selected WhatsApp account must belong to the bot owner.
+         */
+        if ($accountId !== null) {
+            $accountExists = WhatsAppAccount::query()
+                ->whereKey($accountId)
+                ->where('user_id', $ownerId)
+                ->exists();
+
+            if (!$accountExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'The selected WhatsApp account does not belong to the selected user.',
                 ], 422);
             }
         }
 
-        $workflowIds = $validated['workflow_ids'] ?? [];
-
-        // All selected workflows must belong to the selected client.
+        /*
+         * Every selected workflow must belong to the bot owner.
+         */
         if (!empty($workflowIds)) {
             $validCount = Workflow::query()
-                ->where('tenant_id', $tenant->id)
+                ->where('user_id', $ownerId)
                 ->whereIn('id', $workflowIds)
                 ->count();
 
             if ($validCount !== count($workflowIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'One or more workflows do not belong to the selected client.',
+                    'message' =>
+                        'One or more workflows do not belong to the selected user.',
+                ], 422);
+            }
+
+            $alreadyAssigned = Workflow::query()
+                ->whereIn('id', $workflowIds)
+                ->whereNotNull('bot_id')
+                ->exists();
+
+            if ($alreadyAssigned) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                        'One or more selected workflows are already assigned to a bot.',
                 ], 422);
             }
         }
 
         $bot = DB::transaction(function () use (
             $validated,
-            $workflowIds
+            $workflowIds,
+            $ownerId,
+            $accountId
         ) {
             $bot = Bot::create([
-                'tenant_id' => $validated['tenant_id'],
-                'name' => $validated['name'],
+                'user_id' => $ownerId,
+                'name' => trim($validated['name']),
                 'description' => $validated['description'] ?? null,
                 'status' => $validated['status'] ?? 'draft',
-                'whatsapp_account_id' =>
-                    $validated['whatsapp_account_id'] ?? null,
+                'whatsapp_account_id' => $accountId,
             ]);
 
             if (!empty($workflowIds)) {
-                // Assign existing workflows through workflows.bot_id.
-                // Do not silently take workflows from another bot.
-                $alreadyAssigned = Workflow::query()
-                    ->whereIn('id', $workflowIds)
-                    ->whereNotNull('bot_id')
-                    ->exists();
-
-                if ($alreadyAssigned) {
-                    throw new \RuntimeException(
-                        'One or more selected workflows are already assigned to a bot.'
-                    );
-                }
-
                 Workflow::query()
-                    ->where('tenant_id', $bot->tenant_id)
+                    ->where('user_id', $ownerId)
                     ->whereIn('id', $workflowIds)
+                    ->whereNull('bot_id')
                     ->update([
                         'bot_id' => $bot->id,
                     ]);
@@ -163,23 +219,37 @@ class AdminBotController extends Controller
             return $bot;
         });
 
-        $bot->load('tenant', 'workflows')
-            ->loadCount('workflows');
+        $bot->load([
+            'user:id,name,email',
+            'workflows:id,user_id,bot_id,name,status,channel',
+            'whatsappAccount',
+        ])->loadCount('workflows');
 
         return response()->json([
             'success' => true,
-            'message' => 'Bot created successfully.',
+            'message' => 'Bot assigned to user successfully.',
             'data' => $this->formatBot($bot),
         ], 201);
     }
 
     /**
-     * Show a bot.
+     * GET /bots/{bot}
      */
-    public function show(Bot $bot): JsonResponse
+    public function show(Request $request, Bot $bot): JsonResponse
     {
-        $bot->load('tenant', 'workflows')
-            ->loadCount('workflows');
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        if (!$this->canAccessBot($user, $bot)) {
+            return $this->forbiddenResponse();
+        }
+
+        $bot->load([
+            'user:id,name,email',
+            'workflows:id,user_id,bot_id,name,status,channel',
+            'whatsappAccount',
+        ])->loadCount('workflows');
 
         return response()->json([
             'success' => true,
@@ -189,43 +259,30 @@ class AdminBotController extends Controller
     }
 
     /**
-     * Get bot edit data.
+     * GET /bots/{bot}/edit
      */
-    public function edit(Bot $bot): JsonResponse
+    public function edit(Request $request, Bot $bot): JsonResponse
     {
-        $bot->load('tenant', 'workflows')
-            ->loadCount('workflows');
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Bot edit data fetched successfully.',
-            'data' => $this->formatBot($bot),
-        ]);
+        return $this->show($request, $bot);
     }
 
     /**
-     * Update bot and optionally replace workflow assignments.
+     * PUT/PATCH /bots/{bot}
+     * The existing bot owner cannot be changed here.
      */
     public function update(Request $request, Bot $bot): JsonResponse
     {
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        if (!$this->canAccessBot($user, $bot)) {
+            return $this->forbiddenResponse();
+        }
+
         $validated = $request->validate([
-            'tenant_id' => [
-                'sometimes',
-                'required',
-                'integer',
-                'exists:tenants,id',
-            ],
-            'name' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:255',
-            ],
-            'description' => [
-                'sometimes',
-                'nullable',
-                'string',
-            ],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string'],
             'status' => [
                 'sometimes',
                 Rule::in(['draft', 'active', 'inactive']),
@@ -236,10 +293,7 @@ class AdminBotController extends Controller
                 'integer',
                 'exists:whatsapp_accounts,id',
             ],
-            'workflow_ids' => [
-                'sometimes',
-                'array',
-            ],
+            'workflow_ids' => ['sometimes', 'array'],
             'workflow_ids.*' => [
                 'integer',
                 'distinct',
@@ -247,27 +301,26 @@ class AdminBotController extends Controller
             ],
         ]);
 
-        $tenantId = $validated['tenant_id'] ?? $bot->tenant_id;
+        $ownerId = $bot->user_id;
 
-        $tenant = Tenant::find($tenantId);
+        $accountIdProvided = array_key_exists(
+            'whatsapp_account_id',
+            $validated
+        );
 
-        if (!$tenant || $tenant->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Selected client does not exist or is not active.',
-            ], 422);
-        }
+        $accountId = $validated['whatsapp_account_id'] ?? null;
 
-        if (!empty($validated['whatsapp_account_id'])) {
-            $account = WhatsAppAccount::query()
-                ->where('id', $validated['whatsapp_account_id'])
-                ->where('tenant_id', $tenantId)
-                ->first();
+        if ($accountIdProvided && $accountId !== null) {
+            $accountExists = WhatsAppAccount::query()
+                ->whereKey($accountId)
+                ->where('user_id', $ownerId)
+                ->exists();
 
-            if (!$account) {
+            if (!$accountExists) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Selected WhatsApp account does not belong to this client.',
+                    'message' =>
+                        'The selected WhatsApp account does not belong to the bot owner.',
                 ], 422);
             }
         }
@@ -281,18 +334,18 @@ class AdminBotController extends Controller
 
         if ($workflowIdsProvided && !empty($workflowIds)) {
             $validCount = Workflow::query()
-                ->where('tenant_id', $tenantId)
+                ->where('user_id', $ownerId)
                 ->whereIn('id', $workflowIds)
                 ->count();
 
             if ($validCount !== count($workflowIds)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'One or more workflows do not belong to the selected client.',
+                    'message' =>
+                        'One or more workflows do not belong to the bot owner.',
                 ], 422);
             }
 
-            // Prevent taking workflows assigned to another bot.
             $assignedElsewhere = Workflow::query()
                 ->whereIn('id', $workflowIds)
                 ->whereNotNull('bot_id')
@@ -302,7 +355,8 @@ class AdminBotController extends Controller
             if ($assignedElsewhere) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'One or more workflows are already assigned to another bot.',
+                    'message' =>
+                        'One or more selected workflows are already assigned to another bot.',
                 ], 422);
             }
         }
@@ -310,41 +364,42 @@ class AdminBotController extends Controller
         DB::transaction(function () use (
             $bot,
             $validated,
-            $tenantId,
             $workflowIdsProvided,
-            $workflowIds
+            $workflowIds,
+            $ownerId
         ) {
+            // Ownership cannot be changed through normal update data.
             $botData = collect($validated)
-                ->except('workflow_ids')
+                ->except([
+                    'workflow_ids',
+                    'user_id',
+                    'tenant_id',
+                ])
                 ->all();
 
             $bot->update($botData);
 
             if ($workflowIdsProvided) {
-                // Unassign this bot's previous workflows.
                 Workflow::query()
                     ->where('bot_id', $bot->id)
                     ->update(['bot_id' => null]);
 
-                // Assign the newly selected workflows.
                 if (!empty($workflowIds)) {
                     Workflow::query()
-                        ->where('tenant_id', $tenantId)
+                        ->where('user_id', $ownerId)
                         ->whereIn('id', $workflowIds)
+                        ->whereNull('bot_id')
                         ->update(['bot_id' => $bot->id]);
                 }
-            } else {
-                // If tenant changes, clear assignments that no longer
-                // belong to the bot's selected client.
-                Workflow::query()
-                    ->where('bot_id', $bot->id)
-                    ->where('tenant_id', '!=', $tenantId)
-                    ->update(['bot_id' => null]);
             }
         });
 
         $bot->refresh()
-            ->load('tenant', 'workflows')
+            ->load([
+                'user:id,name,email',
+                'workflows:id,user_id,bot_id,name,status,channel',
+                'whatsappAccount',
+            ])
             ->loadCount('workflows');
 
         return response()->json([
@@ -355,10 +410,18 @@ class AdminBotController extends Controller
     }
 
     /**
-     * Delete bot without deleting its workflows.
+     * DELETE /bots/{bot}
      */
-    public function destroy(Bot $bot): JsonResponse
+    public function destroy(Request $request, Bot $bot): JsonResponse
     {
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        if (!$this->canAccessBot($user, $bot)) {
+            return $this->forbiddenResponse();
+        }
+
         DB::transaction(function () use ($bot) {
             Workflow::query()
                 ->where('bot_id', $bot->id)
@@ -374,10 +437,18 @@ class AdminBotController extends Controller
     }
 
     /**
-     * Update bot status.
+     * PATCH /bots/{bot}/status
      */
     public function status(Request $request, Bot $bot): JsonResponse
     {
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        if (!$this->canAccessBot($user, $bot)) {
+            return $this->forbiddenResponse();
+        }
+
         $validated = $request->validate([
             'status' => [
                 'required',
@@ -389,8 +460,11 @@ class AdminBotController extends Controller
             'status' => $validated['status'],
         ]);
 
-        $bot->load('tenant', 'workflows')
-            ->loadCount('workflows');
+        $bot->load([
+            'user:id,name,email',
+            'workflows:id,user_id,bot_id,name,status,channel',
+            'whatsappAccount',
+        ])->loadCount('workflows');
 
         return response()->json([
             'success' => true,
@@ -400,93 +474,179 @@ class AdminBotController extends Controller
     }
 
     /**
-     * List active clients.
+     * GET /bots/clients
+     * Super Admin: registered non-admin users.
+     * Normal user: their own profile.
      */
-    public function clients(): JsonResponse
+    public function clients(Request $request): JsonResponse
     {
-        $clients = Tenant::query()
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'status']);
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
+        $query = User::query()
+            ->select('id', 'name', 'email', 'role')
+            ->orderBy('name');
+
+        if ($this->isSuperAdmin($user)) {
+            $query->where(function ($q) {
+                $q->whereNull('role')
+                    ->orWhereRaw(
+                        'LOWER(role) != ?',
+                        ['super_admin']
+                    );
+            });
+        } else {
+            $query->whereKey($user->id);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Clients fetched successfully.',
-            'data' => $clients,
+            'message' => 'Users fetched successfully.',
+            'data' => $query->get(),
         ]);
     }
 
     /**
-     * List workflows for a selected client.
+     * GET /bots/workflows?user_id=123
+     * Super Admin can load workflows for the selected user.
      */
     public function workflows(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        abort_unless($user, 401, 'Unauthenticated.');
+
         $validated = $request->validate([
-            'tenant_id' => [
-                'required',
-                'integer',
-                'exists:tenants,id',
-            ],
+            'user_id' => ['sometimes', 'integer', 'exists:users,id'],
+            'bot_id' => ['sometimes', 'integer', 'exists:bots,id'],
         ]);
 
-        $workflows = Workflow::query()
-            ->where('tenant_id', $validated['tenant_id'])
-            ->orderBy('name')
-            ->get([
-                'id',
-                'name',
-                'tenant_id',
-                'bot_id',
-                'status',
-                'channel',
-            ]);
+        $targetUserId = $user->id;
+
+        if (
+            $this->isSuperAdmin($user)
+            && isset($validated['user_id'])
+        ) {
+            $targetUserId = (int) $validated['user_id'];
+        }
+
+        $query = Workflow::query()
+            ->where('user_id', $targetUserId);
+
+        if (isset($validated['bot_id'])) {
+            $bot = Bot::find($validated['bot_id']);
+
+            if (
+                !$bot ||
+                (
+                    !$this->isSuperAdmin($user)
+                    && (int) $bot->user_id !== (int) $user->id
+                )
+            ) {
+                return $this->forbiddenResponse();
+            }
+
+            $query->where(function ($q) use ($bot) {
+                $q->whereNull('bot_id')
+                    ->orWhere('bot_id', $bot->id);
+            });
+        } else {
+            $query->where(function ($q) {
+                $q->whereNull('bot_id')
+                    ->orWhereHas('bot', function ($botQuery) {
+                        $botQuery->where('user_id', auth()->id());
+                    });
+            });
+
+
+            if ($this->isSuperAdmin($user)) {
+                $query->where(function ($q) use ($targetUserId) {
+                    $q->whereNull('bot_id')
+                        ->orWhereHas('bot', function ($botQuery) use ($targetUserId) {
+                            $botQuery->where('user_id', $targetUserId);
+                        });
+                });
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Client workflows fetched successfully.',
-            'data' => $workflows,
+            'message' => 'Workflows fetched successfully.',
+            'data' => $query->orderBy('name')->get([
+                'id',
+                'name',
+                'user_id',
+                'bot_id',
+                'status',
+                'channel',
+            ]),
         ]);
     }
 
     /**
-     * Format bot response.
+     * Check Bot access.
+     */
+    private function canAccessBot(User $user, Bot $bot): bool
+    {
+        return $this->isSuperAdmin($user)
+            || (int) $bot->user_id === (int) $user->id;
+    }
+
+    /**
+     * Standard 403 response.
+     */
+    private function forbiddenResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized. You do not have permission to access this bot.',
+        ], 403);
+    }
+
+    /**
+     * Format Bot response for React.
      */
     private function formatBot(Bot $bot): array
     {
+        $workflows = $bot->relationLoaded('workflows')
+            ? $bot->workflows
+            : collect();
+
+        $account = $bot->relationLoaded('whatsappAccount')
+            ? $bot->whatsappAccount
+            : null;
+
         return [
             'id' => $bot->id,
-            'tenant_id' => $bot->tenant_id,
+            'user_id' => $bot->user_id,
             'name' => $bot->name,
-            'description' => $bot->description,
             'status' => $bot->status,
             'whatsapp_account_id' => $bot->whatsapp_account_id,
 
-            'client' => $bot->relationLoaded('tenant') && $bot->tenant
+            'user' => $bot->relationLoaded('user') && $bot->user
                 ? [
-                    'id' => $bot->tenant->id,
-                    'name' => $bot->tenant->name,
-                    'status' => $bot->tenant->status,
+                    'id' => $bot->user->id,
+                    'name' => $bot->user->name,
+                    'email' => $bot->user->email,
                 ]
                 : null,
 
-            'workflows' => $bot->relationLoaded('workflows')
-                ? $bot->workflows->map(fn ($workflow) => [
-                    'id' => $workflow->id,
-                    'name' => $workflow->name,
-                    'tenant_id' => $workflow->tenant_id,
-                    'bot_id' => $workflow->bot_id,
-                    'status' => $workflow->status,
-                    'channel' => $workflow->channel,
-                ])->values()
-                : [],
+            'whatsapp_account' => $account,
 
-            'workflow_ids' => $bot->relationLoaded('workflows')
-                ? $bot->workflows->pluck('id')->values()
-                : [],
+            'workflows' => $workflows->map(fn ($workflow) => [
+                'id' => $workflow->id,
+                'name' => $workflow->name,
+                'user_id' => $workflow->user_id,
+                'bot_id' => $workflow->bot_id,
+                'status' => $workflow->status,
+                'channel' => $workflow->channel,
+            ])->values(),
 
-            'workflows_count' => isset($bot->workflows_count)
-                ? (int) $bot->workflows_count
-                : 0,
+            'workflow_ids' => $workflows->pluck('id')->values(),
+
+            'workflows_count' => $bot->workflows_count
+                ?? $workflows->count(),
 
             'created_at' => $bot->created_at?->toISOString(),
             'updated_at' => $bot->updated_at?->toISOString(),

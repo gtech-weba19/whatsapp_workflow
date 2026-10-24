@@ -67,4 +67,10 @@ return [
     'send_url' => env('OTP_SEND_URL', ''),
     'verify_url' => env('OTP_VERIFY_URL', ''),
 ],
+
+ 'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+
+
+
+
 ];

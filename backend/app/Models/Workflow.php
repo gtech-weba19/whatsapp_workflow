@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Workflow extends Model
 {
 protected $fillable = [
-    'tenant_id',
+    'user_id',
     'bot_id',
     'name',
     'description',
@@ -17,6 +17,7 @@ protected $fillable = [
     'status',
     'version',
     'created_by',
+    'whatsapp_account_id',
     'published_at',
 ];
 
@@ -26,10 +27,10 @@ protected $fillable = [
         'published_at' => 'datetime',
     ];
 
-    public function tenant(): BelongsTo
-    {
-        return $this->belongsTo(Tenant::class);
-    }
+    // public function tenant(): BelongsTo
+    // {
+    //     return $this->belongsTo(Tenant::class);
+    // }
 
     public function bot(): BelongsTo
     {

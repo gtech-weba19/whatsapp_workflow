@@ -44,7 +44,7 @@ const statusOptions = [
   ["suspended", "Suspended"],
 ];
 
-export default function Clients() {
+export default function AllUsers() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

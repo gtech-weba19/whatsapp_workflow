@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -11,11 +12,24 @@ class AdminUsageController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        $isSuperAdmin = $user->isSuperAdmin();
+
         $validated = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'tenant_id' => ['nullable', 'integer'],
             'search' => ['nullable', 'string', 'max:150'],
+
+            // Backward compatibility only. Normal users cannot select another user.
+            'tenant_id' => ['nullable', 'integer'],
         ]);
 
         $from = Carbon::parse(
@@ -26,53 +40,57 @@ class AdminUsageController extends Controller
             $validated['to'] ?? now()->toDateString()
         )->endOfDay();
 
-        $selectedTenant = !empty($validated['tenant_id'])
-            ? (int) $validated['tenant_id']
-            : null;
-
         /*
         |--------------------------------------------------------------------------
-        | Load tenant, workflow and session mappings
+        | Users
         |--------------------------------------------------------------------------
         */
 
-        $clients = $this->getClients();
-        $workflows = $this->getWorkflows();
-        $sessions = $this->getSessions($workflows);
+        $usersQuery = User::query();
 
-        $executions = $this->getEvents(
-            'workflow_executions',
-            $from,
-            $to
-        );
+        if (!$isSuperAdmin) {
+            // A normal user can only see their own usage.
+            $usersQuery->where('id', $user->id);
+        }
 
-        $messages = $this->getEvents(
-            'bot_messages',
-            $from,
-            $to
-        );
+        if ($isSuperAdmin && !empty($validated['tenant_id'])) {
+            // Old frontend compatibility: tenant_id is treated as a user ID.
+            $usersQuery->where('id', (int) $validated['tenant_id']);
+        }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Initialize tenant usage rows
-        |--------------------------------------------------------------------------
-        */
+        $search = trim($validated['search'] ?? '');
+
+        if ($isSuperAdmin && $search !== '') {
+            $usersQuery->where(function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%");
+
+                if (Schema::hasColumn('users', 'email')) {
+                    $query->orWhere('email', 'like', "%{$search}%");
+                }
+
+                if (Schema::hasColumn('users', 'id')) {
+                    $query->orWhere('id', 'like', "%{$search}%");
+                }
+            });
+        }
+
+        $users = $usersQuery
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
 
         $usage = [];
 
-        foreach ($clients as $client) {
-            $tenantId = (int) $client->id;
+        foreach ($users as $client) {
+            $id = (int) $client->id;
 
-            if (
-                $selectedTenant !== null &&
-                $tenantId !== $selectedTenant
-            ) {
-                continue;
-            }
-
-            $usage[$tenantId] = [
-                'tenant_id' => $tenantId,
+            $usage[$id] = [
+                // Keep legacy keys so existing frontend code can continue working.
+                'tenant_id' => $id,
+                'client_id' => $id,
+                'user_id' => $id,
                 'client_name' => $client->name,
+                'business_name' => $client->name,
 
                 'total_workflows' => 0,
                 'total_sessions' => 0,
@@ -86,16 +104,16 @@ class AdminUsageController extends Controller
                 'delivered' => 0,
                 'failed' => 0,
 
-                // Distinct sessions that have execution records.
-                // This is an estimate of runs, not a true run ID count.
-                'workflow_executions' => 0,
+                // Aliases for frontends that use messages_sent naming.
+                'messages_sent' => 0,
+                'messages_delivered' => 0,
+                'messages_failed' => 0,
 
-                // Raw node-level execution records.
+                'workflow_executions' => 0,
                 'execution_records' => 0,
                 'successful_executions' => 0,
                 'failed_executions' => 0,
                 'running_executions' => 0,
-
                 'api_requests' => 0,
                 'last_activity' => null,
             ];
@@ -103,35 +121,53 @@ class AdminUsageController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Count workflow definitions by tenant
+        | Workflow ownership map: workflow ID => user ID
         |--------------------------------------------------------------------------
         */
 
-        foreach ($workflows as $workflow) {
-            $tenantId = (int) ($workflow['tenant_id'] ?? 0);
+        $workflows = $this->getWorkflowMap($user, $isSuperAdmin);
 
-            if (!isset($usage[$tenantId])) {
-                continue;
+       foreach ($workflows as $workflow) {
+                $ownerId = (int) $workflow['user_id'];
+
+                if (!isset($usage[$ownerId])) {
+                    continue;
+                }
+
+                $usage[$ownerId]['total_workflows']++;
+
+                // Workflow creation/update date ko activity mein include karo.
+                $this->updateActivity(
+                    $usage[$ownerId],
+                    $workflow['created_at'] ?? null
+                );
+
+                $this->updateActivity(
+                    $usage[$ownerId],
+                    $workflow['updated_at'] ?? null
+                );
             }
-
-            $usage[$tenantId]['total_workflows']++;
-        }
 
         /*
         |--------------------------------------------------------------------------
-        | Count sessions
+        | Session ownership map: session ID => user ID
         |--------------------------------------------------------------------------
         */
 
-        foreach ($sessions as $session) {
-            $tenantId = (int) ($session['tenant_id'] ?? 0);
+        $sessions = $this->getSessionMap(
+            $user,
+            $isSuperAdmin,
+            $workflows
+        );
 
-            if (!isset($usage[$tenantId])) {
+        foreach ($sessions as $session) {
+            $ownerId = (int) $session['user_id'];
+
+            if (!isset($usage[$ownerId])) {
                 continue;
             }
 
-            // Apply the selected date range to session creation.
-            if (!$this->isWithinDateRange(
+            if (!$this->isWithinRange(
                 $session['created_at'] ?? null,
                 $from,
                 $to
@@ -139,39 +175,49 @@ class AdminUsageController extends Controller
                 continue;
             }
 
-            $usage[$tenantId]['total_sessions']++;
+            $usage[$ownerId]['total_sessions']++;
 
             if (in_array(
                 strtolower((string) ($session['status'] ?? '')),
                 ['active', 'waiting'],
                 true
             )) {
-                $usage[$tenantId]['active_sessions']++;
+                $usage[$ownerId]['active_sessions']++;
             }
 
             $this->updateActivity(
-                $usage[$tenantId],
+                $usage[$ownerId],
                 $session['created_at'] ?? null
             );
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Count node execution records and distinct execution sessions
+        | Workflow execution records
         |--------------------------------------------------------------------------
         */
 
-        $runSessions = [];
+        $executions = $this->getEventRows(
+            'workflow_executions',
+            $from,
+            $to,
+            $user,
+            $isSuperAdmin,
+            $workflows,
+            $sessions
+        );
+
+        $executionSessions = [];
         $latestSessionStatus = [];
 
         foreach ($executions as $event) {
-            $tenantId = $this->resolveTenant(
+            $ownerId = $this->resolveOwner(
                 $event,
                 $workflows,
                 $sessions
             );
 
-            if (!isset($usage[$tenantId])) {
+            if (!$ownerId || !isset($usage[$ownerId])) {
                 continue;
             }
 
@@ -181,83 +227,84 @@ class AdminUsageController extends Controller
                 ?? ''
             ));
 
-            $usage[$tenantId]['execution_records']++;
+            $usage[$ownerId]['execution_records']++;
 
             if ($status === 'success') {
-                $usage[$tenantId]['successful_executions']++;
+                $usage[$ownerId]['successful_executions']++;
             } elseif ($status === 'failed') {
-                $usage[$tenantId]['failed_executions']++;
+                $usage[$ownerId]['failed_executions']++;
             } elseif ($status === 'running') {
-                $usage[$tenantId]['running_executions']++;
+                $usage[$ownerId]['running_executions']++;
             }
 
-            /*
-             * workflow_executions has bot_session_id but no run_id.
-             * Count each non-null session once per tenant.
-             *
-             * The event query is ordered newest-first, so the first
-             * status encountered is the latest status for that session.
-             */
             $sessionId = $event->bot_session_id
                 ?? $event->session_id
                 ?? null;
 
             if ($sessionId !== null) {
-                $sessionKey = $tenantId . ':' . $sessionId;
+                $key = $ownerId . ':' . $sessionId;
 
-                $runSessions[$tenantId][$sessionKey] = true;
+                $executionSessions[$ownerId][$key] = true;
 
-                if (!array_key_exists(
-                    $sessionKey,
-                    $latestSessionStatus
-                )) {
-                    $latestSessionStatus[$sessionKey] = $status;
+                if (!array_key_exists($key, $latestSessionStatus)) {
+                    $latestSessionStatus[$key] = $status;
                 }
             }
 
-            $type = strtolower((string) (
-                $event->node_type ?? $event->type ?? ''
+            $nodeType = strtolower((string) (
+                $event->node_type
+                ?? $event->type
+                ?? ''
             ));
 
-            if ($type === 'api') {
-                $usage[$tenantId]['api_requests']++;
+            if ($nodeType === 'api') {
+                $usage[$ownerId]['api_requests']++;
             }
 
             $this->updateActivity(
-                $usage[$tenantId],
+                $usage[$ownerId],
                 $event->created_at ?? null
             );
         }
 
-        foreach ($runSessions as $tenantId => $tenantSessions) {
-            $usage[$tenantId]['workflow_executions'] =
-                count($tenantSessions);
+        foreach ($executionSessions as $ownerId => $items) {
+            $usage[$ownerId]['workflow_executions'] = count($items);
 
-            foreach (array_keys($tenantSessions) as $sessionKey) {
-                $status = $latestSessionStatus[$sessionKey] ?? '';
+            foreach (array_keys($items) as $key) {
+                $status = $latestSessionStatus[$key] ?? '';
 
                 if ($status === 'success') {
-                    $usage[$tenantId]['successful_executions']++;
+                    $usage[$ownerId]['successful_executions']++;
                 } elseif ($status === 'failed') {
-                    $usage[$tenantId]['failed_executions']++;
+                    $usage[$ownerId]['failed_executions']++;
                 }
             }
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Count messages by direction
+        | Message records
         |--------------------------------------------------------------------------
         */
 
+        $messages = $this->getEventRows(
+            'bot_messages',
+            $from,
+            $to,
+            $user,
+            $isSuperAdmin,
+            $workflows,
+            $sessions
+        );
+
         foreach ($messages as $event) {
-            $tenantId = $this->resolveTenant(
+            $ownerId = $this->resolveOwner(
                 $event,
                 $workflows,
                 $sessions
             );
 
-            if (!isset($usage[$tenantId])) {
+            if (!$ownerId || !isset($usage[$ownerId])) {
                 continue;
             }
 
@@ -273,15 +320,10 @@ class AdminUsageController extends Controller
                 ?? ''
             ));
 
-            // Count every message, inbound or outbound.
-            $usage[$tenantId]['messages']++;
+            $usage[$ownerId]['messages']++;
 
-            if (in_array(
-                $direction,
-                ['inbound', 'incoming', 'in'],
-                true
-            )) {
-                $usage[$tenantId]['inbound_messages']++;
+            if (in_array($direction, ['inbound', 'incoming', 'in'], true)) {
+                $usage[$ownerId]['inbound_messages']++;
             }
 
             if (in_array(
@@ -289,11 +331,11 @@ class AdminUsageController extends Controller
                 ['outbound', 'outgoing', 'sent', 'out'],
                 true
             )) {
-                $usage[$tenantId]['outbound_messages']++;
-                $usage[$tenantId]['sent']++;
+                $usage[$ownerId]['outbound_messages']++;
+                $usage[$ownerId]['sent']++;
 
                 if (in_array($status, ['delivered', 'read'], true)) {
-                    $usage[$tenantId]['delivered']++;
+                    $usage[$ownerId]['delivered']++;
                 }
 
                 if (in_array(
@@ -301,110 +343,72 @@ class AdminUsageController extends Controller
                     ['failed', 'failure', 'error'],
                     true
                 )) {
-                    $usage[$tenantId]['failed']++;
+                    $usage[$ownerId]['failed']++;
                 }
             }
 
             $this->updateActivity(
-                $usage[$tenantId],
+                $usage[$ownerId],
                 $event->created_at ?? null
             );
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Apply search filter
+        | Response
         |--------------------------------------------------------------------------
         */
 
         $usage = array_values($usage);
 
-        $search = strtolower(trim($validated['search'] ?? ''));
-
-        if ($search !== '') {
-            $usage = array_values(array_filter(
-                $usage,
-                fn ($row) => str_contains(
-                    strtolower((string) $row['client_name']),
-                    $search
-                )
-            ));
+        foreach ($usage as &$row) {
+            $row['messages_sent'] = $row['sent'];
+            $row['messages_delivered'] = $row['delivered'];
+            $row['messages_failed'] = $row['failed'];
         }
+        unset($row);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Aggregate dashboard statistics
-        |--------------------------------------------------------------------------
-        */
-
-        $sum = function (string $key) use ($usage): int {
-            return (int) array_sum(
-                array_column($usage, $key)
-            );
+        $sum = static function (array $rows, string $key): int {
+            return (int) array_sum(array_column($rows, $key));
         };
 
         $stats = [
             'total_clients' => count($usage),
+            'active_clients' => count($usage),
 
-            'total_workflows' => $sum('total_workflows'),
-            'total_sessions' => $sum('total_sessions'),
-            'active_sessions' => $sum('active_sessions'),
+            'total_workflows' => $sum($usage, 'total_workflows'),
+            'total_sessions' => $sum($usage, 'total_sessions'),
+            'active_sessions' => $sum($usage, 'active_sessions'),
 
-            'messages' => $sum('messages'),
-            'inbound_messages' => $sum('inbound_messages'),
-            'outbound_messages' => $sum('outbound_messages'),
+            'messages' => $sum($usage, 'messages'),
+            'inbound_messages' => $sum($usage, 'inbound_messages'),
+            'outbound_messages' => $sum($usage, 'outbound_messages'),
 
-            'sent' => $sum('sent'),
-            'delivered' => $sum('delivered'),
-            'failed' => $sum('failed'),
+            'sent' => $sum($usage, 'sent'),
+            'delivered' => $sum($usage, 'delivered'),
+            'failed' => $sum($usage, 'failed'),
 
-            // Distinct sessions with execution records.
-            'workflow_executions' => $sum('workflow_executions'),
+            'messages_sent' => $sum($usage, 'sent'),
+            'messages_delivered' => $sum($usage, 'delivered'),
+            'messages_failed' => $sum($usage, 'failed'),
 
-            // Raw node execution counts are reported separately.
-            'execution_records' => $sum('execution_records'),
-            'successful_executions' => $sum('successful_executions'),
-            'failed_executions' => $sum('failed_executions'),
-            'running_executions' => $sum('running_executions'),
-
-            'api_requests' => $sum('api_requests'),
+            'workflow_executions' => $sum($usage, 'workflow_executions'),
+            'execution_records' => $sum($usage, 'execution_records'),
+            'successful_executions' => $sum($usage, 'successful_executions'),
+            'failed_executions' => $sum($usage, 'failed_executions'),
+            'running_executions' => $sum($usage, 'running_executions'),
+            'api_requests' => $sum($usage, 'api_requests'),
         ];
 
         return response()->json([
             'success' => true,
-
             'filters' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
-                'tenant_id' => $selectedTenant,
-                'search' => $search,
             ],
-
             'stats' => $stats,
             'data' => $usage,
         ]);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Tenants
-    |--------------------------------------------------------------------------
-    */
-
-    private function getClients()
-    {
-        if (
-            !Schema::hasTable('tenants') ||
-            !Schema::hasColumn('tenants', 'id') ||
-            !Schema::hasColumn('tenants', 'name')
-        ) {
-            return collect();
-        }
-
-        return DB::table('tenants')
-            ->select('id', 'name')
-            ->orderBy('name')
-            ->get();
     }
 
     /*
@@ -413,47 +417,66 @@ class AdminUsageController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    private function getWorkflows(): array
-    {
-        if (
-            !Schema::hasTable('workflows') ||
-            !Schema::hasColumn('workflows', 'id')
-        ) {
+    private function getWorkflowMap(
+        User $user,
+        bool $isSuperAdmin
+    ): array {
+        if (!Schema::hasTable('workflows')) {
             return [];
         }
 
         $columns = Schema::getColumnListing('workflows');
 
+        if (!in_array('id', $columns, true)) {
+            return [];
+        }
+
         $ownerColumn = $this->firstColumn(
             $columns,
-            ['tenant_id', 'client_id']
+            ['user_id', 'created_by']
         );
 
+        /*
+         * Do not infer ownership from tenant_id.
+         * If workflows has no user ownership field, it cannot safely
+         * be isolated by user using this controller alone.
+         */
         if (!$ownerColumn) {
             return [];
         }
 
-        $select = ['id', $ownerColumn . ' as tenant_id'];
+        $select = ['id', $ownerColumn . ' as owner_id'];
 
-        if (in_array('created_at', $columns, true)) {
-            $select[] = 'created_at';
+       foreach (['created_at', 'updated_at', 'status'] as $column) {
+                if (in_array($column, $columns, true)) {
+                    $select[] = $column;
+                }
+}
+
+        $query = DB::table('workflows')->select($select);
+
+        if (!$isSuperAdmin) {
+            $query->where($ownerColumn, $user->id);
         }
 
-        if (in_array('status', $columns, true)) {
-            $select[] = 'status';
-        }
+        $map = [];
 
-        $result = [];
+        foreach ($query->get() as $row) {
+            $ownerId = (int) $row->owner_id;
 
-        foreach (DB::table('workflows')->select($select)->get() as $row) {
-            $result[$row->id] = [
-                'tenant_id' => (int) ($row->tenant_id ?? 0),
+            if ($ownerId <= 0) {
+                continue;
+            }
+
+           $map[$row->id] = [
+                'user_id' => $ownerId,
                 'created_at' => $row->created_at ?? null,
+                'updated_at' => $row->updated_at ?? null,
                 'status' => $row->status ?? null,
             ];
         }
 
-        return $result;
+        return $map;
     }
 
     /*
@@ -462,23 +485,26 @@ class AdminUsageController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    private function getSessions(array $workflows): array
-    {
-        if (
-            !Schema::hasTable('bot_sessions') ||
-            !Schema::hasColumn('bot_sessions', 'id')
-        ) {
+    private function getSessionMap(
+        User $user,
+        bool $isSuperAdmin,
+        array $workflows
+    ): array {
+        if (!Schema::hasTable('bot_sessions')) {
             return [];
         }
 
         $columns = Schema::getColumnListing('bot_sessions');
 
+        if (!in_array('id', $columns, true)) {
+            return [];
+        }
+
         $select = ['id'];
 
         foreach ([
+            'user_id',
             'workflow_id',
-            'tenant_id',
-            'client_id',
             'status',
             'created_at',
         ] as $column) {
@@ -487,27 +513,75 @@ class AdminUsageController extends Controller
             }
         }
 
+        $query = DB::table('bot_sessions')->select($select);
+
+        if (!$isSuperAdmin) {
+            $workflowIds = array_keys($workflows);
+
+            $query->where(function ($q) use (
+                $columns,
+                $workflowIds,
+                $user
+            ) {
+                $hasCondition = false;
+
+                if (
+                    in_array('user_id', $columns, true)
+                ) {
+                    $q->where('user_id', $user->id);
+                    $hasCondition = true;
+                }
+
+                if (
+                    !empty($workflowIds) &&
+                    in_array('workflow_id', $columns, true)
+                ) {
+                    if ($hasCondition) {
+                        $q->orWhereIn('workflow_id', $workflowIds);
+                    } else {
+                        $q->whereIn('workflow_id', $workflowIds);
+                    }
+
+                    $hasCondition = true;
+                }
+
+                if (!$hasCondition) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
+        }
+
         $map = [];
 
-        foreach (DB::table('bot_sessions')->select($select)->get() as $row) {
-            $tenantId = (int) (
-                $row->tenant_id
-                ?? $row->client_id
-                ?? 0
-            );
-
+        foreach ($query->get() as $row) {
             $workflowId = $row->workflow_id ?? null;
 
+            $ownerId = (int) ($row->user_id ?? 0);
+
             if (
-                $tenantId <= 0 &&
                 $workflowId &&
                 isset($workflows[$workflowId])
             ) {
-                $tenantId = (int) $workflows[$workflowId]['tenant_id'];
+                $workflowOwner = (int) $workflows[$workflowId]['user_id'];
+
+                // Workflow ownership is authoritative when available.
+                if ($ownerId > 0 && $ownerId !== $workflowOwner) {
+                    continue;
+                }
+
+                $ownerId = $workflowOwner;
+            }
+
+            if ($ownerId <= 0) {
+                continue;
+            }
+
+            if (!$isSuperAdmin && $ownerId !== (int) $user->id) {
+                continue;
             }
 
             $map[$row->id] = [
-                'tenant_id' => $tenantId,
+                'user_id' => $ownerId,
                 'workflow_id' => $workflowId,
                 'status' => $row->status ?? '',
                 'created_at' => $row->created_at ?? null,
@@ -519,14 +593,18 @@ class AdminUsageController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Events within the selected date range
+    | Events
     |--------------------------------------------------------------------------
     */
 
-    private function getEvents(
+    private function getEventRows(
         string $table,
         Carbon $from,
-        Carbon $to
+        Carbon $to,
+        User $user,
+        bool $isSuperAdmin,
+        array $workflows,
+        array $sessions
     ) {
         if (
             !Schema::hasTable($table) ||
@@ -541,8 +619,7 @@ class AdminUsageController extends Controller
 
         foreach ([
             'id',
-            'tenant_id',
-            'client_id',
+            'user_id',
             'workflow_id',
             'session_id',
             'bot_session_id',
@@ -559,9 +636,62 @@ class AdminUsageController extends Controller
             }
         }
 
-        return DB::table($table)
+        $query = DB::table($table)
             ->select(array_values(array_unique($select)))
-            ->whereBetween('created_at', [$from, $to])
+            ->whereBetween('created_at', [$from, $to]);
+
+        if (!$isSuperAdmin) {
+            $workflowIds = array_keys($workflows);
+            $sessionIds = array_keys($sessions);
+
+            $query->where(function ($q) use (
+                $columns,
+                $user,
+                $workflowIds,
+                $sessionIds
+            ) {
+                $hasCondition = false;
+
+                if (in_array('user_id', $columns, true)) {
+                    $q->where('user_id', $user->id);
+                    $hasCondition = true;
+                }
+
+                if (
+                    !empty($workflowIds) &&
+                    in_array('workflow_id', $columns, true)
+                ) {
+                    if ($hasCondition) {
+                        $q->orWhereIn('workflow_id', $workflowIds);
+                    } else {
+                        $q->whereIn('workflow_id', $workflowIds);
+                    }
+
+                    $hasCondition = true;
+                }
+
+                foreach (['bot_session_id', 'session_id'] as $column) {
+                    if (
+                        !empty($sessionIds) &&
+                        in_array($column, $columns, true)
+                    ) {
+                        if ($hasCondition) {
+                            $q->orWhereIn($column, $sessionIds);
+                        } else {
+                            $q->whereIn($column, $sessionIds);
+                        }
+
+                        $hasCondition = true;
+                    }
+                }
+
+                if (!$hasCondition) {
+                    $q->whereRaw('1 = 0');
+                }
+            });
+        }
+
+        return $query
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -569,61 +699,74 @@ class AdminUsageController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Resolve tenant for an event
+    | Resolve event owner
     |--------------------------------------------------------------------------
     */
 
-    private function resolveTenant(
+    private function resolveOwner(
         object $event,
         array $workflows,
         array $sessions
-    ): int {
-        $tenantId = (int) ($event->tenant_id ?? 0);
-
-        if ($tenantId > 0) {
-            return $tenantId;
-        }
-
-        $clientId = (int) ($event->client_id ?? 0);
-
-        if ($clientId > 0) {
-            return $clientId;
-        }
-
-        $sessionId = $event->session_id
-            ?? $event->bot_session_id
+    ): ?int {
+        $sessionId = $event->bot_session_id
+            ?? $event->session_id
             ?? null;
-
-        /*
-         * Prefer the session's workflow mapping if direct ownership
-         * is missing or the event has no workflow ID.
-         */
-        if ($sessionId && isset($sessions[$sessionId])) {
-            $sessionTenantId = (int) (
-                $sessions[$sessionId]['tenant_id'] ?? 0
-            );
-
-            if ($sessionTenantId > 0) {
-                return $sessionTenantId;
-            }
-        }
 
         $workflowId = $event->workflow_id ?? null;
 
-        if ($workflowId && isset($workflows[$workflowId])) {
-            return (int) $workflows[$workflowId]['tenant_id'];
+        $sessionOwner = null;
+        $workflowOwner = null;
+
+        if ($sessionId && isset($sessions[$sessionId])) {
+            $sessionOwner = (int) $sessions[$sessionId]['user_id'];
         }
 
-        return 0;
+        if ($workflowId && isset($workflows[$workflowId])) {
+            $workflowOwner = (int) $workflows[$workflowId]['user_id'];
+        }
+
+        // Reject events whose session and workflow owners disagree.
+        if (
+            $sessionOwner &&
+            $workflowOwner &&
+            $sessionOwner !== $workflowOwner
+        ) {
+            return null;
+        }
+
+        if ($sessionOwner) {
+            return $sessionOwner;
+        }
+
+        if ($workflowOwner) {
+            return $workflowOwner;
+        }
+
+        $directUserId = (int) ($event->user_id ?? 0);
+
+        return $directUserId > 0 ? $directUserId : null;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Date and activity helpers
+    | Helpers
     |--------------------------------------------------------------------------
     */
 
-    private function isWithinDateRange(
+    private function firstColumn(
+        array $columns,
+        array $candidates
+    ): ?string {
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function isWithinRange(
         $date,
         Carbon $from,
         Carbon $to
@@ -633,9 +776,7 @@ class AdminUsageController extends Controller
         }
 
         try {
-            $value = Carbon::parse($date);
-
-            return $value->betweenIncluded($from, $to);
+            return Carbon::parse($date)->betweenIncluded($from, $to);
         } catch (\Throwable $e) {
             return false;
         }
@@ -655,18 +796,5 @@ class AdminUsageController extends Controller
         ) {
             $row['last_activity'] = $createdAt;
         }
-    }
-
-    private function firstColumn(
-        array $columns,
-        array $candidates
-    ): ?string {
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, $columns, true)) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 }

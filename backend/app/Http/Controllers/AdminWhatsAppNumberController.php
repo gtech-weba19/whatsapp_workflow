@@ -10,35 +10,35 @@ use Illuminate\Validation\Rule;
 class AdminWhatsAppNumberController extends Controller
 {
     /**
-     * Get the authenticated user's tenant.
+     * Get authenticated user's ID.
      */
-    private function tenantId(Request $request): int
+    private function userId(Request $request): int
     {
-        $tenantId = $request->user()?->tenant_id;
+        $userId = $request->user()?->id;
 
         abort_if(
-            !$tenantId,
-            403,
-            'Tenant access is not configured.'
+            !$userId,
+            401,
+            'Unauthenticated.'
         );
 
-        return (int) $tenantId;
+        return (int) $userId;
     }
 
     /**
-     * Get WhatsApp accounts for the current tenant.
+     * Get WhatsApp accounts belonging to the current user.
      */
     public function accounts(Request $request)
     {
-        $tenantId = $this->tenantId($request);
+        $userId = $this->userId($request);
 
         return response()->json([
             'success' => true,
             'data' => WhatsAppAccount::query()
-                ->where('tenant_id', $tenantId)
+                ->where('user_id', $userId)
                 ->select(
                     'id',
-                    'tenant_id',
+                    'user_id',
                     'name',
                     'provider',
                     'status'
@@ -53,15 +53,14 @@ class AdminWhatsAppNumberController extends Controller
      */
     public function index(Request $request)
     {
-        $tenantId = $this->tenantId($request);
+        $userId = $this->userId($request);
 
         $query = WhatsAppNumber::query()
-            ->where('tenant_id', $tenantId)
+            ->where('user_id', $userId)
             ->with([
-                'whatsappAccount:id,name,provider,status',
+                'whatsappAccount:id,user_id,name,provider,status',
             ]);
 
-        // Optional account filter.
         if ($request->filled('whatsapp_account_id')) {
             $query->where(
                 'whatsapp_account_id',
@@ -115,18 +114,20 @@ class AdminWhatsAppNumberController extends Controller
         ]);
     }
 
-
+    /**
+     * Create a WhatsApp number.
+     */
     public function store(Request $request)
     {
-        $tenantId = $this->tenantId($request);
+        $userId = $this->userId($request);
 
         $validated = $this->validateNumber(
             $request,
-            $tenantId
+            $userId
         );
 
-
-        $validated['tenant_id'] = $tenantId;
+        // Ownership comes from the authenticated user.
+        $validated['user_id'] = $userId;
 
         $number = WhatsAppNumber::create($validated);
 
@@ -134,12 +135,14 @@ class AdminWhatsAppNumberController extends Controller
             'success' => true,
             'message' => 'WhatsApp number created successfully.',
             'data' => $number->load(
-                'whatsappAccount:id,name,provider,status'
+                'whatsappAccount:id,user_id,name,provider,status'
             ),
         ], 201);
     }
 
-
+    /**
+     * Show a WhatsApp number.
+     */
     public function show(Request $request, int $id)
     {
         $number = $this->findNumber($request, $id);
@@ -147,7 +150,7 @@ class AdminWhatsAppNumberController extends Controller
         return response()->json([
             'success' => true,
             'data' => $number->load(
-                'whatsappAccount:id,name,provider,status'
+                'whatsappAccount:id,user_id,name,provider,status'
             ),
         ]);
     }
@@ -157,18 +160,18 @@ class AdminWhatsAppNumberController extends Controller
      */
     public function update(Request $request, int $id)
     {
-        $tenantId = $this->tenantId($request);
+        $userId = $this->userId($request);
 
         $number = $this->findNumber($request, $id);
 
         $validated = $this->validateNumber(
             $request,
-            $tenantId,
+            $userId,
             $number->id
         );
 
-        // Do not allow changing ownership through the request.
-        unset($validated['tenant_id']);
+        // Never accept ownership from the request.
+        unset($validated['user_id']);
 
         $number->update($validated);
 
@@ -176,7 +179,7 @@ class AdminWhatsAppNumberController extends Controller
             'success' => true,
             'message' => 'WhatsApp number updated successfully.',
             'data' => $number->fresh()->load(
-                'whatsappAccount:id,name,provider,status'
+                'whatsappAccount:id,user_id,name,provider,status'
             ),
         ]);
     }
@@ -197,23 +200,25 @@ class AdminWhatsAppNumberController extends Controller
     }
 
     /**
-     * Find a number restricted to the current tenant.
+     * Find a number belonging to the authenticated user.
      */
     private function findNumber(
         Request $request,
         int $id
     ): WhatsAppNumber {
-        $tenantId = $this->tenantId($request);
+        $userId = $this->userId($request);
 
         return WhatsAppNumber::query()
-            ->where('tenant_id', $tenantId)
+            ->where('user_id', $userId)
             ->findOrFail($id);
     }
 
-
+    /**
+     * Validation rules.
+     */
     private function validateNumber(
         Request $request,
-        int $tenantId,
+        int $userId,
         ?int $ignoreId = null
     ): array {
         return $request->validate([
@@ -221,7 +226,7 @@ class AdminWhatsAppNumberController extends Controller
                 'required',
                 'integer',
                 Rule::exists('whatsapp_accounts', 'id')
-                    ->where('tenant_id', $tenantId),
+                    ->where('user_id', $userId),
             ],
 
             'phone_number' => [
@@ -229,7 +234,7 @@ class AdminWhatsAppNumberController extends Controller
                 'string',
                 'max:30',
                 Rule::unique('whatsapp_numbers', 'phone_number')
-                    ->where('tenant_id', $tenantId)
+                    ->where('user_id', $userId)
                     ->ignore($ignoreId),
             ],
 
@@ -251,7 +256,6 @@ class AdminWhatsAppNumberController extends Controller
                 'max:190',
             ],
 
-
             'status' => [
                 'required',
                 Rule::in([
@@ -261,8 +265,6 @@ class AdminWhatsAppNumberController extends Controller
                     'error',
                 ]),
             ],
-
-
         ]);
     }
 }

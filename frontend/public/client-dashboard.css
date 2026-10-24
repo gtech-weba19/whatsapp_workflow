@@ -1,0 +1,993 @@
+/* ==========================================================================
+   GLOBAL APP STYLESHEET & CLIENT DASHBOARD
+   Unified Font: 'Plus Jakarta Sans' Used Everywhere (Admin, Client, Sidebar, Header)
+   Location: /client-dashboard.css & src/admin/ClientDashboard.css
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,700&display=swap');
+
+/* --------------------------------------------------------------------------
+   1. UNIFIED FONT EVERYWHERE (App-wide, Admin, Client, Modals, Forms, Sidebar)
+   -------------------------------------------------------------------------- */
+
+html,
+body,
+button,
+input,
+optgroup,
+select,
+textarea,
+a,
+span,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+div,
+aside,
+header,
+nav,
+section {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+    /* Font Variable */
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Theme Colors */
+    --cd-primary: #00a884;
+    --cd-primary-hover: #008f70;
+    --cd-primary-light: #e6f7f2;
+    --cd-primary-border: #a7f3d0;
+    --cd-blue: #2563eb;
+    --cd-blue-light: #eff6ff;
+    --cd-purple: #7c3aed;
+    --cd-purple-light: #f5f3ff;
+    --cd-amber: #d97706;
+    --cd-amber-light: #fffbeb;
+    --cd-bg: #f6faf8;
+    --cd-card: #ffffff;
+    --cd-border: #e3ece8;
+    --cd-border-hover: #c9ded6;
+    --cd-text-dark: #0f172a;
+    --cd-text-body: #334155;
+    --cd-text-muted: #64748b;
+    --cd-text-light: #94a3b8;
+    --cd-radius-sm: 8px;
+    --cd-radius-md: 12px;
+    --cd-radius-lg: 16px;
+    --cd-radius-xl: 20px;
+    --cd-radius-full: 9999px;
+    --cd-shadow-card: 0 3px 12px -2px rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.02);
+    --cd-shadow-hover: 0 12px 28px -4px rgba(0, 168, 132, 0.09), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    --cd-shadow-btn: 0 4px 14px rgba(0, 168, 132, 0.25);
+    --cd-transition: all 0.2s ease-in-out;
+}
+
+
+/* --------------------------------------------------------------------------
+   2. MAIN CONTAINER (Modern Luminous Mesh Background)
+   -------------------------------------------------------------------------- */
+
+.cd-dashboard-wrap {
+    position: relative;
+    background-color: #f6faf8;
+    background-image: radial-gradient(ellipse 70% 45% at 50% -8%, rgba(0, 168, 132, 0.085), transparent), radial-gradient(circle 520px at 98% 8%, rgba(16, 185, 129, 0.055), transparent), radial-gradient(circle 420px at 2% 35%, rgba(6, 182, 212, 0.045), transparent), linear-gradient(180deg, #f8fbf9 0%, #f3f8f5 100%);
+    background-attachment: fixed;
+    color: var(--cd-text-body);
+    width: 100%;
+    min-height: 100%;
+    padding: 1.25rem 1rem 3rem 1rem;
+}
+
+@media (min-width: 640px) {
+    .cd-dashboard-wrap {
+        padding: 1.5rem 1.5rem 3.5rem 1.5rem;
+    }
+}
+
+.cd-dashboard-container {
+    width: 100%;
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+
+/* --------------------------------------------------------------------------
+   3. HERO BANNER WITH ROBOT MASCOT (Fluid, Non-Overlapping)
+   -------------------------------------------------------------------------- */
+
+.cd-hero-card {
+    position: relative;
+    background: linear-gradient(135deg, #e7f8f1 0%, #f2fbf7 50%, #e1f7ef 100%);
+    border: 1px solid #b7ecd8;
+    border-radius: var(--cd-radius-xl);
+    padding: 24px 26px;
+    box-shadow: 0 10px 28px -6px rgba(0, 168, 132, 0.09), 0 2px 8px -2px rgba(0, 168, 132, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .cd-hero-card {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 26px 32px;
+    }
+}
+
+.cd-hero-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 640px;
+}
+
+.cd-hero-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    color: #047857;
+    border: 1px solid #bbf7d0;
+    padding: 4px 12px;
+    border-radius: var(--cd-radius-full);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+}
+
+.cd-plan-chip-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+    padding: 4px 12px;
+    border-radius: var(--cd-radius-full);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(6, 95, 70, 0.05);
+}
+
+.cd-plan-chip-trial {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    padding: 4px 12px;
+    border-radius: var(--cd-radius-full);
+    font-size: 0.76rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(146, 64, 14, 0.05);
+}
+
+.cd-hero-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--cd-primary);
+}
+
+.cd-hero-title {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--cd-text-dark);
+    margin: 0;
+    line-height: 1.25;
+}
+
+@media (min-width: 640px) {
+    .cd-hero-title {
+        font-size: 1.95rem;
+    }
+}
+
+.cd-hero-name {
+    color: var(--cd-primary);
+}
+
+.cd-hero-subtitle {
+    font-size: 0.94rem;
+    color: var(--cd-text-body);
+    margin: 6px 0 16px 0;
+    line-height: 1.5;
+}
+
+.cd-hero-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+
+/* ==========================================================================
+   WALKING ROBOT MASCOT USING WHATSAPP (Walks Left-to-Right & Right-to-Left)
+   ========================================================================== */
+
+.cd-mascot-box {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px auto 0 auto;
+    position: relative;
+    user-select: none;
+    width: 290px;
+    height: 235px;
+    overflow: visible;
+}
+
+@media (min-width: 768px) {
+    .cd-mascot-box {
+        width: 340px;
+        height: 245px;
+        margin: 0 0 0 16px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .cd-mascot-box {
+        width: 370px;
+        height: 250px;
+        margin: 0 0 0 20px;
+    }
+}
+
+/* 1. Horizontal Patrol Walk (Walks Left to Right, turns, walks Right to Left) */
+.cd-mascot-walker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: cdPatrolWalking 9s ease-in-out infinite;
+    transform-origin: 50% 50%;
+    will-change: transform;
+}
+
+@keyframes cdPatrolWalking {
+    0% {
+        transform: translateX(-40px) scaleX(1);
+    }
+    43% {
+        transform: translateX(42px) scaleX(1);
+    }
+    46% {
+        transform: translateX(42px) scaleX(0.05);
+    }
+    50% {
+        transform: translateX(42px) scaleX(-1);
+    }
+    93% {
+        transform: translateX(-40px) scaleX(-1);
+    }
+    96% {
+        transform: translateX(-40px) scaleX(-0.05);
+    }
+    100% {
+        transform: translateX(-40px) scaleX(1);
+    }
+}
+
+@media (min-width: 768px) {
+    @keyframes cdPatrolWalking {
+        0% {
+            transform: translateX(-55px) scaleX(1);
+        }
+        43% {
+            transform: translateX(55px) scaleX(1);
+        }
+        46% {
+            transform: translateX(55px) scaleX(0.05);
+        }
+        50% {
+            transform: translateX(55px) scaleX(-1);
+        }
+        93% {
+            transform: translateX(-55px) scaleX(-1);
+        }
+        96% {
+            transform: translateX(-55px) scaleX(-0.05);
+        }
+        100% {
+            transform: translateX(-55px) scaleX(1);
+        }
+    }
+}
+
+@media (min-width: 1024px) {
+    @keyframes cdPatrolWalking {
+        0% {
+            transform: translateX(-68px) scaleX(1);
+        }
+        43% {
+            transform: translateX(68px) scaleX(1);
+        }
+        46% {
+            transform: translateX(68px) scaleX(0.05);
+        }
+        50% {
+            transform: translateX(68px) scaleX(-1);
+        }
+        93% {
+            transform: translateX(-68px) scaleX(-1);
+        }
+        96% {
+            transform: translateX(-68px) scaleX(-0.05);
+        }
+        100% {
+            transform: translateX(-68px) scaleX(1);
+        }
+    }
+}
+
+.cd-mascot-svg {
+    width: 220px;
+    height: 210px;
+    display: block;
+    filter: drop-shadow(0 14px 28px rgba(0, 168, 132, 0.16));
+    transition: transform 0.25s ease;
+}
+
+.cd-mascot-svg:hover {
+    transform: scale(1.04);
+}
+
+@media (min-width: 640px) {
+    .cd-mascot-svg {
+        width: 245px;
+        height: 235px;
+    }
+}
+
+/* 2. Walking Upper Body Bob & Subtle Bounce with Every Step */
+.cd-robot-walking-body {
+    animation: cdWalkingBodyBob 0.48s ease-in-out infinite alternate;
+    transform-origin: 120px 165px;
+}
+
+@keyframes cdWalkingBodyBob {
+    0% {
+        transform: translateY(0px) rotate(-1.5deg);
+    }
+    100% {
+        transform: translateY(-5px) rotate(1.5deg);
+    }
+}
+
+/* 3. Walking Legs Swing (Brisk, Natural Stride Cycle) */
+.cd-robot-leg-left {
+    animation: cdLegSwingLeft 0.48s ease-in-out infinite alternate;
+    transform-origin: 104px 166px;
+}
+
+@keyframes cdLegSwingLeft {
+    0% {
+        transform: rotate(-22deg) translateY(-2px);
+    }
+    100% {
+        transform: rotate(24deg) translateY(0px);
+    }
+}
+
+.cd-robot-leg-right {
+    animation: cdLegSwingRight 0.48s ease-in-out infinite alternate;
+    transform-origin: 136px 166px;
+}
+
+@keyframes cdLegSwingRight {
+    0% {
+        transform: rotate(24deg) translateY(0px);
+    }
+    100% {
+        transform: rotate(-22deg) translateY(-2px);
+    }
+}
+
+/* 4. Tapping Hand on Mobile Screen (Fast Chat Texting Motion) */
+.cd-robot-tapping-hand {
+    animation: cdFingerTap 0.32s ease-in-out infinite alternate;
+    transform-origin: 172px 146px;
+}
+
+@keyframes cdFingerTap {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+    100% {
+        transform: translate(-3px, 2px) scale(0.95);
+    }
+}
+
+/* 5. WhatsApp Mobile Screen Pulse & Glow */
+.cd-phone-screen-glow {
+    animation: cdPhoneScreenPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes cdPhoneScreenPulse {
+    0% {
+        filter: drop-shadow(0 0 2px rgba(37, 211, 102, 0.2));
+    }
+    100% {
+        filter: drop-shadow(0 0 7px rgba(37, 211, 102, 0.45));
+    }
+}
+
+/* 6. Floating WhatsApp Bubbles from Phone Screen */
+.cd-chat-bubble-float-1 {
+    animation: cdBubbleFloat1 2.8s ease-in-out infinite;
+    transform-origin: 198px 84px;
+}
+
+.cd-chat-bubble-float-2 {
+    animation: cdBubbleFloat2 3.4s ease-in-out infinite 0.5s;
+    transform-origin: 180px 42px;
+}
+
+@keyframes cdBubbleFloat1 {
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+        opacity: 0.95;
+    }
+    50% {
+        transform: translateY(-8px) scale(1.06);
+        opacity: 1;
+    }
+}
+
+@keyframes cdBubbleFloat2 {
+    0%, 100% {
+        transform: translateY(0px) scale(0.95);
+        opacity: 0.9;
+    }
+    50% {
+        transform: translateY(-10px) scale(1.08);
+        opacity: 1;
+    }
+}
+
+/* 7. Dynamic Ground Shadow Stretching during Stride */
+.cd-robot-ground-shadow {
+    animation: cdShadowWalk 0.48s ease-in-out infinite alternate;
+    transform-origin: 120px 226px;
+}
+
+@keyframes cdShadowWalk {
+    0% {
+        transform: scaleX(0.88) scaleY(1.12);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scaleX(1.12) scaleY(0.88);
+        opacity: 0.95;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   4. BUTTONS
+   -------------------------------------------------------------------------- */
+
+.cd-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: var(--cd-radius-md);
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: var(--cd-transition);
+    white-space: nowrap;
+}
+
+.cd-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.cd-btn-primary {
+    background: var(--cd-primary);
+    color: #ffffff;
+    box-shadow: var(--cd-shadow-btn);
+}
+
+.cd-btn-primary:hover:not(:disabled) {
+    background: var(--cd-primary-hover);
+    transform: translateY(-1px);
+}
+
+.cd-btn-secondary {
+    background: #ffffff;
+    color: var(--cd-text-dark);
+    border-color: var(--cd-border);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.cd-btn-secondary:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: var(--cd-border-hover);
+    color: var(--cd-primary);
+}
+
+.cd-btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: var(--cd-radius-sm);
+}
+
+
+/* --------------------------------------------------------------------------
+   5. TOP 4 STAT CARDS (Responsive Auto-Fit)
+   -------------------------------------------------------------------------- */
+
+.cd-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.cd-stat-card {
+    background: var(--cd-card);
+    border: 1px solid var(--cd-border);
+    border-radius: var(--cd-radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--cd-shadow-card);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: var(--cd-transition);
+}
+
+.cd-stat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--cd-primary-border);
+    box-shadow: var(--cd-shadow-hover);
+}
+
+.cd-stat-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cd-stat-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--cd-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.cd-stat-value {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--cd-text-dark);
+    line-height: 1.15;
+}
+
+.cd-stat-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--cd-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cd-stat-icon-box.green {
+    background: var(--cd-primary-light);
+    color: var(--cd-primary);
+}
+
+.cd-stat-icon-box.blue {
+    background: var(--cd-blue-light);
+    color: var(--cd-blue);
+}
+
+.cd-stat-icon-box.purple {
+    background: var(--cd-purple-light);
+    color: var(--cd-purple);
+}
+
+.cd-stat-icon-box.amber {
+    background: var(--cd-amber-light);
+    color: var(--cd-amber);
+}
+
+.cd-stat-foot {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--cd-text-muted);
+}
+
+
+/* --------------------------------------------------------------------------
+   6. GRAPH & USAGE SECTION (Side-by-Side on Desktop, Never Overlaps)
+   -------------------------------------------------------------------------- */
+
+.cd-middle-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    width: 100%;
+}
+
+@media (min-width: 980px) {
+    .cd-middle-grid {
+        grid-template-columns: 1.4fr 1fr;
+    }
+}
+
+.cd-card {
+    background: var(--cd-card);
+    border: 1px solid var(--cd-border);
+    border-radius: var(--cd-radius-lg);
+    padding: 20px 22px;
+    box-shadow: var(--cd-shadow-card);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: var(--cd-transition);
+}
+
+.cd-card:hover {
+    border-color: var(--cd-border-hover);
+    box-shadow: var(--cd-shadow-hover);
+}
+
+.cd-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.cd-card-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--cd-text-dark);
+    margin: 0;
+}
+
+
+/* Graph Timeframe Filter Buttons */
+
+.cd-time-tabs {
+    display: inline-flex;
+    align-items: center;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.cd-time-btn {
+    border: none;
+    background: transparent;
+    padding: 4px 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--cd-text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--cd-transition);
+}
+
+.cd-time-btn.active {
+    background: var(--cd-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(0, 168, 132, 0.25);
+}
+
+
+/* SVG Chart Container */
+
+.cd-chart-wrap {
+    width: 100%;
+    height: 200px;
+    position: relative;
+    overflow: hidden;
+}
+
+
+/* Progress bar inside usage card */
+
+.cd-progress-track {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: var(--cd-radius-full);
+    overflow: hidden;
+    margin: 12px 0;
+}
+
+.cd-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00a884 0%, #10b981 100%);
+    border-radius: var(--cd-radius-full);
+    transition: width 0.4s ease;
+}
+
+
+/* --------------------------------------------------------------------------
+   7. BOTS & WORKFLOWS PANELS
+   -------------------------------------------------------------------------- */
+
+.cd-panel {
+    background: var(--cd-card);
+    border: 1px solid var(--cd-border);
+    border-radius: var(--cd-radius-lg);
+    box-shadow: var(--cd-shadow-card);
+    overflow: hidden;
+}
+
+.cd-panel-head {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #ffffff;
+}
+
+@media (min-width: 640px) {
+    .cd-panel-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+}
+
+.cd-panel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cd-panel-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--cd-radius-md);
+    background: var(--cd-primary-light);
+    color: var(--cd-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cd-panel-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--cd-text-dark);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cd-count-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: #f1f5f9;
+    color: var(--cd-text-body);
+    padding: 2px 8px;
+    border-radius: var(--cd-radius-full);
+}
+
+.cd-panel-desc {
+    font-size: 0.8rem;
+    color: var(--cd-text-muted);
+    margin: 2px 0 0 0;
+}
+
+.cd-panel-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cd-panel-body {
+    padding: 20px;
+}
+
+
+/* Cards Grid inside panels */
+
+.cd-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.cd-item-card {
+    background: #ffffff;
+    border: 1px solid var(--cd-border);
+    border-radius: var(--cd-radius-md);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: var(--cd-transition);
+}
+
+.cd-item-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--cd-primary-border);
+    box-shadow: var(--cd-shadow-card);
+}
+
+.cd-item-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.cd-item-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--cd-radius-md);
+    background: var(--cd-primary-light);
+    color: var(--cd-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cd-item-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--cd-text-dark);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cd-item-desc {
+    font-size: 0.78rem;
+    color: var(--cd-text-muted);
+    margin: 3px 0 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cd-item-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+
+.cd-badge-active {
+    background: #dcfce7;
+    color: #15803d;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--cd-radius-full);
+    font-size: 0.72rem;
+}
+
+.cd-badge-draft {
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--cd-radius-full);
+    font-size: 0.72rem;
+}
+
+.cd-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--cd-primary);
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 0.8rem;
+    transition: var(--cd-transition);
+}
+
+.cd-link:hover {
+    color: var(--cd-primary-hover);
+    text-decoration: underline;
+}
+
+
+/* Empty State */
+
+.cd-empty-box {
+    text-align: center;
+    padding: 36px 20px;
+    border: 2px dashed #cbd5e1;
+    border-radius: var(--cd-radius-lg);
+    background: #f8fafc;
+}
+
+.cd-empty-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #ffffff;
+    color: var(--cd-text-muted);
+    border: 1px solid var(--cd-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px auto;
+}
+
+.cd-empty-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--cd-text-dark);
+    margin: 0 0 6px 0;
+}
+
+.cd-empty-text {
+    font-size: 0.84rem;
+    color: var(--cd-text-muted);
+    max-width: 440px;
+    margin: 0 auto 16px auto;
+    line-height: 1.5;
+}
+
+
+/* --------------------------------------------------------------------------
+   8. FOOTER
+   -------------------------------------------------------------------------- */
+
+.cd-footer {
+    margin-top: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--cd-border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--cd-text-light);
+}
+
+@media (min-width: 640px) {
+    .cd-footer {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+}

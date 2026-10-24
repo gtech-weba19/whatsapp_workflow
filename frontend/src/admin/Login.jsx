@@ -10,9 +10,11 @@ import {
   Mail,
   LockKeyhole,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   MessageCircle,
   Headset,
+  RefreshCw,
 } from "lucide-react";
 
 import "react-toastify/dist/ReactToastify.css";
@@ -35,14 +37,67 @@ const Login = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
+  // Both steps stay on this page; no verification route is created.
+  const [step, setStep] = useState("login");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+
+
   useEffect(() => {
+    const registrationMessage = sessionStorage.getItem(
+      "registration_success_message"
+    );
+
+    if (registrationMessage) {
+      toast.success(registrationMessage);
+      sessionStorage.removeItem("registration_success_message");
+    }
+
     const logoutMessage = sessionStorage.getItem("logoutMessage");
 
     if (logoutMessage) {
       toast.success(logoutMessage);
       sessionStorage.removeItem("logoutMessage");
     }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("email_verification_token");
+    const email = params.get("email");
+
+    if (token && email) {
+      confirmEmailVerification(email, token);
+    }
+    // Run once when the component loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
+  useEffect(() => {
+  const handleUnauthorized = (event) => {
+    if (event.detail?.status !== 401) return;
+
+    clearAuthData();
+
+    sessionStorage.setItem(
+      "logoutMessage",
+      "Your session has expired. Please log in again."
+    );
+
+    if (window.location.pathname !== "/") {
+      window.location.replace("/");
+    }
+  };
+
+  window.addEventListener("auth:unauthorized", handleUnauthorized);
+
+  return () => {
+    window.removeEventListener(
+      "auth:unauthorized",
+      handleUnauthorized
+    );
+  };
+}, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -53,21 +108,83 @@ const Login = () => {
     }));
   };
 
+const clearAuthData = () => {
+  [
+    "token",
+    "auth_token",
+    "access_token",
+    "user",
+    "tenant",
+  ].forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+
+  delete axios.defaults.headers.common.Authorization;
+};
+
+  const saveAuthData = (data) => {
+    const token =
+      data?.token ||
+      data?.access_token ||
+      data?.data?.token ||
+      data?.data?.access_token;
+
+    const user = data?.user || data?.data?.user || null;
+
+    if (!token || !user) {
+      throw new Error("Login response did not include a token and user.");
+    }
+
+    clearAuthData();
+
+    const storage = rememberMe ? localStorage : sessionStorage;
+
+    storage.setItem("token", token);
+    storage.setItem("user", JSON.stringify(user));
+
+    const tenant = data?.tenant || data?.data?.tenant || null;
+
+    if (tenant) {
+      storage.setItem("tenant", JSON.stringify(tenant));
+    }
+
+    axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+  };
+
+  const finishLogin = async (email, password) => {
+    const response = await axios.post(
+      `${API}/login`,
+      { email, password },
+      {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      }
+    );
+
+    saveAuthData(response.data);
+
+    toast.success(response.data?.message || "Login successful!");
+    navigate("/dashboard", { replace: true });
+  };
+
   const doLogin = async (event) => {
     event.preventDefault();
 
     if (loginLoading) return;
 
-    const email = login.email.trim();
+    const email = login.email.trim().toLowerCase();
+    const password = login.password;
 
-    if (!email || !login.password) {
+    if (!email || !password) {
       toast.warning("Please enter your email and password.");
       return;
     }
 
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailPattern.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.warning("Please enter a valid email address.");
       return;
     }
@@ -75,151 +192,157 @@ const Login = () => {
     setLoginLoading(true);
 
     try {
+      await finishLogin(email, password);
+    } catch (error) {
+      console.error("Login error:", error?.response?.data || error.message);
+
+      const status = error?.response?.status;
+      const errorData = error?.response?.data;
+
+      if (
+        status === 403 &&
+        errorData?.email_verified === false
+      ) {
+        setVerificationEmail(
+          String(errorData?.email || email).trim().toLowerCase()
+        );
+        setVerificationSent(false);
+        setStep("verify-email");
+
+        toast.info("Please verify your email to continue.");
+        return;
+      }
+
+      if (error.code === "ECONNABORTED") {
+        toast.error("The request timed out. Please try again.");
+        return;
+      }
+
+      if (!error.response) {
+        toast.error(
+          "Unable to connect to the server. Please check your connection."
+        );
+        return;
+      }
+
+      const validationMessage = errorData?.errors
+        ? Object.values(errorData.errors).flat().join(" ")
+        : null;
+
+      toast.error(
+        errorData?.message ||
+          errorData?.error ||
+          validationMessage ||
+          (status === 401 || status === 422
+            ? "Invalid email or password."
+            : status === 429
+              ? "Too many attempts. Please try again later."
+              : "Login failed. Please try again.")
+      );
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Sends the verification email to the address displayed in Step 2.
+  const sendVerificationLink = async () => {
+    if (verificationLoading) return;
+
+    if (!verificationEmail) {
+      toast.error("Email Address is missing.");
+      return;
+    }
+
+    setVerificationLoading(true);
+
+    try {
       const response = await axios.post(
-        `${API}/login`,
+        `${API}/email/send-verification-link`,
+        { email: verificationEmail },
         {
-          email,
-          password: login.password,
-        },
-        {
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
+          headers: { Accept: "application/json" },
           timeout: 30000,
         }
       );
 
-      const data = response.data;
-
-      const token =
-        data?.token ||
-        data?.access_token ||
-        data?.data?.token ||
-        data?.data?.access_token;
-
-      if (!token) {
-        toast.error(data?.message || "Login token was not received.");
-        return;
-      }
-
-      const user = data?.user || data?.data?.user || null;
-
-      if (!user) {
-        toast.error("User information was not received from the server.");
-        return;
-      }
-
-      // Remove old authentication data.
-      [
-        "token",
-        "auth_token",
-        "access_token",
-        "user",
-        "tenant",
-      ].forEach((key) => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
-      });
-
-      // Save the latest authentication response.
-      if (rememberMe) {
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
-
-        if (data?.tenant) {
-          localStorage.setItem("tenant", JSON.stringify(data.tenant));
-        } else if (data?.data?.tenant) {
-          localStorage.setItem(
-            "tenant",
-            JSON.stringify(data.data.tenant)
-          );
-        }
+      if (response.data?.success) {
+        setVerificationSent(true);
+        toast.success(
+          response.data?.message ||
+            "Verification link sent. Please check your inbox."
+        );
+      } else if (response.data?.verified) {
+        toast.info("Your email is already verified. Please sign in.");
+        setStep("login");
       } else {
-        sessionStorage.setItem("token", token);
-        sessionStorage.setItem("user", JSON.stringify(user));
-
-        if (data?.tenant) {
-          sessionStorage.setItem("tenant", JSON.stringify(data.tenant));
-        } else if (data?.data?.tenant) {
-          sessionStorage.setItem(
-            "tenant",
-            JSON.stringify(data.data.tenant)
-          );
-        }
+        toast.error(
+          response.data?.message || "Unable to send verification email."
+        );
       }
-
-      // Set Axios authorization header.
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-      // Determine the correct destination from backend status.
-      const role = user?.role;
-      const onboardingStep = user?.onboarding_step;
-
-      let destination;
-
-      if (role === "super_admin") {
-        destination = "/dashboard";
-      } else {
-        switch (onboardingStep) {
-          case "connect_whatsapp":
-            destination = "/connect-whatsapp";
-            break;
-
-          case "completed":
-            destination = "/dashboard";
-            break;
-
-          case "choose_plan":
-          default:
-            destination = "/plans";
-            break;
-        }
-      }
-
-      console.log("Login successful");
-      console.log("User role:", role);
-      console.log("Onboarding step:", onboardingStep);
-      console.log("Redirect destination:", destination);
-
-      toast.success(data?.message || "Login successful!");
-
-      // Replace Login history entry after authentication.
-      navigate(destination, { replace: true });
     } catch (error) {
       console.error(
-        "Login error:",
+        "Send verification email error:",
         error?.response?.data || error.message
       );
 
-      if (error.code === "ECONNABORTED") {
-        toast.error("The request timed out. Please try again.");
-      } else if (!error.response) {
-        toast.error(
-          "Unable to connect to the server. Please check your connection."
-        );
-      } else {
-        const errors = error.response.data?.errors;
-
-        const validationMessage = errors
-          ? Object.values(errors).flat().join(" ")
-          : null;
-
-        const status = error.response.status;
-
-        toast.error(
-          error.response.data?.message ||
-            error.response.data?.error ||
-            validationMessage ||
-            (status === 401
-              ? "Invalid email or password."
-              : status === 429
-                ? "Too many attempts. Please try again later."
-                : "Login failed. Please try again.")
-        );
-      }
+      toast.error(
+        error?.response?.data?.message ||
+          "Unable to send verification email. Please try again."
+      );
     } finally {
-      setLoginLoading(false);
+      setVerificationLoading(false);
+    }
+  };
+
+      // This endpoint must validate the token and update users.email_verified_at.
+      const confirmEmailVerification = async (email, token) => {
+        setStep("verify-email");
+        setVerificationEmail(String(email).trim().toLowerCase());
+        setVerificationLoading(true);
+
+        try {
+          const response = await axios.post(
+            `${API}/email/confirm-verification`,
+            { email, token },
+            {
+              headers: { Accept: "application/json" },
+              timeout: 30000,
+            }
+          );
+
+      if (response.data?.verified) {
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname
+      );
+
+      setVerificationSent(false);
+      setStep("login");
+
+      setLogin((previous) => ({
+        ...previous,
+        email: String(email).trim().toLowerCase(),
+        password: "",
+      }));
+
+      toast.success("Email verified successfully. Please log in.");
+    }
+
+      // No password is saved or reused after following the email link.
+      // The user signs in again with their password.
+    } catch (error) {
+      console.error(
+        "Email confirmation error:",
+        error?.response?.data || error.message
+      );
+
+      toast.error(
+        error?.response?.data?.message ||
+          "Verification link is invalid or expired. Please request a new link."
+      );
+    } finally {
+      setVerificationLoading(false);
     }
   };
 
@@ -314,7 +437,7 @@ const Login = () => {
           </div>
         </section>
 
-        {/* RIGHT: LOGIN FORM */}
+        {/* RIGHT: LOGIN / VERIFICATION STEPS */}
         <main className="flex h-full min-h-0 items-center justify-center overflow-y-auto px-5 py-4 sm:px-8 lg:px-10">
           <div className="my-auto w-full max-w-md py-2">
             {/* Mobile Logo */}
@@ -340,162 +463,228 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Login Card */}
-            <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xl shadow-slate-200/40 sm:p-6">
-              <div className="mb-5">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
-                  <LockKeyhole size={21} />
-                </div>
 
-                <p className="mb-1.5 text-xs font-semibold tracking-wider text-emerald-700 uppercase">
-                  Build Your WhatsApp Chatbot
-                </p>
 
-                <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  Welcome back
-                </h2>
-
-                <p className="mt-2 text-sm leading-5 text-slate-500">
-                  Sign in to manage your WhatsApp business communications.
-                </p>
-              </div>
-
-              <form onSubmit={doLogin} className="space-y-4">
-                {/* Email */}
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
-                  >
-                    Email address
-                  </label>
-
-                  <div className="relative">
-                    <Mail
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={login.email}
-                      onChange={handleChange}
-                      placeholder="you@company.com"
-                      autoComplete="username"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      required
-                      disabled={loginLoading}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
+            {step === "login" ? (
+              <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xl shadow-slate-200/40 sm:p-6">
+                <div className="mb-5">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
+                    <LockKeyhole size={21} />
                   </div>
+
+                  <p className="mb-1.5 text-xs font-semibold tracking-wider text-emerald-700 uppercase">
+                    Build Your WhatsApp Chatbot
+                  </p>
+
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                    Welcome Back
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-5 text-slate-500">
+                    Sign in to manage your WhatsApp Business Communications.
+                  </p>
                 </div>
 
-                {/* Password */}
-                <div>
-                  <label
-                    htmlFor="password"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
-                  >
-                    Password
-                  </label>
-
-                  <div className="relative">
-                    <LockKeyhole
-                      size={18}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      value={login.password}
-                      onChange={handleChange}
-                      placeholder="Enter your password"
-                      autoComplete="current-password"
-                      required
-                      disabled={loginLoading}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((value) => !value)}
-                      disabled={loginLoading}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      aria-pressed={showPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50"
+                <form onSubmit={doLogin} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="email"
+                      className="mb-1.5 block text-sm font-semibold text-slate-700"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
+                      Email Address
+                    </label>
 
-                {/* Remember Me */}
-                <div className="flex items-center">
+                    <div className="relative">
+                      <Mail
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={login.email}
+                        onChange={handleChange}
+                        placeholder="you@company.com"
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        required
+                        disabled={loginLoading}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="password"
+                      className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    >
+                      Password
+                    </label>
+
+                    <div className="relative">
+                      <LockKeyhole
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        value={login.password}
+                        onChange={handleChange}
+                        placeholder="Enter your password"
+                        autoComplete="current-password"
+                        required
+                        disabled={loginLoading}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((value) => !value)}
+                        disabled={loginLoading}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
                   <label className="inline-flex cursor-pointer items-center gap-2.5 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={rememberMe}
-                      onChange={(event) => setRememberMe(event.target.checked)}
+                      onChange={(event) =>
+                        setRememberMe(event.target.checked)
+                      }
                       disabled={loginLoading}
-                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600 focus:ring-emerald-500"
+                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
                     />
                     Remember me on this device
                   </label>
+
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        Signing you in...
+                      </>
+                    ) : (
+                      <>
+                        Sign in to WhatsApp workspace
+                        <ArrowRight
+                          size={17}
+                          className="transition-transform group-hover:translate-x-1"
+                        />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                  <ShieldCheck
+                    size={18}
+                    className="mt-0.5 shrink-0 text-emerald-600"
+                  />
+                  <p className="text-xs leading-5 text-slate-500">
+                    Your workspace is protected. Never share your password
+                    or authentication token with anyone.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xl shadow-slate-200/40 sm:p-6">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
+                  <ShieldCheck size={24} />
                 </div>
 
-                {/* Submit */}
+                <p className="mb-1.5 text-xs font-semibold tracking-wider text-emerald-700 uppercase">
+                  Step 2 of 2
+                </p>
+
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                  Verify your email
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Verify your email address to unlock your WhatsApp workspace.
+                </p>
+
+                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium text-slate-500">
+                    Verification email will be sent to
+                  </p>
+                  <p className="mt-1 break-all text-sm font-semibold text-slate-800">
+                    {verificationEmail}
+                  </p>
+                </div>
+
+                {verificationSent && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm leading-5 text-emerald-800">
+                    Verification email sent. Open the link in your email,
+                    then return here and sign in.
+                  </div>
+                )}
+
                 <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-700/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  onClick={sendVerificationLink}
+                  disabled={verificationLoading}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loginLoading ? (
+                  {verificationLoading ? (
                     <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                      Signing you in...
+                      <RefreshCw size={17} className="animate-spin" />
+                      Please wait...
                     </>
                   ) : (
                     <>
-                      Sign in to WhatsApp workspace
-                      <ArrowRight
-                        size={17}
-                        className="transition-transform group-hover:translate-x-1"
-                      />
+                      <Mail size={17} />
+                      Send Verification Link
                     </>
                   )}
                 </button>
-              </form>
 
-              {/* Security Notice */}
-              <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                <ShieldCheck
-                  size={18}
-                  className="mt-0.5 shrink-0 text-emerald-600"
-                />
-                <p className="text-xs leading-5 text-slate-500">
-                  Your workspace is protected. Never share your password
-                  or authentication token with anyone.
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("login");
+                    setVerificationSent(false);
+                  }}
+                  disabled={verificationLoading}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ArrowLeft size={17} />
+                  Back to Login
+                </button>
+
+                <p className="mt-5 text-center text-xs leading-5 text-slate-500">
+                  Already clicked the verification link? Sign in again to
+                  continue to your dashboard.
                 </p>
               </div>
-            </div>
+            )}
 
-            {/* Register Link */}
             <p className="mt-4 text-center text-sm text-slate-500">
               Don&apos;t have an account?{" "}
               <Link
                 to="/register"
                 className="font-semibold text-emerald-700 hover:text-emerald-800"
               >
-                Create account
+                Create Account
               </Link>
             </p>
 
-            {/* Footer */}
             <p className="mt-4 text-center text-xs leading-5 text-slate-400">
               © {new Date().getFullYear()} WABA. All rights reserved.
             </p>

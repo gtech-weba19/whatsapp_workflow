@@ -8561,6 +8561,8 @@ order_id={{order_id}}`}
 const WorkflowBuilder = () => {
 
     const navigate = useNavigate();
+
+    const [saved, setSaved] = useState(false);
      /* =======================================================
      AUTH
   ======================================================= */
@@ -8589,7 +8591,7 @@ const WorkflowBuilder = () => {
 
   const [name, setName] =
     useState(
-      "New WhatsApp Workflow"
+      ""
     );
 
   const [
@@ -8609,12 +8611,33 @@ const WorkflowBuilder = () => {
    TENANT / BOT SELECTION
 ======================================================= */
 
+const storedUser = (() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem("user") ||
+      sessionStorage.getItem("user") ||
+      "{}"
+    );
+  } catch {
+    return {};
+  }
+})();
+
+const isSuperAdmin = Boolean(
+  storedUser?.is_super_admin ||
+  storedUser?.role === "super_admin" ||
+  storedUser?.role_name === "Super Admin"
+);
+
 const [tenants, setTenants] = useState([]);
 const [bots, setBots] = useState([]);
 
-const [selectedTenantId, setSelectedTenantId] = useState(
-  localStorage.getItem("workflow_tenant_id") || ""
-);
+const [selectedTenantId, setSelectedTenantId] = useState(() => {
+  if (isSuperAdmin) {
+    return localStorage.getItem("workflow_tenant_id") || "";
+  }
+  return storedUser?.tenant_id ? String(storedUser.tenant_id) : "";
+});
 
 const [selectedBotId, setSelectedBotId] = useState(
   localStorage.getItem("workflow_bot_id") || ""
@@ -9434,11 +9457,11 @@ const onDrop = useCallback(
 
 
 /* =======================================================
-   LOAD TENANTS / CLIENTS
+   LOAD TENANTS / CLIENTS (Super Admin only)
 ======================================================= */
 
 useEffect(() => {
-  if (!token) return;
+  if (!token || !isSuperAdmin) return;
 
   let cancelled = false;
 
@@ -9482,14 +9505,20 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [token]);
+}, [token, isSuperAdmin]);
 
 /* =======================================================
-   LOAD BOTS FOR SELECTED TENANT
+   LOAD BOTS (For user or selected tenant)
 ======================================================= */
 
 useEffect(() => {
-  if (!token || !selectedTenantId) {
+  if (!token) {
+    setBots([]);
+    return;
+  }
+
+  // Super admin must select a tenant first
+  if (isSuperAdmin && !selectedTenantId) {
     setBots([]);
     return;
   }
@@ -9514,26 +9543,33 @@ useEffect(() => {
         ? payload
         : payload?.data ?? [];
 
-      const tenantBots = (Array.isArray(list) ? list : [])
-        .filter(
+      let userBots = Array.isArray(list) ? list : [];
+
+      if (isSuperAdmin && selectedTenantId) {
+        userBots = userBots.filter(
           (bot) =>
             String(bot.tenant_id ?? bot.client?.id) ===
             String(selectedTenantId)
         );
+      }
 
       if (!cancelled) {
-        setBots(tenantBots);
+        setBots(userBots);
 
-        // Clear a previously selected bot if it belongs
-        // to a different tenant.
+        // Auto-select first bot if none selected or previous invalid
         setSelectedBotId((currentId) => {
-          const stillExists = tenantBots.some(
+          const stillExists = userBots.some(
             (bot) => String(bot.id) === String(currentId)
           );
 
           if (!stillExists) {
-            localStorage.removeItem("workflow_bot_id");
-            return "";
+            const nextBotId = userBots[0] ? String(userBots[0].id) : "";
+            if (nextBotId) {
+              localStorage.setItem("workflow_bot_id", nextBotId);
+            } else {
+              localStorage.removeItem("workflow_bot_id");
+            }
+            return nextBotId;
           }
 
           return currentId;
@@ -9544,10 +9580,6 @@ useEffect(() => {
 
       if (!cancelled) {
         setBots([]);
-        toast.error(
-          error.response?.data?.message ||
-          "Unable to load bots."
-        );
       }
     } finally {
       if (!cancelled) setLoadingBots(false);
@@ -9559,104 +9591,46 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [token, selectedTenantId]);
+}, [token, selectedTenantId, isSuperAdmin]);
 
 /* =======================================================
-   LOAD BOTS FOR SELECTED TENANT
+   LOAD WORKFLOWS (Strictly user-isolated)
+======================================================= */
+/* =======================================================
+   LOAD WORKFLOWS
 ======================================================= */
 
 useEffect(() => {
-  if (!token || !selectedTenantId) {
-    setBots([]);
-    return;
-  }
+  let isMounted = true;
 
-  let cancelled = false;
-
-  const loadBots = async () => {
-    setLoadingBots(true);
-
-    try {
-      const response = await axios.get(
-        `${API}/bots`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const payload = response.data?.data ?? response.data;
-      const list = Array.isArray(payload)
-        ? payload
-        : payload?.data ?? [];
-
-      const tenantBots = (Array.isArray(list) ? list : [])
-        .filter(
-          (bot) =>
-            String(bot.tenant_id ?? bot.client?.id) ===
-            String(selectedTenantId)
-        );
-
-      if (!cancelled) {
-        setBots(tenantBots);
-
-        // Clear a previously selected bot if it belongs
-        // to a different tenant.
-        setSelectedBotId((currentId) => {
-          const stillExists = tenantBots.some(
-            (bot) => String(bot.id) === String(currentId)
-          );
-
-          if (!stillExists) {
-            localStorage.removeItem("workflow_bot_id");
-            return "";
-          }
-
-          return currentId;
-        });
-      }
-    } catch (error) {
-      console.error("BOT LOAD ERROR:", error);
-
-      if (!cancelled) {
-        setBots([]);
-        toast.error(
-          error.response?.data?.message ||
-          "Unable to load bots."
-        );
-      }
-    } finally {
-      if (!cancelled) setLoadingBots(false);
-    }
-  };
-
-  loadBots();
-
-  return () => {
-    cancelled = true;
-  };
-}, [token, selectedTenantId]);
-
-
-  /* =======================================================
-     LOAD WORKFLOWS
-  ======================================================= */
-useEffect(() => {
   const loadWorkflows = async () => {
-    if (!token || !selectedTenantId || !selectedBotId) {
+    if (!token) {
       setWorkflows([]);
+      setLoadingWorkflows(false);
+      return;
+    }
+
+    if (isSuperAdmin && !selectedTenantId) {
+      setWorkflows([]);
+      setLoadingWorkflows(false);
       return;
     }
 
     try {
       setLoadingWorkflows(true);
 
+      const params = {};
+
+      if (selectedBotId) {
+        params.bot_id = selectedBotId;
+      }
+
+      if (isSuperAdmin && selectedTenantId) {
+        params.tenant_id = selectedTenantId;
+      }
+
       const response = await axios.get(`${API}/workflows`, {
-        params: {
-          tenant_id: selectedTenantId,
-          bot_id: selectedBotId,
-        },
+        params,
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -9671,23 +9645,62 @@ useEffect(() => {
           ? payload.data
           : [];
 
+      if (!isMounted) return;
+
       setWorkflows(list);
 
-      console.log("Workflow API response:", response.data);
-      console.log("Loaded workflows:", list);
+      // Check whether the saved workflow belongs to the loaded list.
+      const savedWorkflowId = localStorage.getItem("workflow_id");
+
+      const savedWorkflowExists =
+        savedWorkflowId &&
+        list.some(
+          (workflow) =>
+            String(workflow.id) === String(savedWorkflowId)
+        );
+
+      // Clear only a stale workflow ID; never change workflow ownership.
+      if (savedWorkflowId && !savedWorkflowExists) {
+        localStorage.removeItem("workflow_id");
+
+        setWorkflowId((currentId) =>
+          String(currentId) === String(savedWorkflowId)
+            ? null
+            : currentId
+        );
+
+        setNodes([]);
+        setEdges([]);
+        setSelected(null);
+        // setName("New WhatsApp Workflow");
+        setHistory([]);
+        setFuture([]);
+
+        historyReady.current = true;
+        isLoadingWorkflow.current = false;
+      }
     } catch (error) {
       console.error(
         "Workflow loading error:",
         error.response?.data || error.message
       );
-      setWorkflows([]);
+
+      if (isMounted) {
+        setWorkflows([]);
+      }
     } finally {
-      setLoadingWorkflows(false);
+      if (isMounted) {
+        setLoadingWorkflows(false);
+      }
     }
   };
 
   loadWorkflows();
-}, [token, selectedTenantId, selectedBotId]);
+
+  return () => {
+    isMounted = false;
+  };
+}, [token, selectedTenantId, selectedBotId, isSuperAdmin]);
 
   /* =======================================================
      SELECT WORKFLOW
@@ -9732,9 +9745,9 @@ useEffect(() => {
 
       setWorkflowId(null);
 
-      setName(
-        "New WhatsApp Workflow"
-      );
+      // setName(
+      //   "New WhatsApp Workflow"
+      // );
 
       historyReady.current =
         true;
@@ -9753,12 +9766,21 @@ useEffect(() => {
   ======================================================= */
 
   useEffect(() => {
-    if (
-      !token ||
-      !workflowId
-    ) {
-      return;
-    }
+  if (
+  !token ||
+  !workflowId ||
+  loadingWorkflows
+) {
+  return;
+}
+
+const workflowExists = workflows.some(
+  (workflow) => String(workflow.id) === String(workflowId)
+);
+
+if (!workflowExists) {
+  return;
+}
 
     const loadWorkflow =
       async () => {
@@ -9967,10 +9989,14 @@ useEffect(() => {
               false;
           }, 100);
         } catch (error) {
-          console.error(
-            "WORKFLOW LOAD ERROR:",
-            error
-          );
+          console.error("WORKFLOW LOAD ERROR:", {
+        url: error.config?.url,
+        status: error.response?.status,
+        response: error.response?.data,
+        userId: JSON.parse(
+            localStorage.getItem("user") || "null"
+        )?.id,
+    });
 
           isLoadingWorkflow.current =
             false;
@@ -9989,7 +10015,7 @@ useEffect(() => {
     workflowId,
     setNodes,
     setEdges,
-  ]);
+  ],[token, workflowId, workflows, loadingWorkflows]);
 
  
  /* =======================================================
@@ -10353,20 +10379,21 @@ useEffect(() => {
 }, [deleteNode]);
 
 
+
 const save = async (publish = false) => {
   if (!token) {
-    toast.warning(
-      "Please login first."
-    );
-
+    toast.warning("Please login first.");
     return;
   }
 
   if (!name.trim()) {
-    toast.warning(
-      "Please enter workflow name."
-    );
+    toast.warning("Please enter workflow name.");
+    return;
+  }
 
+  // Publish se pehle Save required hai.
+  if (publish && !saved) {
+    toast.warning("Please save the workflow before publishing.");
     return;
   }
 
@@ -10374,199 +10401,100 @@ const save = async (publish = false) => {
 
   try {
     const headers = {
-      Authorization:
-        "Bearer " + token,
+      Authorization: "Bearer " + token,
     };
 
     let id = workflowId;
 
-    /* ===============================================
-       CREATE WORKFLOW
-    =============================================== */
-
+    /* CREATE WORKFLOW */
     if (!id) {
-      const response =
-        await axios.post(
-          API + "/workflows",
+      const response = await axios.post(
+        API + "/workflows",
+        {
+          name,
+          channel: "whatsapp",
+          tenant_id: selectedTenantId || null,
+          bot_id: selectedBotId || null,
+        },
+        { headers }
+      );
 
-         {
-            name,
-            channel: "whatsapp",
-            tenant_id: selectedTenantId,
-            bot_id: selectedBotId,
-          },
-          {
-            headers,
-          }
-        );
-
-      id =
-        response.data?.id ||
-        response.data?.data?.id;
+      id = response.data?.id || response.data?.data?.id;
 
       if (!id) {
-        throw new Error(
-          "Workflow ID was not returned."
-        );
+        throw new Error("Workflow ID was not returned.");
       }
 
-      setWorkflowId(
-        String(id)
-      );
+      setWorkflowId(String(id));
 
-      localStorage.setItem(
-        "workflow_id",
-        String(id)
-      );
+      localStorage.setItem("workflow_id", String(id));
 
-      const createdWorkflow =
-        response.data?.data ||
-        response.data;
+      const createdWorkflow = response.data?.data || response.data;
 
-      setWorkflows(
-        (current) => [
-          createdWorkflow,
-          ...current,
-        ]
-      );
+      setWorkflows((current) => [
+        createdWorkflow,
+        ...current,
+      ]);
     }
 
-    /* ===============================================
-       PREPARE EDGES
-       KEEP EXACT SOURCE/TARGET HANDLES
-    =============================================== */
+    /* PREPARE EDGES */
+    const edgesToSave = edges.map((edge) => ({
+      ...edge,
+      sourceHandle: edge.sourceHandle || null,
+      targetHandle: edge.targetHandle || null,
+      type: edge.type || "smoothstep",
+      label: edge.label || null,
+    }));
 
-    const edgesToSave =
-      edges.map((edge) => ({
-        ...edge,
-
-        /*
-         * Main Menu option handle
-         *
-         * Example:
-         * source-option-0
-         * source-option-1
-         * source-option-2
-         */
-        sourceHandle:
-          edge.sourceHandle ||
-          null,
-
-        /*
-         * Target node handle
-         *
-         * Example:
-         * target-top
-         * target-left
-         * target-right
-         * target-bottom
-         */
-        targetHandle:
-          edge.targetHandle ||
-          null,
-
-        /*
-         * Keep edge type
-         */
-        type:
-          edge.type ||
-          "smoothstep",
-
-        /*
-         * Keep label
-         */
-        label:
-          edge.label ||
-          null,
-      }));
-
-    /* ===============================================
-       UPDATE WORKFLOW
-    =============================================== */
-
+    /* SAVE WORKFLOW DATA */
     await axios.put(
       API + "/workflows/" + id,
-
       {
         name,
-
         nodes,
-
-        edges:
-          edgesToSave,
+        edges: edgesToSave,
       },
-
-      {
-        headers,
-      }
+      { headers }
     );
 
-    /* ===============================================
-       UPDATE DROPDOWN
-    =============================================== */
-
-    setWorkflows(
-      (current) =>
-        current.map(
-          (workflow) =>
-            String(
-              workflow.id
-            ) ===
-            String(id)
-              ? {
-                  ...workflow,
-                  name,
-                }
-              : workflow
-        )
+    /* UPDATE DROPDOWN */
+    setWorkflows((current) =>
+      current.map((workflow) =>
+        String(workflow.id) === String(id)
+          ? { ...workflow, name }
+          : workflow
+      )
     );
 
-    /* ===============================================
-       PUBLISH
-    =============================================== */
+    // Save successful: workflow ab saved hai.
+    setSaved(true);
 
+    /* PUBLISH */
     if (publish) {
       await axios.post(
-        API +
-          "/workflows/" +
-          id +
-          "/publish",
-
+        API + "/workflows/" + id + "/publish",
         {},
-
-        {
-          headers,
-        }
+        { headers }
       );
+
+      toast.success("Workflow published successfully.");
+    } else {
+      toast.success("Workflow saved successfully.");
     }
-
-    /* ===============================================
-       SUCCESS
-    =============================================== */
-
-    toast.success(
-      publish
-        ? "Workflow published successfully."
-        : "Workflow saved successfully."
-    );
-
   } catch (error) {
-    console.error(
-      "WORKFLOW ERROR:",
-      error
-    );
+    console.error("WORKFLOW ERROR:", error);
 
+    // Save ya publish fail hone par success assume na karein.
     toast.error(
-      error?.response
-        ?.data?.message ||
+      error?.response?.data?.message ||
         error.message ||
         "Something went wrong."
     );
-
   } finally {
     setSaving(false);
   }
 };
+
   /* =======================================================
      KEYBOARD SHORTCUTS
   ======================================================= */
@@ -10748,43 +10676,45 @@ const save = async (publish = false) => {
             </button>
 
             {/* =======================================================
-            TENANT SELECT
+            TENANT SELECT (Super Admin only)
         ======================================================= */}
 
-        <select
-          value={selectedTenantId}
-          disabled={loadingTenants}
-          onChange={(e) => {
-            const id = e.target.value;
+        {isSuperAdmin && (
+          <select
+            value={selectedTenantId}
+            disabled={loadingTenants}
+            onChange={(e) => {
+              const id = e.target.value;
 
-            setSelectedTenantId(id);
-            setSelectedBotId("");
+              setSelectedTenantId(id);
+              setSelectedBotId("");
 
-            localStorage.removeItem("workflow_bot_id");
-            localStorage.setItem("workflow_tenant_id", id);
+              localStorage.removeItem("workflow_bot_id");
+              localStorage.setItem("workflow_tenant_id", id);
 
-            // Reset workflow selection when changing tenant.
-            localStorage.removeItem("workflow_id");
-            setWorkflowId(null);
-            setWorkflows([]);
-            setNodes([]);
-            setEdges([]);
-            setSelected(null);
-            setHistory([]);
-            setFuture([]);
-          }}
-          className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
-        >
-          <option value="">
-            {loadingTenants ? "Loading clients..." : "Select Client"}
-          </option>
-
-          {tenants.map((tenant) => (
-            <option key={tenant.id} value={String(tenant.id)}>
-              {tenant.name}
+              // Reset workflow selection when changing tenant.
+              localStorage.removeItem("workflow_id");
+              setWorkflowId(null);
+              setWorkflows([]);
+              setNodes([]);
+              setEdges([]);
+              setSelected(null);
+              setHistory([]);
+              setFuture([]);
+            }}
+            className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="">
+              {loadingTenants ? "Loading clients..." : "Select Client"}
             </option>
-          ))}
-        </select>
+
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={String(tenant.id)}>
+                {tenant.name}
+              </option>
+            ))}
+          </select>
+        )}
 
     {/* =======================================================
         BOT SELECT
@@ -10792,7 +10722,7 @@ const save = async (publish = false) => {
 
     <select
       value={selectedBotId}
-      disabled={!selectedTenantId || loadingBots}
+      disabled={(isSuperAdmin && !selectedTenantId) || loadingBots}
       onChange={(e) => {
         const id = e.target.value;
 
@@ -10817,7 +10747,7 @@ const save = async (publish = false) => {
       className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
     >
       <option value="">
-        {!selectedTenantId
+        {isSuperAdmin && !selectedTenantId
           ? "Select client first"
           : loadingBots
           ? "Loading bots..."
@@ -10831,75 +10761,85 @@ const save = async (publish = false) => {
       ))}
     </select>
           
-         {/* WORKFLOW SELECT + DELETE */}
+{/* WORKFLOW SELECT + DELETE */}
+{/* WORKFLOW SELECT + NEW WORKFLOW */}
 
-          <div className="relative flex items-center gap-2">
-            <div className="relative">
-              <select
-                value={workflowId || ""}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (id) selectWorkflow(id);
-                }}
-                disabled={loadingWorkflows || saving}
-                className="
-                  h-10 w-[220px] appearance-none
-                  rounded-xl border border-slate-200
-                  bg-white pl-4 pr-10 text-sm
-                  font-semibold text-slate-700
-                  shadow-sm outline-none transition
-                  hover:border-indigo-300
-                  focus:border-indigo-500
-                  focus:ring-4 focus:ring-indigo-500/10
-                  disabled:cursor-not-allowed
-                  disabled:bg-slate-100
-                  md:w-[200px]
-                "
-              >
-                <option value="">
-                  {loadingWorkflows
-                    ? "Loading workflows..."
-                    : workflows.length
-                      ? "Select Workflow"
-                      : "No workflows found"}
-                </option>
+<div className="relative flex items-center gap-2">
 
-                {workflows.map((workflow) => (
-                  <option key={workflow.id} value={String(workflow.id)}>
-                    {workflow.name}
-                  </option>
-                ))}
-              </select>
+  {/* Dropdown sirf workflow create hone ke baad dikhega */}
+  {!loadingWorkflows && workflows.length > 0 && (
+    <div className="relative">
+      <select
+        value={workflowId || ""}
+        onChange={(e) => {
+          const id = e.target.value;
 
-              <ChevronDown
-                className="
-                  pointer-events-none absolute right-3 top-1/2
-                  h-4 w-4 -translate-y-1/2 text-slate-400
-                "
-              />
-            </div>
+          if (id === "new") {
+            setWorkflowModalMode("add");
+            setWorkflowFormName("");
+            setWorkflowFormDescription("");
+            setWorkflowModalOpen(true);
+            return;
+          }
 
-          
+          if (id) selectWorkflow(id);
+        }}
+        disabled={saving}
+        className="
+          h-10 w-[220px] appearance-none
+          rounded-xl border border-slate-200
+          bg-white pl-4 pr-10 text-sm
+          font-semibold text-slate-700 shadow-sm
+          outline-none transition hover:border-indigo-300
+          focus:border-indigo-500
+          focus:ring-4 focus:ring-indigo-500/10
+          disabled:cursor-not-allowed
+          disabled:bg-slate-100
+        "
+      >
+        <option value="" disabled>
+          Select Workflow
+        </option>
 
-            {/* NEW WORKFLOW */}
+    
 
-         <button
-              type="button"
-              onClick={() => {
-                setWorkflowModalMode("add");
-                setWorkflowFormName("");
-                setWorkflowFormDescription("");
-                setWorkflowModalOpen(true);
-              }}
-              className="
-                inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60
-              "
-            >
-              <Plus className="h-4 w-4" />
-              New Add
-            </button>
-          </div>
+        {workflows.map((workflow) => (
+          <option key={workflow.id} value={String(workflow.id)}>
+            {workflow.name}
+          </option>
+        ))}
+      </select>
 
+      <ChevronDown
+        className="
+          pointer-events-none absolute right-3 top-1/2
+          h-4 w-4 -translate-y-1/2 text-slate-400
+        "
+      />
+    </div>
+  )}
+
+  {/* New Add button hamesha dikhega */}
+  <button
+    type="button"
+    onClick={() => {
+      setWorkflowModalMode("add");
+      setWorkflowFormName("");
+      setWorkflowFormDescription("");
+      setWorkflowModalOpen(true);
+    }}
+    className="
+      inline-flex min-h-11 items-center justify-center gap-2
+      rounded-xl bg-emerald-700 px-5 py-3
+      text-sm font-bold text-white shadow-md
+      transition hover:bg-emerald-800
+    "
+  >
+    <Plus className="h-4 w-4" />
+    New Add
+  </button>
+
+</div>
           {/* ADD / UPDATE WORKFLOW MODAL */}
 
 {workflowModalOpen && (
@@ -10943,8 +10883,13 @@ const save = async (publish = false) => {
     return;
   }
 
-  if (!selectedTenantId || !selectedBotId) {
-    toast.error("Please select a tenant and bot first.");
+  if (isSuperAdmin && !selectedTenantId) {
+    toast.error("Please select a client first.");
+    return;
+  }
+
+  if (!selectedBotId) {
+    toast.error("Please select a bot first.");
     return;
   }
 
@@ -10962,7 +10907,7 @@ const save = async (publish = false) => {
       name: workflowName,
       description: workflowFormDescription.trim() || null,
       channel: "whatsapp",
-      tenant_id: selectedTenantId,
+      ...(selectedTenantId ? { tenant_id: selectedTenantId } : {}),
       bot_id: selectedBotId,
     };
 
@@ -11165,7 +11110,7 @@ const save = async (publish = false) => {
                   setNodes([]);
                   setEdges([]);
                   setSelected(null);
-                  setName("New WhatsApp Workflow");
+                  setName("");
 
                   toast.success("Workflow deleted successfully.");
                 } catch (error) {
@@ -11329,53 +11274,28 @@ const save = async (publish = false) => {
             </button>
           </div>
           
-            {/* SAVE */}
+      {/* SAVE */}
+        <button
+          type="button"
+          onClick={() => save(false)}
+          disabled={saving}
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 md:px-4"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : saved ? "Saved ✓" : "Save"}
+        </button>
 
-            <button
-              onClick={() =>
-                save(false)
-              }
-              disabled={saving}
-              className="
-                flex
-                items-center
-                gap-2
-                rounded-lg
-                border
-                border-slate-200
-                bg-white
-                px-3
-                py-2
-                text-sm
-                font-semibold
-                text-slate-700
-                shadow-sm
-                transition
-                hover:bg-slate-50
-                disabled:opacity-50
-                md:px-4
-              "
-            >
-              <Save className="h-4 w-4" />
-
-              {saving
-                ? "Saving..."
-                : "Save"}
-            </button>
-
-            {/* PUBLISH */}
-
-            <button
-              onClick={() =>
-                save(true)
-              }
-              disabled={saving}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 curosr-pointer"
-            >
-              <Send className="h-4 w-4" />
-
-              Publish
-            </button>
+        {/* PUBLISH */}
+        <button
+          type="button"
+          onClick={() => save(true)}
+          disabled={saving || !saved}
+          title={!saved ? "Save the workflow before publishing" : "Publish workflow"}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          Publish
+        </button>
 
          
           </div>
@@ -11446,7 +11366,7 @@ const save = async (publish = false) => {
 
         setNodes([]);
         setEdges([]);
-        setName("New WhatsApp Workflow");
+   
       } catch (error) {
         console.error(
           "Delete workflow error:",
@@ -11493,7 +11413,7 @@ const save = async (publish = false) => {
     "
   >
     <option value="">
-      {!selectedTenantId
+      {isSuperAdmin && !selectedTenantId
         ? "Select Client First"
         : !selectedBotId
           ? "Select Bot First"

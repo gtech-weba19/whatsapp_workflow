@@ -10,7 +10,7 @@ class WhatsAppAccount extends Model
       protected $table = 'whatsapp_accounts';
 
     protected $fillable = [
-        'tenant_id', 'name', 'provider', 'business_name', 'phone_number',
+        'user_id', 'name', 'provider', 'business_name', 'phone_number',
         'phone_number_id', 'waba_id', 'access_token', 'app_secret',
         'webhook_verify_token', 'api_base_url', 'status', 'last_synced_at', 'notes',
     ];
@@ -27,8 +27,8 @@ class WhatsAppAccount extends Model
         ];
     }
 
-    public function tenant(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->belongsTo(User::class);
     }
 }

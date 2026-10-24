@@ -17,6 +17,19 @@ class WorkflowEngine
         private WhatsAppService $whatsapp,
 
     ) {}
+
+
+
+    public function useWhatsAppAccount(
+    int $userId,
+    string $whatsappTo
+): void {
+    $this->whatsapp->useAccountForUser(
+        $userId,
+        $whatsappTo
+    );
+}
+
 /**
  * Send OTP for API node.
  */
@@ -1716,18 +1729,28 @@ private function replaceApiVariables(
         return null;
     }
 
-    public function findActiveSession(string $user): ?BotSession
-    {
-        return BotSession::query()
-            ->where('channel', 'whatsapp')
-            ->where('user_identifier', $user)
-            ->whereIn('status', [
-                'active',
-                'waiting',
-            ])
-            ->orderByDesc('id')
-            ->first();
+
+private function findActiveSession(
+    string $user,
+    ?int $whatsappAccountId = null
+): ?BotSession {
+
+    $query = BotSession::query()
+        ->where('channel', 'whatsapp')
+        ->where('user_identifier', $user)
+        ->whereIn('status', ['active', 'waiting']);
+
+    if ($whatsappAccountId !== null) {
+        $query->where(
+            'whatsapp_account_id',
+            $whatsappAccountId
+        );
+    } else {
+        $query->whereNull('whatsapp_account_id');
     }
+
+    return $query->orderByDesc('id')->first();
+}
 
     private function getStartNode(Workflow $workflow)
     {
@@ -2077,67 +2100,96 @@ private function replaceApiVariables(
     return null;
 }
 
-    public function start(
-        Workflow $workflow,
-        string $user,
-        array $incoming = []
-    ): BotSession {
 
-        $existingSession = $this->findActiveSession($user);
+public function start(
+    Workflow $workflow,
+    string $user,
+    array $incoming = []
+): BotSession {
+    if ($this->whatsapp->getUserId() === null && isset($workflow->user_id)) {
+        $this->whatsapp->setUserId((int) $workflow->user_id);
+    }
 
-        if ($existingSession) {
+    // WhatsApp account ki database ID
+    $whatsappAccountId = $incoming['whatsapp_account_id'] ?? null;
 
-            return $existingSession;
-        }
+    /*
+     * Existing active session sirf usi account ke liye find karein.
+     * Alag account ki session reuse nahi honi chahiye.
+     */
+    $existingSession = $this->findActiveSession(
+        $user,
+        $whatsappAccountId
+    );
 
-        $session = BotSession::query()
-            ->where('channel', 'whatsapp')
-            ->where('user_identifier', $user)
-            ->where('workflow_id', $workflow->id)
-            ->orderByDesc('id')
-            ->first();
+    if ($existingSession) {
+        return $existingSession;
+    }
 
-        if (! $session) {
+    // Same account + customer + workflow ki session find karein
+    $sessionQuery = BotSession::query()
+        ->where('channel', 'whatsapp')
+        ->where('user_identifier', $user)
+        ->where('workflow_id', $workflow->id);
 
-            $session = BotSession::create([
-                'channel' => 'whatsapp',
-                'user_identifier' => $user,
-                'workflow_id' => $workflow->id,
-                'variables' => [],
-                'status' => 'active',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
-
-        } else {
-
-            $session->update([
-                'workflow_id' => $workflow->id,
-                'variables' => [],
-                'status' => 'active',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
-        }
-
-        $startNode = $this->getStartNode($workflow);
-
-        if (! $startNode) {
-
-            return $session;
-        }
-
-        $this->execute(
-            $workflow,
-            $session,
-            (string) $startNode->node_id,
-            []
+    if ($whatsappAccountId !== null) {
+        $sessionQuery->where(
+            'whatsapp_account_id',
+            $whatsappAccountId
         );
+    } else {
+        $sessionQuery->whereNull('whatsapp_account_id');
+    }
 
-        $session->refresh();
+    $session = $sessionQuery
+        ->orderByDesc('id')
+        ->first();
 
+    if (! $session) {
+
+        // New session mein account ID save hogi
+        $session = BotSession::create([
+            'channel' => 'whatsapp',
+            'user_identifier' => $user,
+            'workflow_id' => $workflow->id,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'variables' => [],
+            'status' => 'active',
+            'current_node_id' => null,
+            'last_message_at' => now(),
+        ]);
+
+    } else {
+
+        // Purani session ko reset karein
+        $session->update([
+            'whatsapp_account_id' => $whatsappAccountId,
+            'workflow_id' => $workflow->id,
+            'variables' => [],
+            'status' => 'active',
+            'current_node_id' => null,
+            'last_message_at' => now(),
+        ]);
+    }
+
+    $startNode = $this->getStartNode($workflow);
+
+    if (! $startNode) {
         return $session;
     }
+
+    $this->execute(
+        $workflow,
+        $session,
+        (string) $startNode->node_id,
+        []
+    );
+
+    $session->refresh();
+
+    return $session;
+}
+
 
         public function execute(
             Workflow $workflow,
@@ -2145,6 +2197,9 @@ private function replaceApiVariables(
             string $nodeId,
             array $input = []
         ): void {
+            if ($this->whatsapp->getUserId() === null && isset($workflow->user_id)) {
+                $this->whatsapp->setUserId((int) $workflow->user_id);
+            }
 
             $node = $workflow->nodes()
                 ->where('node_id', $nodeId)

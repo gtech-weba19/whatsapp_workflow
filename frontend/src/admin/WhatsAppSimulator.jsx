@@ -252,143 +252,91 @@ export default function WhatsAppSimulator() {
        LOAD PUBLISHED JOURNEYS
     ========================================================== */
 
-    useEffect(() => {
-        const loadJourneys = async () => {
-            try {
-                setJourneysLoading(true);
+  useEffect(() => {
+    const loadJourneys = async () => {
+        try {
+            setJourneysLoading(true);
 
-                const response =
-                    await axios.get(
-                        `${API}/webhooks/whatsapp/journeys`
-                    );
+            const token =
+                localStorage.getItem("token") ||
+                localStorage.getItem("auth_token") ||
+                localStorage.getItem("access_token");
 
-                console.log(
-                    "JOURNEYS RESPONSE:",
-                    response.data
-                );
-
-                const list =
-                    Array.isArray(response.data)
-                        ? response.data
-                        : Array.isArray(
-                              response.data?.data
-                          )
-                        ? response.data.data
-                        : [];
-
-                console.log(
-                    "JOURNEY LIST:",
-                    list
-                );
-
-                setJourneys(list);
-
-                if (list.length > 0) {
-                    setSelectedJourney(
-                        (current) => {
-                            /*
-                            |--------------------------------------------------------------------------
-                            | CURRENT STATE
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if (current) {
-                                const exists =
-                                    list.some(
-                                        (
-                                            journey
-                                        ) =>
-                                            String(
-                                                journey.id
-                                            ) ===
-                                            String(
-                                                current
-                                            )
-                                    );
-
-                                if (exists) {
-                                    return String(
-                                        current
-                                    );
-                                }
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | LOCAL STORAGE
-                            |--------------------------------------------------------------------------
-                            */
-
-                            let savedJourney =
-                                "";
-
-                            try {
-                                savedJourney =
-                                    localStorage.getItem(
-                                        JOURNEY_STORAGE_KEY
-                                    ) || "";
-                            } catch (
-                                error
-                            ) {
-                                console.error(
-                                    "READ SAVED JOURNEY ERROR:",
-                                    error
-                                );
-                            }
-
-                            if (
-                                savedJourney &&
-                                list.some(
-                                    (
-                                        journey
-                                    ) =>
-                                        String(
-                                            journey.id
-                                        ) ===
-                                        String(
-                                            savedJourney
-                                        )
-                                )
-                            ) {
-                                return String(
-                                    savedJourney
-                                );
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | FIRST JOURNEY
-                            |--------------------------------------------------------------------------
-                            */
-
-                            return String(
-                                list[0].id
-                            );
-                        }
-                    );
-                } else {
-                    setSelectedJourney("");
-                }
-            } catch (error) {
-                console.error(
-                    "JOURNEYS LOAD ERROR:",
-                    error
-                );
-
-                console.error(
-                    "JOURNEYS RESPONSE ERROR:",
-                    error.response?.data
-                );
-
+            if (!token) {
+                console.error("AUTH TOKEN NOT FOUND");
                 setJourneys([]);
-            } finally {
-                setJourneysLoading(false);
+                setSelectedJourney("");
+                return;
             }
-        };
 
-        loadJourneys();
-    }, []);
+            const response = await axios.get(
+                `${API}/webhooks/whatsapp/journeys`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: "application/json",
+                    },
+                }
+            );
 
+            console.log("JOURNEYS RESPONSE:", response.data);
+
+            const list = Array.isArray(response.data)
+                ? response.data
+                : Array.isArray(response.data?.data)
+                ? response.data.data
+                : [];
+
+            setJourneys(list);
+
+            setSelectedJourney((current) => {
+                if (
+                    current &&
+                    list.some(
+                        (journey) =>
+                            String(journey.id) === String(current)
+                    )
+                ) {
+                    return String(current);
+                }
+
+                let savedJourney = "";
+
+                try {
+                    savedJourney =
+                        localStorage.getItem(JOURNEY_STORAGE_KEY) || "";
+                } catch (error) {
+                    console.error("READ SAVED JOURNEY ERROR:", error);
+                }
+
+                if (
+                    savedJourney &&
+                    list.some(
+                        (journey) =>
+                            String(journey.id) === String(savedJourney)
+                    )
+                ) {
+                    return String(savedJourney);
+                }
+
+                return list.length ? String(list[0].id) : "";
+            });
+        } catch (error) {
+            console.error("JOURNEYS LOAD ERROR:", error);
+            console.error(
+                "JOURNEYS RESPONSE ERROR:",
+                error.response?.data
+            );
+
+            setJourneys([]);
+            setSelectedJourney("");
+        } finally {
+            setJourneysLoading(false);
+        }
+    };
+
+    loadJourneys();
+}, []);
     /* =========================================================
        CHAT MESSAGES
     ========================================================== */

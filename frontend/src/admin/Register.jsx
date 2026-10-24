@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 
@@ -17,10 +17,13 @@ import {
   Globe,
   MapPin,
   FileText,
-  CreditCard,
   LockKeyhole,
   Check,
   Upload,
+  BookOpen,
+  ExternalLink,
+  LogIn,
+  LoaderCircle
 } from "lucide-react";
 
 import "react-toastify/dist/ReactToastify.css";
@@ -35,8 +38,7 @@ const STEPS = [
   { title: "Create Account", subtitle: "Login information" },
   { title: "Business Profile", subtitle: "Company information" },
   { title: "Meta Account", subtitle: "WhatsApp setup" },
-  { title: "Documents", subtitle: "Only if required" },
-  { title: "Choose Plan", subtitle: "Message credits" },
+  { title: "Get Started", subtitle: "Guidance & Support" },
 ];
 
 const BUSINESS_TYPES = [
@@ -162,7 +164,10 @@ const initialForm = {
   gstin: "",
   city: "",
 
-  meta_account_type: "existing",
+  meta_account_type: "",
+
+  onboarding_preference: "",
+  number_setup_type: "",
 
   utility_bill: null,
   gst_document: null,
@@ -178,7 +183,6 @@ const inputClass =
 
 const labelClass = "mb-1.5 block text-xs font-semibold text-slate-700";
 
-
 const Field = ({
   label,
   name,
@@ -191,6 +195,7 @@ const Field = ({
   onChange,
   disabled = false,
   error,
+  inputClassName = "",
   ...props
 }) => (
   <div className="min-w-0">
@@ -220,16 +225,13 @@ const Field = ({
           disabled={disabled}
           className={`${inputClass} ${Icon ? "pl-10" : ""} ${
             error ? "border-red-400" : ""
-          }`}
+          } ${inputClassName}`}
         />
       )}
     </div>
 
-    {/* Error directly below its input */}
     {error && (
-      <p className="mt-1 text-xs font-medium text-red-500">
-        {error}
-      </p>
+      <p className="mt-1 text-xs font-medium text-red-500">{error}</p>
     )}
   </div>
 );
@@ -265,9 +267,7 @@ const SelectField = ({
         error ? "border-red-400" : ""
       }`}
     >
-      <option value="">
-        {placeholder || `Select ${label}`}
-      </option>
+      <option value="">{placeholder || `Select ${label}`}</option>
 
       {options.map((option) => (
         <option key={option} value={option}>
@@ -277,8 +277,6 @@ const SelectField = ({
     </select>
   </Field>
 );
-
-
 
 const StepHeading = ({ title, subtitle, icon: Icon }) => (
   <div className="mb-6 flex items-start gap-3.5">
@@ -291,14 +289,18 @@ const StepHeading = ({ title, subtitle, icon: Icon }) => (
         {title}
       </h2>
 
-      <p className="mt-1 text-sm leading-6 text-slate-500">
-        {subtitle}
-      </p>
+      <p className="mt-1 text-sm leading-6 text-slate-500">{subtitle}</p>
     </div>
   </div>
 );
 
-const Checkbox = ({ name, checked, onChange, children, disabled }) => (
+const Checkbox = ({
+  name,
+  checked,
+  onChange,
+  children,
+  disabled,
+}) => (
   <label
     className={`mt-5 flex items-start gap-2.5 ${
       disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
@@ -327,70 +329,103 @@ const InfoBox = ({ children }) => (
   </div>
 );
 
-const FileUpload = ({
-  label,
-  description,
-  name,
-  file,
-  onChange,
-  disabled,
-}) => (
-  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-4 transition hover:border-emerald-400">
-    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-      <Upload size={19} />
-    </div>
-
-    <h3 className="mt-3 text-sm font-bold text-slate-800">{label}</h3>
-
-    <p className="mt-1 min-h-[40px] text-xs leading-5 text-slate-500">
-      {description}
-    </p>
-
-    <label
-      htmlFor={name}
-      className={`mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition ${
-        disabled
-          ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:bg-slate-50"
-      }`}
-    >
-      <Upload size={14} />
-      {file ? "Change file" : "Choose file"}
-    </label>
-
-    <input
-      id={name}
-      name={name}
-      type="file"
-      accept=".pdf,.jpg,.jpeg,.png,.webp"
-      onChange={onChange}
-      disabled={disabled}
-      className="sr-only"
-    />
-
-    <p className="mt-2 break-all text-[11px] text-slate-400">
-      {file ? file.name : "PDF, JPG, PNG or WEBP · Max 5 MB"}
-    </p>
-  </div>
-);
-
 
 /* =========================================================
    REGISTER PAGE
 ========================================================= */
 
 const Register = () => {
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ ...initialForm });
+  const navigate = useNavigate();
+
+  // Restore saved step but keep it within the current 4-step flow.
+  const [step, setStep] = useState(() => {
+    const savedStep = Number(localStorage.getItem("register_step")) || 1;
+    return Math.min(4, Math.max(1, savedStep));
+  });
+
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem("register_form_data");
+
+      return saved
+        ? { ...initialForm, ...JSON.parse(saved) }
+        : { ...initialForm };
+    } catch {
+      return { ...initialForm };
+    }
+  });
+
   const [loading, setLoading] = useState(false);
+  const [savedSteps, setSavedSteps] = useState(() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem("register_saved_steps") || "{}"
+    );
+  } catch {
+    return {};
+  }
+});
+
   const [errorMessage, setErrorMessage] = useState("");
   const [registrationComplete, setRegistrationComplete] = useState(false);
-
+  const [cityLoading, setCityLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const selectedPlan =
-    PLANS.find((plan) => String(plan.id) === String(form.plan_id)) ||
-    PLANS[0];
+
+  
+const saveRegistrationProgress = async (
+  completedStep,
+  registrationCompleted = false
+) => {
+  const {
+    password,
+    password_confirmation,
+    utility_bill,
+    gst_document,
+    ...safeForm
+  } = form;
+
+  const response = await axios.post(
+    `${API}/registration-progress`,
+    {
+      step: completedStep,
+      form: {
+        ...safeForm,
+        email: (safeForm.email || "").trim().toLowerCase(),
+      },
+      registration_completed: registrationCompleted,
+    },
+    {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    }
+  );
+
+  return response.data;
+};
+
+
+
+  // Persist form fields without passwords or file objects.
+  useEffect(() => {
+    const {
+      password,
+      password_confirmation,
+      utility_bill,
+      gst_document,
+      ...safeForm
+    } = form;
+
+    localStorage.setItem(
+      "register_form_data",
+      JSON.stringify(safeForm)
+    );
+
+    localStorage.setItem("register_step", String(step));
+  }, [form, step]);
 
   const updateForm = (name, value) => {
     setForm((previous) => ({
@@ -406,66 +441,116 @@ const Register = () => {
     }));
   };
 
+  // City detection.
+  useEffect(() => {
+    let cancelled = false;
 
-  const checkEmailAvailability = async (email) => {
-  const normalizedEmail = email.trim().toLowerCase();
+    const fetchCityFromIP = async () => {
+      if (form.city?.trim()) return;
 
-  if (!normalizedEmail) return false;
+      setCityLoading(true);
+
+      try {
+        const response = await fetch("https://ipapi.co/json/");
+
+        if (!response.ok) {
+          throw new Error("Unable to fetch city");
+        }
+
+        const data = await response.json();
+
+        if (!cancelled && data.city) {
+          updateForm("city", data.city);
+        }
+      } catch (error) {
+        console.error("City detection failed:", error);
+      } finally {
+        if (!cancelled) {
+          setCityLoading(false);
+        }
+      }
+    };
+
+    fetchCityFromIP();
+
+    return () => {
+      cancelled = true;
+    };
+   
+  }, []);
+
+
+
+ const checkEmailAvailability = async (email) => {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    setFieldErrors((previous) => ({
+      ...previous,
+      email: "Business email is required.",
+    }));
+
+    return false;
+  }
 
   try {
-    const response = await axios.post(`${API}/check-email`, {
-      email: normalizedEmail,
-    });
+    const response = await axios.post(
+      `${API}/check-email`,
+      { email: normalizedEmail },
+      {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
 
-    if (!response.data.available) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        email: "Email already taken.",
+    if (response.data?.available !== true) {
+      setFieldErrors((previous) => ({
+        ...previous,
+        email: response.data?.message || "Email already taken.",
       }));
 
       return false;
     }
 
-    setFieldErrors((prev) => ({
-      ...prev,
+    setFieldErrors((previous) => ({
+      ...previous,
       email: "",
     }));
 
     return true;
-} catch (error) {
-  console.error("Email check API failed:", {
-    url: `${API}/check-email`,
-    status: error.response?.status,
-    response: error.response?.data,
-    message: error.message,
-  });
+  } catch (error) {
+    console.error("Email check API failed:", {
+      url: `${API}/check-email`,
+      message: error.message,
+      status: error.response?.status,
+      response: error.response?.data,
+    });
 
-  const status = error.response?.status;
-  const data = error.response?.data;
+    let message = "Unable to check email. Please try again.";
 
-  let message = "Unable to check email. Please try again.";
+    if (!error.response) {
+      message =
+        "Backend URL Error";
+    } else if (error.response.status === 422) {
+      message =
+        error.response.data?.errors?.email?.[0] ||
+        "Please enter a valid email address.";
+    } else if (error.response.status === 404) {
+      message = "Email check API route not found.";
+    } else if (error.response.status >= 500) {
+      message = "Laravel server error. Check storage/logs/laravel.log.";
+    }
 
-  if (status === 422) {
-    message =
-      data?.errors?.email?.[0] ||
-      "Please enter a valid email address.";
-  } else if (status === 404) {
-    message = "Email check API route not found.";
-  } else if (status >= 500) {
-    message = "Server error. Please check Laravel logs.";
-  } else if (!error.response) {
-    message = "Cannot connect to the API. Check the backend URL or CORS.";
-  } else if (data?.message) {
-    message = data.message;
+    setFieldErrors((previous) => ({
+      ...previous,
+      email: message,
+    }));
+
+    return false;
   }
-
-  setFieldErrors((prev) => ({
-    ...prev,
-    email: message,
-  }));
-
-  return false;
-}
 };
 
   /* =========================================================
@@ -473,7 +558,20 @@ const Register = () => {
   ========================================================= */
 
   const handleChange = (event) => {
-    const { name, value, type, checked } = event.target;
+    const { name, value, type, checked, files } = event.target;
+
+    if (type === "file") {
+      const file = files?.[0] || null;
+
+      if (file && file.size > 5 * 1024 * 1024) {
+        toast.error("File size must not exceed 5 MB.");
+        event.target.value = "";
+        return;
+      }
+
+      updateForm(name, file);
+      return;
+    }
 
     if (name === "mobile") {
       updateForm(name, value.replace(/\D/g, "").slice(0, 10));
@@ -481,85 +579,12 @@ const Register = () => {
     }
 
     if (name === "email") {
+      // Remove spaces only. Duplicate email validation runs on Continue.
       updateForm(name, value.replace(/\s/g, ""));
       return;
     }
 
     updateForm(name, type === "checkbox" ? checked : value);
-  };
-
-
-const [emailVerified, setEmailVerified] = useState(false);
-const [verificationSent, setVerificationSent] = useState(false);
-const [emailLoading, setEmailLoading] = useState(false);
-
-const handleVerifyEmail = async () => {
-  const email = form.email?.trim().toLowerCase();
-
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    setFieldErrors((prev) => ({
-      ...prev,
-      email: "Please enter a valid email address.",
-    }));
-    return;
-  }
-
-  setEmailLoading(true);
-
-  try {
-    const response = await axios.post(`${API}/email/send-verification-link`, {
-      email,
-    });
-
-    if (response.data?.success !== true) {
-      toast.error(response.data?.message || "Unable to send verification link.");
-      return;
-    }
-
-    setVerificationSent(true);
-    toast.success("Verification link sent. Please check your email.");
-  } catch (error) {
-    toast.error(
-      error.response?.data?.message ||
-        "Unable to send verification link. Please try again."
-    );
-  } finally {
-    setEmailLoading(false);
-  }
-};
-  /* =========================================================
-     FILE UPLOAD
-  ========================================================= */
-
-  const handleFileChange = (event) => {
-    const { name, files } = event.target;
-    const file = files?.[0] || null;
-
-    if (!file) {
-      updateForm(name, null);
-      return;
-    }
-
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Please select a PDF, JPG, PNG or WEBP file.");
-      event.target.value = "";
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must not exceed 5 MB.");
-      event.target.value = "";
-      return;
-    }
-
-    updateForm(name, file);
   };
 
   /* =========================================================
@@ -585,17 +610,39 @@ const handleVerifyEmail = async () => {
       if (!form.mobile?.trim()) {
         errors.mobile = "Mobile number is required.";
       } else if (!/^[6-9]\d{9}$/.test(form.mobile.trim())) {
-        errors.mobile = "Enter a valid 10-digit Indian mobile number.";
+        errors.mobile =
+          "Enter a valid 10-digit Indian mobile number.";
       }
 
-      if (!form.password) {
+    if (!form.password) {
         errors.password = "Password is required.";
       } else if (form.password.length < 8) {
         errors.password = "Password must contain at least 8 characters.";
+      } else if (form.password.length > 128) {
+        errors.password = "Password must not exceed 128 characters.";
+      } else if (!/[A-Z]/.test(form.password)) {
+        errors.password =
+          "Password must contain at least one uppercase letter (A-Z).";
+      } else if (!/[a-z]/.test(form.password)) {
+        errors.password =
+          "Password must contain at least one lowercase letter (a-z).";
+      } else if (!/[0-9]/.test(form.password)) {
+        errors.password =
+          "Password must contain at least one number (0-9).";
+      } else if (!/[^A-Za-z0-9]/.test(form.password)) {
+        errors.password =
+          "Password must contain at least one special character (e.g. @, #, $).";
       }
 
       if (!form.password_confirmation) {
         errors.password_confirmation = "Please confirm your password.";
+      } else if (form.password !== form.password_confirmation) {
+        errors.password_confirmation = "Passwords do not match.";
+      }
+
+      if (!form.password_confirmation) {
+        errors.password_confirmation =
+          "Please confirm your password.";
       } else if (form.password !== form.password_confirmation) {
         errors.password_confirmation = "Passwords do not match.";
       }
@@ -627,17 +674,49 @@ const handleVerifyEmail = async () => {
         errors.city = "City is required.";
       }
 
-      if (form.website?.trim()) {
-        try {
-          const website = new URL(form.website.trim());
+    if (form.website?.trim()) {
+  const websiteValue = form.website.trim();
 
-          if (!["http:", "https:"].includes(website.protocol)) {
-            errors.website = "Please enter a valid website URL.";
-          }
-        } catch {
-          errors.website = "Enter a valid URL, including https://.";
-        }
-      }
+  try {
+    const website = new URL(websiteValue);
+
+    const validProtocol = ["http:", "https:"].includes(
+      website.protocol
+    );
+
+    const validHostname =
+      website.hostname.length <= 253 &&
+      website.hostname.includes(".") &&
+      website.hostname
+        .split(".")
+        .every(
+          (label) =>
+            label.length >= 1 &&
+            label.length <= 63 &&
+            /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(
+              label
+            )
+        );
+
+    const validTld = /\.[a-zA-Z]{2,}$/.test(website.hostname);
+
+    const validCredentials =
+      !website.username && !website.password;
+
+    if (
+      !validProtocol ||
+      !validHostname ||
+      !validTld ||
+      !validCredentials
+    ) {
+      errors.website =
+        "Please enter a valid website URL, e.g. https://example.com.";
+    }
+  } catch {
+    errors.website =
+      "Enter a valid website URL, including https:// or http://.";
+  }
+}
     }
 
     if (currentStep === 3 && !form.meta_account_type) {
@@ -652,17 +731,6 @@ const handleVerifyEmail = async () => {
     ) {
       errors.document_consent =
         "Please confirm that you are authorized to share these documents.";
-    }
-
-    if (currentStep === 5) {
-      if (!form.plan_id) {
-        errors.plan_id = "Please select a message-credit plan.";
-      }
-
-      if (!form.billing_consent) {
-        errors.billing_consent =
-          "Please confirm the package and credit usage terms.";
-      }
     }
 
     setFieldErrors((previous) => {
@@ -687,7 +755,6 @@ const handleVerifyEmail = async () => {
         ],
         3: ["meta_account_type"],
         4: ["document_consent"],
-        5: ["plan_id", "billing_consent"],
       };
 
       (fieldsByStep[currentStep] || []).forEach((field) => {
@@ -707,39 +774,175 @@ const handleVerifyEmail = async () => {
   };
 
   /* =========================================================
-     NEXT / BACK
+     NEXT / BACK - 4 STEPS
   ========================================================= */
 
-const handleNext = async () => {
-  const error = validateStep(step);
 
-  if (error) {
-    if (error !== "FIELD_ERRORS") {
-      toast.error(error);
+// const handleNext = async () => {
+//   if (loading) return;
+
+//   // 1. Validate current step
+//   const validationError = validateStep(step);
+
+//   if (validationError) {
+//     if (validationError !== "FIELD_ERRORS") {
+//       toast.error(validationError);
+//     }
+//     return;
+//   }
+
+//   setLoading(true);
+
+//   try {
+//     // 2. Check email availability on EVERY step
+//     const emailAvailable = await checkEmailAvailability(form.email);
+
+//     if (!emailAvailable) {
+//       setStep(1);
+
+//       window.scrollTo({
+//         top: 0,
+//         behavior: "smooth",
+//       });
+
+//       return;
+//     }
+
+//     // 3. Validate Meta account selection
+//     if (step === 3 && !form.meta_account_type) {
+//       setFieldErrors((previous) => ({
+//         ...previous,
+//         meta_account_type: "Please select an option to continue.",
+//       }));
+
+//       toast.error("Please select an option to continue.");
+//       return;
+//     }
+
+//     const stepKey = String(step);
+//     const alreadySaved = savedSteps[stepKey] === true;
+
+//     // 4. Save progress only if this step hasn't been saved before
+//     if (!alreadySaved) {
+//       const result = await saveRegistrationProgress(step);
+
+//       if (!result?.progress_saved) {
+//         throw new Error(
+//           result?.message || "Could not save registration progress."
+//         );
+//       }
+
+//       const updatedSteps = {
+//         ...savedSteps,
+//         [stepKey]: true,
+//       };
+
+//       setSavedSteps(updatedSteps);
+
+//       localStorage.setItem(
+//         "register_saved_steps",
+//         JSON.stringify(updatedSteps)
+//       );
+
+//     }
+
+//     // 5. Clear Step 3 validation error
+//     if (step === 3) {
+//       setFieldErrors((previous) => ({
+//         ...previous,
+//         meta_account_type: "",
+//       }));
+//     }
+
+//     // 6. Go to next step
+//     setStep((previous) => Math.min(previous + 1, 4));
+
+//     window.scrollTo({
+//       top: 0,
+//       behavior: "smooth",
+//     });
+//   } catch (error) {
+//     console.error(
+//       "Registration progress error:",
+//       error.response?.data || error.message
+//     );
+
+//     toast.error(
+//       error.response?.data?.message ||
+//         "Could not save this step. Please try again."
+//     );
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+
+const handleNext = async () => {
+  if (loading) return;
+
+  // Final step par registration submit karein
+  if (step === 4) {
+    await handleSubmit();
+    return;
+  }
+
+  const validationError = validateStep(step);
+
+  if (validationError) {
+    if (validationError !== "FIELD_ERRORS") {
+      toast.error(validationError);
     }
     return;
   }
 
-  // Step 1: Check duplicate email before moving to Step 2
-  if (step === 1) {
-    const emailAvailable = await checkEmailAvailability(form.email);
+  setLoading(true);
 
-    if (!emailAvailable) {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-      return;
+  try {
+    // Email availability sirf Step 1 par check hogi
+    if (step === 1) {
+      const emailAvailable = await checkEmailAvailability(form.email);
+
+      if (!emailAvailable) {
+        setStep(1);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
     }
-  }
 
-  if (step < 5) {
-    setStep((previous) => previous + 1);
+    const stepKey = String(step);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    if (savedSteps[stepKey] !== true) {
+      const result = await saveRegistrationProgress(step);
+
+      if (!result?.progress_saved) {
+        throw new Error(
+          result?.message || "Could not save registration progress."
+        );
+      }
+
+      const updatedSteps = {
+        ...savedSteps,
+        [stepKey]: true,
+      };
+
+      setSavedSteps(updatedSteps);
+      localStorage.setItem(
+        "register_saved_steps",
+        JSON.stringify(updatedSteps)
+      );
+    }
+
+    setStep((previous) => Math.min(previous + 1, 4));
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (error) {
+    toast.error(
+      error.response?.data?.message ||
+        error.message ||
+        "Could not save this step. Please try again."
+    );
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -759,182 +962,42 @@ const handleNext = async () => {
      FINAL REGISTRATION SUBMIT
   ========================================================= */
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+ 
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    if (loading || registrationComplete) {
-      return;
-    }
+  if (loading || registrationComplete) {
+    return;
+  }
 
-    for (let currentStep = 1; currentStep <= 5; currentStep += 1) {
-      const validationError = validateStep(currentStep);
+  // Validate all four registration steps.
+  for (let currentStep = 1; currentStep <= 4; currentStep += 1) {
+    const validationError = validateStep(currentStep);
 
-      if (validationError) {
-        setStep(currentStep);
+    if (validationError) {
+      setStep(currentStep);
 
-        if (validationError !== "FIELD_ERRORS") {
-          setErrorMessage(validationError);
-          toast.warning(validationError);
-        }
-
-        window.scrollTo({
-          top: 0,
-          behavior: "smooth",
+      if (validationError !== "FIELD_ERRORS") {
+        setErrorMessage(validationError);
+        toast.warning(validationError, {
+          toastId: "registration-validation",
         });
-
-        return;
-      }
-    }
-
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const payload = new FormData();
-
-      // STEP 1: ACCOUNT
-      payload.append("name", form.name.trim());
-      payload.append("email", form.email.trim().toLowerCase());
-      payload.append("mobile", form.mobile.trim());
-      payload.append("password", form.password);
-      payload.append(
-        "password_confirmation",
-        form.password_confirmation
-      );
-      payload.append("terms", form.terms ? "1" : "0");
-
-      // STEP 2: BUSINESS
-      payload.append("company_name", form.company_name.trim());
-      payload.append("business_type", form.business_type);
-      payload.append("industry", form.industry);
-      payload.append("country", form.country);
-      payload.append("website", (form.website || "").trim());
-      payload.append("gstin", (form.gstin || "").trim());
-      payload.append("city", form.city.trim());
-
-      // STEP 3: META
-      payload.append("meta_account_type", form.meta_account_type);
-
-      // STEP 4: DOCUMENTS
-      if (form.utility_bill) {
-        payload.append("utility_bill", form.utility_bill);
       }
 
-      if (form.gst_document) {
-        payload.append("gst_document", form.gst_document);
-      }
-
-      payload.append("document_note", (form.document_note || "").trim());
-      payload.append(
-        "document_consent",
-        form.document_consent ? "1" : "0"
-      );
-
-      // STEP 5: PLAN
-      payload.append("plan_id", form.plan_id);
-      payload.append("plan_name", selectedPlan.name);
-      payload.append("message_credits", String(selectedPlan.credits));
-      payload.append(
-        "billing_consent",
-        form.billing_consent ? "1" : "0"
-      );
-
-      const response = await axios.post(`${API}/register`, payload, {
-        headers: {
-          Accept: "application/json",
-        },
-        timeout: 60000,
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
       });
 
-      const data = response.data;
+      return;
+    }
+  }
 
-      const token =
-        data?.token ||
-        data?.access_token ||
-        data?.data?.token ||
-        data?.data?.access_token;
+  // Check email availability.
+  const emailAvailable = await checkEmailAvailability(form.email);
 
-      const user = data?.user || data?.data?.user || null;
-      const tenant = data?.tenant || data?.data?.tenant || null;
-
-      if (token) {
-        [
-          "token",
-          "access_token",
-          "auth_token",
-          "user",
-          "tenant",
-        ].forEach((key) => {
-          localStorage.removeItem(key);
-          sessionStorage.removeItem(key);
-        });
-
-        localStorage.setItem("token", token);
-
-        if (user) {
-          localStorage.setItem("user", JSON.stringify(user));
-        }
-
-        if (tenant) {
-          localStorage.setItem("tenant", JSON.stringify(tenant));
-        }
-
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      }
-
-      if (token || data?.success === true) {
-        toast.success(
-          data?.message || "Registration submitted successfully!"
-        );
-
-        setErrorMessage("");
-        setRegistrationComplete(true);
-
-        window.scrollTo({
-          top: 0,
-          behavior: "smooth",
-        });
-
-        return;
-      }
-
-      throw new Error(
-        data?.message || "Registration could not be completed."
-      );
-} catch (error) {
-  console.error(
-    "Registration error:",
-    error.response?.data || error.message
-  );
-
-  const data = error.response?.data;
-  const errors = data?.errors || {};
-
-  // Clear previous field errors and display current API errors
-  const formattedErrors = {};
-
-  Object.entries(errors).forEach(([field, messages]) => {
-    formattedErrors[field] = Array.isArray(messages)
-      ? messages[0]
-      : String(messages);
-  });
-
-  setFieldErrors((prev) => ({
-    ...prev,
-    ...formattedErrors,
-  }));
-
-  // Duplicate email or email validation error
-  if (errors.email) {
+  if (!emailAvailable) {
     setStep(1);
-
-    const emailError = Array.isArray(errors.email)
-      ? errors.email[0]
-      : errors.email;
-
-    setErrorMessage("");
-
-    toast.error(emailError);
 
     window.scrollTo({
       top: 0,
@@ -944,22 +1007,200 @@ const handleNext = async () => {
     return;
   }
 
-  const validationMessage = Object.values(errors)
-    .flat()
-    .join(" ");
+  setLoading(true);
+  setErrorMessage("");
 
-  const message =
-    validationMessage ||
-    data?.message ||
-    error.message ||
-    "Unable to register. Please try again.";
+  try {
+    const payload = new FormData();
 
-  setErrorMessage(message);
-  toast.error(message);
-    } finally {
-      setLoading(false);
+    // STEP 1: ACCOUNT
+    payload.append("name", form.name.trim());
+    payload.append("email", form.email.trim().toLowerCase());
+    payload.append("mobile", form.mobile.trim());
+    payload.append("password", form.password);
+    payload.append(
+      "password_confirmation",
+      form.password_confirmation
+    );
+    payload.append("terms", form.terms ? "1" : "0");
+
+    // STEP 2: BUSINESS
+    payload.append("company_name", form.company_name.trim());
+    payload.append("business_type", form.business_type);
+    payload.append("industry", form.industry);
+    payload.append("country", form.country);
+    payload.append("website", (form.website || "").trim());
+    payload.append("gstin", (form.gstin || "").trim());
+    payload.append("city", form.city.trim());
+
+    // STEP 3: META BUSINESS ACCOUNT
+    payload.append("meta_account_type", form.meta_account_type);
+
+    // STEP 4: WHATSAPP ONBOARDING PREFERENCE
+    payload.append(
+      "onboarding_preference",
+      form.onboarding_preference || ""
+    );
+    payload.append(
+      "number_setup_type",
+      form.number_setup_type || ""
+    );
+
+    // DOCUMENTS
+    if (form.utility_bill) {
+      payload.append("utility_bill", form.utility_bill);
     }
-  };
+
+    if (form.gst_document) {
+      payload.append("gst_document", form.gst_document);
+    }
+
+    payload.append(
+      "document_note",
+      (form.document_note || "").trim()
+    );
+
+    payload.append(
+      "document_consent",
+      form.document_consent ? "1" : "0"
+    );
+
+    // SUBMIT REGISTRATION
+    const response = await axios.post(`${API}/register`, payload, {
+      headers: {
+        Accept: "application/json",
+      },
+      timeout: 60000,
+    });
+
+    const data = response.data;
+
+    const token =
+      data?.token ||
+      data?.access_token ||
+      data?.data?.token ||
+      data?.data?.access_token;
+
+    const registrationSucceeded =
+      Boolean(token) || data?.success === true;
+
+    if (!registrationSucceeded) {
+      throw new Error(
+        data?.message || "Registration could not be completed."
+      );
+    }
+
+    // Save final progress without showing a separate toast.
+    try {
+      const progressResult = await saveRegistrationProgress(4, true);
+
+      if (!progressResult?.progress_saved) {
+        console.warn(
+          "Registration completed, but final progress was not saved."
+        );
+      }
+
+      if (progressResult?.admin_email_sent === false) {
+        console.warn(
+          "Registration completed, but the Admin progress email was not sent."
+        );
+      }
+    } catch (progressError) {
+      console.error(
+        "Final registration progress error:",
+        progressError.response?.data || progressError.message
+      );
+    }
+
+    // Clear saved registration information.
+    localStorage.removeItem("register_form_data");
+    localStorage.removeItem("register_step");
+    localStorage.removeItem("register_email_verified");
+    localStorage.removeItem("register_verified_email");
+
+    sessionStorage.removeItem("registration_success_message");
+
+    // Do not automatically log the user in.
+    setRegistrationComplete(true);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    // Dismiss any previous notifications and show only one success toast.
+    toast.dismiss();
+
+    toast.success("Registration completed successfully!", {
+      toastId: "registration-complete",
+    });
+  } catch (error) {
+    console.error(
+      "Registration error:",
+      error.response?.data || error.message
+    );
+
+    const responseData = error.response?.data;
+    const errors = responseData?.errors || {};
+    const formattedErrors = {};
+
+    Object.entries(errors).forEach(([field, messages]) => {
+      formattedErrors[field] = Array.isArray(messages)
+        ? messages[0]
+        : String(messages);
+    });
+
+    setFieldErrors((previous) => ({
+      ...previous,
+      ...formattedErrors,
+    }));
+
+    if (errors.email) {
+      setStep(1);
+
+      const emailError = Array.isArray(errors.email)
+        ? errors.email[0]
+        : errors.email;
+
+      setErrorMessage("");
+
+      toast.error(emailError, {
+        toastId: "registration-email-error",
+      });
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
+      return;
+    }
+
+    const validationMessage = Object.values(errors)
+      .flat()
+      .join(" ");
+
+    const message =
+      validationMessage ||
+      responseData?.message ||
+      error.message ||
+      "Unable to register. Please try again.";
+
+    setErrorMessage(message);
+
+    toast.error(message, {
+      toastId: "registration-error",
+    });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   /* =========================================================
      SHARED FIELD PROPS
@@ -999,56 +1240,26 @@ const handleNext = async () => {
                 />
               </div>
 
-            {/* EMAIL */}
-              <div className="space-y-2">
-                <div className="relative">
-                  <Field
-                    {...fieldProps}
-                    label="Email address"
-                    name="email"
-                    icon={Mail}
-                    type="email"
-                    placeholder="you@company.com"
-                    autoComplete="email"
-                    maxLength={255}
-                    required
-                    error={fieldErrors.email}
-                    className={
-                      emailVerified
-                        ? "border-green-500 focus:border-green-500 focus:ring-green-100"
-                        : ""
-                    }
-                  />
+              <div>
+                <Field
+                  {...fieldProps}
+                  label="Email Address"
+                  name="email"
+                  icon={Mail}
+                  type="email"
+                  placeholder="you@company.com"
+                  autoComplete="email"
+                  maxLength={255}
+                  required
+                  error={fieldErrors.email}
+                />
 
-                  {emailVerified ? (
-                    <span className="absolute right-3 top-[38px] z-10 flex items-center gap-1 text-sm font-semibold text-green-600">
-                      <CheckCircle2 size={16} />
-                      Verified
-                    </span>
-                  ) : (
-                    form.email?.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleVerifyEmail}
-                        disabled={emailLoading}
-                        className="absolute right-3 top-[38px] z-10 text-sm font-semibold text-red-600 underline underline-offset-2 hover:text-red-700 disabled:opacity-50"
-                      >
-                        {emailLoading
-                          ? "Sending..."
-                          : verificationSent
-                            ? "Resend link"
-                            : "Verify"}
-                      </button>
-                    )
-                  )}
-                </div>
-
-                {verificationSent && !emailVerified && (
-                  <p className="text-sm text-amber-600">
-                    Verification link sent. Open your inbox and click the link to verify your email.
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Enter your business email. We will check whether it is
+                  already registered.
+                </p>
               </div>
+
               <Field
                 {...fieldProps}
                 label="Mobile Number"
@@ -1070,6 +1281,7 @@ const handleNext = async () => {
                 icon={LockKeyhole}
                 type="password"
                 placeholder="At least 8 characters"
+                autoComplete="new-password"
                 required
                 error={fieldErrors.password}
               />
@@ -1081,6 +1293,7 @@ const handleNext = async () => {
                 icon={ShieldCheck}
                 type="password"
                 placeholder="Re-enter password"
+                autoComplete="new-password"
                 required
                 error={fieldErrors.password_confirmation}
               />
@@ -1150,17 +1363,30 @@ const handleNext = async () => {
                 name="country"
                 options={COUNTRIES}
                 required
+                error={fieldErrors.country}
               />
 
-              <Field
-                {...fieldProps}
-                label="City"
-                name="city"
-                icon={MapPin}
-                placeholder="e.g. New Delhi"
-                required
-                error={fieldErrors.city}
-              />
+              <div>
+                <Field
+                  {...fieldProps}
+                  label="City"
+                  name="city"
+                  icon={MapPin}
+                  placeholder={
+                    cityLoading ? "Detecting your city..." : "e.g. New Delhi"
+                  }
+                  required
+                  error={fieldErrors.city}
+                />
+
+                <p className="mt-1 text-xs text-slate-500">
+                  {cityLoading
+                    ? "Detecting your location..."
+                    : form.city
+                      ? "City detected from your IP address. You can edit it if needed."
+                      : "Enter your city manually if it could not be detected."}
+                </p>
+              </div>
 
               <Field
                 {...fieldProps}
@@ -1179,6 +1405,7 @@ const handleNext = async () => {
                 icon={FileText}
                 placeholder="Enter GSTIN if available"
                 maxLength={20}
+                error={fieldErrors.gstin}
               />
             </div>
 
@@ -1253,198 +1480,227 @@ const handleNext = async () => {
             </div>
 
             <InfoBox>
-              <strong>Secure account connection.</strong> Use your official Meta Account for flow onbording. Never enter/share your personal facebook password with anyone.
+              <strong>Secure account connection.</strong> Use your official
+              Meta account for flow onboarding. Never share your personal
+              Facebook password with anyone.
             </InfoBox>
           </>
         );
 
       case 4:
         return (
-          <>
-            <StepHeading
-              title="Business Documents"
-              subtitle="Upload documents if needed for business onboarding or verification. Requirements may vary."
-              icon={FileText}
-            />
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Connect Your WhatsApp
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Choose how you want to set up your WhatsApp number.
+              </p>
+            </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FileUpload
-                label="Utility Bill"
-                description="Electricity, water or another accepted bill showing business name/address."
-                name="utility_bill"
-                file={form.utility_bill}
-                onChange={handleFileChange}
+              <button
+                type="button"
                 disabled={loading}
-              />
+                onClick={() => {
+                  updateForm("onboarding_preference", "guide");
+                  updateForm("number_setup_type", "");
+                }}
+                className={`rounded-2xl border p-5 text-left transition ${
+                  form.onboarding_preference === "guide"
+                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+                    : "border-slate-200 bg-white hover:border-blue-300"
+                }`}
+              >
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                  <BookOpen size={22} />
+                </div>
 
-              <FileUpload
-                label="GST / Business Document"
-                description="GST certificate or another accepted business proof, if applicable."
-                name="gst_document"
-                file={form.gst_document}
-                onChange={handleFileChange}
+                <h3 className="font-semibold text-slate-900">Guide</h3>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Follow the steps to migrate or connect your number.
+                </p>
+              </button>
+
+              <button
+                type="button"
                 disabled={loading}
-              />
+                onClick={() => {
+                  updateForm("onboarding_preference", "support");
+                  updateForm("number_setup_type", "");
+                }}
+                className={`rounded-2xl border p-5 text-left transition ${
+                  form.onboarding_preference === "support"
+                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+                    : "border-slate-200 bg-white hover:border-blue-300"
+                }`}
+              >
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                  <Headset size={22} />
+                </div>
+
+                <h3 className="font-semibold text-slate-900">Support</h3>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Contact our team for assistance.
+                </p>
+              </button>
             </div>
 
-            <div className="mt-4">
-              <Field
-                {...fieldProps}
-                label="Additional Information (optional)"
-                name="document_note"
-                placeholder="Any note for the verification team"
-                maxLength={1000}
-              />
-            </div>
+            {form.onboarding_preference === "guide" && (
+              <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                <h3 className="font-semibold text-slate-900">
+                  Choose Your Setup Option
+                </h3>
 
-            <Checkbox
-              name="document_consent"
-              checked={form.document_consent}
-              onChange={handleChange}
-              disabled={loading}
-            >
-              I confirm I am authorized to share these documents for business
-              onboarding and verification.
-            </Checkbox>
-
-            {fieldErrors.document_consent && (
-              <p className="mt-2 text-xs text-rose-600">
-                {fieldErrors.document_consent}
-              </p>
-            )}
-
-            <InfoBox>
-              <strong>Privacy note.</strong> Uploaded documents should be
-              stored in private storage with file validation, access controls
-              and a retention policy.
-            </InfoBox>
-          </>
-        );
-
-      case 5:
-        return (
-          <>
-            <StepHeading
-              title="Choose your message-credit plan"
-              subtitle="Choose a starting package. Final pricing and provider charges should be confirmed before checkout."
-              icon={CreditCard}
-            />
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {PLANS.map((plan) => {
-                const selected =
-                  String(form.plan_id) === String(plan.id);
-
-                return (
-                  <button
-                    key={plan.id}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => updateForm("plan_id", plan.id)}
-                    className={`relative rounded-2xl border p-4 text-left transition ${
-                      selected
-                        ? "border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/10"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-bold text-slate-800">
-                        {plan.name}
-                      </span>
-
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                          selected
-                            ? "border-emerald-600 bg-emerald-600 text-white"
-                            : "border-slate-300"
-                        }`}
-                      >
-                        {selected && <Check size={12} />}
-                      </span>
-                    </span>
-
-                    {plan.tag && (
-                      <span className="mt-2 inline-flex rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold tracking-wide text-emerald-800">
-                        {plan.tag}
-                      </span>
-                    )}
-
-                    <div className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900">
-                      {Number(plan.credits).toLocaleString("en-IN")}
-                      <span className="ml-1 text-xs font-medium text-slate-500">
-                        credits
-                      </span>
+                <div
+                  className={`rounded-xl border p-4 transition ${
+                    form.number_setup_type === "migrate"
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                      <ArrowRight size={20} />
                     </div>
 
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {plan.priceLabel}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-semibold text-slate-900">
+                        Migrate Number
+                      </h4>
 
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
-                      {plan.description}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+                      <a
+                        href="https://ajayaar.com/2026/10/15/how-to-migrate-an-existing-number-to-whatsapp-business-api-step-by-step-guide/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        Read Guide
+                        <ExternalLink size={15} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3 py-2">
-                <span className="text-sm text-slate-500">
-                  Selected package
-                </span>
+                <div
+                  className={`rounded-xl border p-4 transition ${
+                    form.number_setup_type === "connect"
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                      <Smartphone size={20} />
+                    </div>
 
-                <strong className="text-right text-sm text-slate-800">
-                  {selectedPlan.name} —{" "}
-                  {Number(selectedPlan.credits).toLocaleString("en-IN")} credits
-                </strong>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-semibold text-slate-900">
+                        Connect New Number
+                      </h4>
+
+                      <a
+                        href="https://ajayaar.com/2026/10/15/how-to-add-a-new-number-to-whatsapp-business-api-step-by-step-guide/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        Read Guide
+                        <ExternalLink size={15} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
-
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 py-2">
-                <span className="text-sm text-slate-500">
-                  Platform fee at signup
-                </span>
-
-                <strong className="text-sm text-slate-800">
-                  {selectedPlan.price === "0"
-                    ? "₹0"
-                    : selectedPlan.priceLabel}
-                </strong>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 py-2">
-                <span className="text-sm text-slate-500">
-                  WhatsApp/provider charges
-                </span>
-
-                <strong className="text-right text-xs text-slate-700">
-                  May apply separately
-                </strong>
-              </div>
-            </div>
-
-            <InfoBox>
-              <strong>Understand your credits.</strong> Confirm what one
-              credit represents, along with expiry, recharge rules, taxes and
-              any separate WhatsApp/provider charges.
-            </InfoBox>
-
-            <Checkbox
-              name="billing_consent"
-              checked={form.billing_consent}
-              onChange={handleChange}
-              disabled={loading}
-            >
-              I understand the selected package and agree to review pricing,
-              credit usage and service terms before any paid purchase.
-            </Checkbox>
-
-            {fieldErrors.billing_consent && (
-              <p className="mt-2 text-xs text-rose-600">
-                {fieldErrors.billing_consent}
-              </p>
             )}
-          </>
+
+            {form.onboarding_preference === "support" && (
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+                <h3 className="font-semibold text-slate-900">
+                  Contact Support
+                </h3>
+
+                <p className="mt-1 text-sm text-slate-600">
+                  Get help with your WhatsApp number setup.
+                </p>
+
+                <div className="mt-5 space-y-3">
+                  <a
+                    href="tel:+919876543210"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm"
+                  >
+                    <Smartphone
+                      size={20}
+                      className="shrink-0 text-blue-600"
+                    />
+
+                    <div>
+                      <p className="text-xs text-slate-500">Call Support</p>
+                      <p className="font-semibold text-slate-900">
+                        +91 98765 43210
+                      </p>
+                    </div>
+
+                    <ExternalLink
+                      size={16}
+                      className="ml-auto text-slate-400"
+                    />
+                  </a>
+
+                  <a
+                    href="mailto:support@yourdomain.com"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm"
+                  >
+                    <Mail size={20} className="shrink-0 text-blue-600" />
+
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-500">
+                        Email Support
+                      </p>
+                      <p className="break-all font-semibold text-slate-900">
+                        support@yourdomain.com
+                      </p>
+                    </div>
+
+                    <ExternalLink
+                      size={16}
+                      className="ml-auto shrink-0 text-slate-400"
+                    />
+                  </a>
+
+                  <a
+                    href="https://wa.me/919810120907?text=Hello%2C%20I%20need%20help%20with%20WhatsApp%20number%20setup."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-300 hover:shadow-sm"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                      <MessageCircle size={21} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-slate-500">Live Chat</p>
+                      <p className="font-semibold text-slate-900">
+                        Chat with Support
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Chat with our team on WhatsApp
+                      </p>
+                    </div>
+
+                    <ExternalLink
+                      size={16}
+                      className="shrink-0 text-slate-400"
+                    />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
         );
 
       default:
@@ -1456,313 +1712,204 @@ const handleNext = async () => {
      SUCCESS SCREEN
   ========================================================= */
 
-  const renderSuccess = () => {
-    const details = [
-      ["Full Name", form.name],
-      ["Email Address", form.email],
-      ["Mobile Number", form.mobile],
-      ["Business Name", form.company_name],
-      ["Business Type", form.business_type],
-      ["Industry", form.industry],
-      ["Country", form.country],
-      ["City", form.city],
-      ["Website", form.website || "Not provided"],
-      ["GSTIN", form.gstin || "Not provided"],
-      [
-        "Meta Business Account",
-        META_OPTIONS.find(
-          (option) => option.value === form.meta_account_type
-        )?.title || form.meta_account_type || "Not selected",
-      ],
-      ["Selected Plan", selectedPlan.name],
-      [
-        "Message Credits",
-        Number(selectedPlan.credits).toLocaleString("en-IN"),
-      ],
-      ["Plan Price", selectedPlan.priceLabel],
-      ["Utility Bill", form.utility_bill?.name || "Not uploaded"],
-      [
-        "GST / Business Document",
-        form.gst_document?.name || "Not uploaded",
-      ],
-    ];
+  const renderSuccess = () => (
+    <div className="relative overflow-hidden px-5 py-10 sm:px-10 sm:py-12">
+      <div className="relative mx-auto max-w-3xl">
+        <div className="success-enter text-center">
+          <div className="success-scene relative mx-auto flex h-32 w-32 items-center justify-center">
+            <div className="success-glow absolute h-24 w-24 rounded-full bg-emerald-400/25 blur-2xl" />
 
-    return (
-   <div className="relative overflow-hidden bg-white px-5 py-8 sm:px-10 sm:py-10">
-  <div className="relative mx-auto max-w-3xl">
+            <div className="success-ring absolute inset-3 rounded-full border-2 border-emerald-300" />
 
-    {/* Animated Success Icon */}
-    <div className="success-enter text-center">
-      <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
+            <div className="success-ring success-ring-delay absolute inset-3 rounded-full border-2 border-green-200" />
 
-        {/* Animated pulse rings */}
-        <div className="success-ring absolute inset-0 rounded-full border border-emerald-300" />
+            <span className="success-orbit absolute left-2 top-7 h-2.5 w-2.5 rounded-full bg-amber-400" />
 
-        <div className="success-ring success-ring-delay absolute inset-1 rounded-full border border-emerald-200" />
+            <span className="success-orbit absolute right-2 top-9 h-2 w-2 rounded-full bg-emerald-400" />
 
-        {/* Green success circle */}
-        <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-xl shadow-emerald-500/25">
-          <svg
-            viewBox="0 0 52 52"
-            className="h-12 w-12"
-            fill="none"
-            aria-label="Registration successful"
-            role="img"
+            <div className="success-badge relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-600 shadow-xl shadow-emerald-600/30">
+              <div className="absolute inset-1 rounded-full border border-white/30" />
+
+              <svg
+                viewBox="0 0 24 24"
+                className="relative h-11 w-11"
+                fill="none"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-label="Registration successful"
+                role="img"
+              >
+                <path d="M5 12.5 10 17l9-10" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="success-heading mt-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+
+              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">
+                Registration Successful
+              </span>
+            </div>
+
+            <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+              Welcome Aboard!
+            </h2>
+
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500 sm:text-base">
+              Your account has been created successfully. Please log in
+              to continue.
+            </p>
+          </div>
+        </div>
+
+        <div className="success-card-enter mt-8 flex flex-col items-center justify-center">
+          <button
+            type="button"
+            onClick={() => navigate("/", { replace: true })}
+            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 sm:w-auto"
           >
-            <circle
-              cx="26"
-              cy="26"
-              r="24"
-              stroke="white"
-              strokeOpacity="0.25"
-              strokeWidth="1.5"
-            />
+            
+            Please Login to Continue
 
-            <path
-              className="success-check"
-              d="M15 27L22 34L37 18"
-              stroke="white"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <LogIn 
+              size={18}
+              className="transition-transform duration-200 group-hover:translate-x-1"
             />
-          </svg>
+          </button>
         </div>
 
-        {/* Small animated sparkles */}
-        <span className="success-sparkle absolute right-0 top-3 h-2.5 w-2.5 rounded-full bg-amber-400" />
-
-        <span className="success-sparkle success-sparkle-delay absolute bottom-3 left-0 h-2 w-2 rounded-full bg-indigo-400" />
-      </div>
-
-      {/* Success heading */}
-      <div className="mt-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-
-          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">
-            Registration completed
-          </span>
-        </div>
-
-        <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-          You're all set!
-        </h2>
-
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500 sm:text-base">
-          Your registration details have been submitted successfully.
-          Here's a summary of your account information.
+        <p className="success-card-enter mt-8 text-center text-xs leading-5 text-slate-400">
+          Thank you for choosing our platform.
+          <span className="mx-1.5">·</span>
+          Your account information is handled securely.
         </p>
       </div>
+
+      <style>{`
+        @keyframes success-enter {
+          from {
+            opacity: 0;
+            transform: translateY(18px) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes success-badge-pop {
+          0% {
+            opacity: 0;
+            transform: scale(0.35) rotate(-18deg);
+          }
+          65% {
+            opacity: 1;
+            transform: scale(1.12) rotate(4deg);
+          }
+          100% {
+            transform: scale(1) rotate(0);
+          }
+        }
+
+        @keyframes success-ring-pulse {
+          0% {
+            opacity: 0;
+            transform: scale(0.55);
+          }
+          25% {
+            opacity: 0.8;
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.55);
+          }
+        }
+
+        @keyframes success-glow {
+          0%, 100% {
+            opacity: 0.4;
+            transform: scale(0.85);
+          }
+          50% {
+            opacity: 0.9;
+            transform: scale(1.2);
+          }
+        }
+
+        @keyframes success-orbit {
+          0%, 100% {
+            transform: translateY(0) scale(1);
+          }
+          50% {
+            transform: translateY(-7px) scale(1.15);
+          }
+        }
+
+        @keyframes success-heading-enter {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .success-enter {
+          animation: success-enter 650ms cubic-bezier(.2,.8,.2,1) both;
+        }
+
+        .success-badge {
+          animation: success-badge-pop 750ms cubic-bezier(.16,1,.3,1) 100ms both;
+        }
+
+        .success-ring {
+          animation: success-ring-pulse 1.4s ease-out 200ms both;
+        }
+
+        .success-ring-delay {
+          animation-delay: 500ms;
+        }
+
+        .success-glow {
+          animation: success-glow 2.4s ease-in-out 300ms infinite;
+        }
+
+        .success-orbit {
+          animation: success-orbit 2s ease-in-out infinite;
+        }
+
+        .success-heading {
+          animation: success-heading-enter 650ms ease-out 250ms both;
+        }
+
+        .success-card-enter {
+          animation: success-enter 650ms cubic-bezier(.2,.8,.2,1) 250ms both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .success-enter,
+          .success-badge,
+          .success-ring,
+          .success-ring-delay,
+          .success-glow,
+          .success-orbit,
+          .success-heading,
+          .success-card-enter {
+            animation: none !important;
+            transition: none !important;
+            opacity: 1;
+            transform: none;
+          }
+        }
+      `}</style>
     </div>
-
-    {/* Registration Details Card */}
-    <div className="success-card-enter mt-9 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_12px_40px_-20px_rgba(15,23,42,0.20)]">
-
-      {/* Card Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
-            <FileText className="h-5 w-5 text-indigo-600" />
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Registration summary
-            </h3>
-
-            <p className="mt-0.5 text-xs text-slate-500">
-              Your submitted information
-            </p>
-          </div>
-        </div>
-
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Submitted
-        </span>
-      </div>
-
-      {/* Details Grid */}
-      <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2">
-        {details.map(([label, value], index) => (
-          <div
-            key={label}
-            style={{ animationDelay: `${index * 70}ms` }}
-            className="detail-item min-w-0 bg-white px-5 py-4 transition-colors duration-200 hover:bg-slate-50 sm:px-6"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              {label}
-            </p>
-
-            <p className="mt-1.5 break-words text-sm font-semibold text-slate-800">
-              {value || "Not provided"}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Security Note */}
-      <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
-        <LockKeyhole className="h-4 w-4 shrink-0 text-slate-400" />
-
-        <p className="text-xs text-slate-500">
-          Your password is protected and is never displayed here.
-        </p>
-      </div>
-    </div>
-
-    {/* WhatsApp Onboarding Card */}
-    <div className="success-card-enter relative mt-5 overflow-hidden rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6">
-
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-        {/* WhatsApp Icon */}
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50">
-          <MessageCircle className="h-7 w-7 text-indigo-600" />
-        </div>
-
-        {/* Onboarding Content */}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-bold text-slate-900">
-              Next up: Connect WhatsApp
-            </h3>
-
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              Action required
-            </span>
-          </div>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Connect your WhatsApp Business account to configure messaging,
-            publish your automation journeys, and prepare your workspace.
-          </p>
-        </div>
-
-        {/* Next Step Indicator */}
-        <div className="shrink-0">
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50">
-              <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-
-            Continue onboarding
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Footer */}
-    <p className="mt-6 text-center text-xs leading-5 text-slate-400">
-      Thank you for choosing our platform.
-      <span className="mx-1.5">·</span>
-      your account information is handled securely.
-    </p>
-
-  </div>
-
-  {/* Animation CSS */}
-  <style>{`
-    @keyframes success-enter {
-      from {
-        opacity: 0;
-        transform: translateY(16px) scale(0.98);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    @keyframes success-check-draw {
-      from {
-        stroke-dashoffset: 35;
-      }
-
-      to {
-        stroke-dashoffset: 0;
-      }
-    }
-
-    @keyframes success-ring-pulse {
-      0% {
-        opacity: 0.8;
-        transform: scale(0.82);
-      }
-
-      100% {
-        opacity: 0;
-        transform: scale(1.35);
-      }
-    }
-
-    @keyframes success-sparkle {
-      0%, 100% {
-        opacity: 0.4;
-        transform: scale(0.7) translateY(0);
-      }
-
-      50% {
-        opacity: 1;
-        transform: scale(1.15) translateY(-3px);
-      }
-    }
-
-    .success-enter {
-      animation: success-enter 650ms cubic-bezier(.2,.8,.2,1) both;
-    }
-
-    .success-card-enter {
-      animation: success-enter 650ms cubic-bezier(.2,.8,.2,1) 120ms both;
-    }
-
-    .success-check {
-      stroke-dasharray: 35;
-      stroke-dashoffset: 35;
-      animation: success-check-draw 550ms ease-out 350ms forwards;
-    }
-
-    .success-ring {
-      animation: success-ring-pulse 1.3s ease-out 150ms both;
-    }
-
-    .success-ring-delay {
-      animation-delay: 350ms;
-    }
-
-    .success-sparkle {
-      animation: success-sparkle 1.8s ease-in-out 500ms infinite;
-    }
-
-    .success-sparkle-delay {
-      animation-delay: 900ms;
-    }
-
-    .detail-item {
-      animation: success-enter 450ms ease-out both;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .success-enter,
-      .success-card-enter,
-      .success-check,
-      .success-ring,
-      .success-ring-delay,
-      .success-sparkle,
-      .success-sparkle-delay,
-      .detail-item {
-        animation: none !important;
-      }
-
-      .success-check {
-        stroke-dashoffset: 0;
-      }
-    }
-  `}</style>
-</div>
-    );
-  };
+  );
 
   /* =========================================================
      PAGE
@@ -1791,8 +1938,8 @@ const handleNext = async () => {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-            Create your account, Connect your business and choose a
-            message-credit plan. Complete the steps to get started.
+            Create your account, connect your business and configure your
+            WhatsApp onboarding. Complete the steps to get started.
           </p>
         </div>
       )}
@@ -1895,7 +2042,7 @@ const handleNext = async () => {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold tracking-wide text-emerald-700">
-                        STEP {step} OF 5
+                        STEP {step} OF 4
                       </p>
 
                       <p className="mt-1 text-sm font-semibold text-slate-700">
@@ -1904,20 +2051,20 @@ const handleNext = async () => {
                     </div>
 
                     <span className="text-xs font-semibold text-slate-500">
-                      {step * 20}% completed
+                      {step * 25}% completed
                     </span>
                   </div>
 
                   <div
                     className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"
                     role="progressbar"
-                    aria-valuenow={step * 20}
+                    aria-valuenow={step * 25}
                     aria-valuemin={0}
                     aria-valuemax={100}
                   >
                     <div
                       className="h-full rounded-full bg-emerald-600 transition-all duration-300"
-                      style={{ width: `${step * 20}%` }}
+                      style={{ width: `${step * 25}%` }}
                     />
                   </div>
                 </div>
@@ -1926,7 +2073,7 @@ const handleNext = async () => {
                   onSubmit={(event) => {
                     event.preventDefault();
 
-                    if (step < 5) {
+                    if (step < 4) {
                       handleNext();
                     } else {
                       handleSubmit(event);
@@ -1951,38 +2098,47 @@ const handleNext = async () => {
                       type="button"
                       onClick={handleBack}
                       disabled={step === 1 || loading}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ArrowLeft size={17} />
                       Back
                     </button>
 
-                    {step < 5 ? (
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/15 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
+                    {step < 4 ? (
+               <button
+                    type="submit"
+                    disabled={loading}
+                    className="group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/15 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loading ? (
+                      <>
+                        <LoaderCircle size={17} className="animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
                         Continue
                         <ArrowRight
                           size={17}
-                          className="transition-transform group-hover:translate-x-1"
+                          className="transition-transform group-hover:translate-x-1 cursor-pointer"
                         />
-                      </button>
+                      </>
+                    )}
+                  </button>
                     ) : (
                       <button
                         type="submit"
                         disabled={loading}
-                        className="group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/15 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="cursor-pointer group inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/15 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {loading ? (
                           <>
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                            Creating account...
+                            Creating Account...
                           </>
                         ) : (
                           <>
-                            Create Account
+                            Complete Registration
                             <CheckCircle2 size={17} />
                           </>
                         )}
@@ -1995,11 +2151,8 @@ const handleNext = async () => {
           </section>
         </main>
       </div>
-
-      
     </div>
   );
 };
-
 
 export default Register;

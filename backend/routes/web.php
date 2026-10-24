@@ -9,5 +9,9 @@ Route::get('/', function () {
     ]);
 });
 
+Route::get('/login', function () {
+    return response()->json(['message' => 'Unauthenticated.'], 401);
+})->name('login');
+
 // Load API routes
 Route::prefix('api')->group(base_path('routes/api.php'));
