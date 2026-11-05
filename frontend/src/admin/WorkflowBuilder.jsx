@@ -30,7 +30,12 @@ import {
     // ADD THESE
   Loader2,
   Upload,
-  Zap
+  Zap,
+  AlertTriangle,
+  Scissors,
+    PanelRightClose,
+  PanelRightOpen,
+  
 
 } from "lucide-react";
 
@@ -39,18 +44,23 @@ import ReactFlow, {
   Controls,
   Background,
   addEdge,
+   BaseEdge,
+   EdgeLabelRenderer,
+    getBezierPath,
+     useReactFlow,
   reconnectEdge,
   useNodesState,
   useEdgesState,
   Handle,
   Position,
+  Panel
 } from "reactflow";
 
 import "reactflow/dist/style.css";
 import "react-toastify/dist/ReactToastify.css";
 
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 
 import {
@@ -74,15 +84,15 @@ const API =
 const defaultMenuOptions = [
   {
     id: "option-1",
-    label: "Products",
+    label: "Option-1",
   },
   {
     id: "option-2",
-    label: "Orders",
+    label: "Opton-2",
   },
   {
     id: "option-3",
-    label: "Support",
+    label: "Option-3",
   },
 ];
 
@@ -166,6 +176,22 @@ function Node({
     Array.isArray(data?.menuOptions)
       ? data.menuOptions
       : [];
+
+
+const buttonOptions = [
+  // DEFAULT BUTTON
+  {
+    title: data?.buttonText || "Button 1",
+    value: data?.buttonValue || "",
+    type: data?.buttonType || "reply",
+    url: data?.buttonUrl || "",
+  },
+
+  // EXTRA BUTTONS
+  ...(Array.isArray(data?.extraButtons)
+    ? data.extraButtons
+    : []),
+];
 
  const preview =
   type === "api"
@@ -400,111 +426,161 @@ function Node({
 ====================================================== */}
 
 {type === "menu" ? (
+  /* MAIN MENU */
   <div className="px-4 pb-4 pt-3">
     <div className="rounded-xl bg-slate-50 p-3">
-
       <p className="text-xs leading-5 text-slate-600">
         {data.message || "Please select an option"}
       </p>
 
-   <div className="mt-3 space-y-2">
-  {menuOptions.length > 0 ? (
-    menuOptions.map((option, index) => {
-      const sourceHandle = `source-option-${index}`;
+      <div className="mt-3 space-y-2">
+        {menuOptions.length > 0 ? (
+          menuOptions.map((option, index) => {
+            const sourceHandle = `source-option-${index}`;
 
-      return (
-        <div
-          key={sourceHandle}
-          className="
-            relative
-            flex
-            min-h-[34px]
-            items-center
-            rounded-lg
-            border
-            border-purple-100
-            bg-white
-            px-3
-            py-2
-            pl-7
-          "
-        >
-          {/* =================================================
-              OPTION SOURCE HANDLE - LEFT
-          ================================================== */}
-          <Handle
-            type="source"
-            position={Position.Left}
-            id={sourceHandle}
-            className="
-              !absolute
-              !left-[-7px]
-              !top-1/2
-              !z-50
-              !h-3
-              !w-3
-              !-translate-y-1/2
-              !cursor-crosshair
-              !border-2
-              !border-white
-              !bg-purple-500
-              hover:!bg-purple-700
-            "
-          />
+            return (
+              <div
+                key={sourceHandle}
+                className="relative flex min-h-[34px] items-center rounded-lg border border-purple-100 bg-white px-3 py-2 pl-7"
+              >
+                <Handle
+                  type="source"
+                  position={Position.Left}
+                  id={sourceHandle}
+                  className="!absolute !left-[-7px] !top-1/2 !z-50 !h-3 !w-3 !-translate-y-1/2 !border-2 !border-white !bg-purple-500"
+                />
 
-          {/* NUMBER */}
-          <span
-            className="
-              mr-2
-              flex
-              h-5
-              w-5
-              shrink-0
-              items-center
-              justify-center
-              rounded-full
-              bg-purple-100
-              text-[9px]
-              font-bold
-              text-purple-600
-            "
-          >
-            {index + 1}
-          </span>
+                <span className="mr-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-[9px] font-bold text-purple-600">
+                  {index + 1}
+                </span>
 
-          {/* OPTION LABEL */}
-          <span
-            className="
-              min-w-0
-              flex-1
-              truncate
-              text-[11px]
-              font-semibold
-              text-slate-700
-            "
-          >
-            {option.label ||
-              option.title ||
-              option.text ||
-              `Option ${index + 1}`}
-          </span>
-        </div>
-      );
-    })
-  ) : (
-    <p className="text-[10px] italic text-slate-400">
-      No menu options
-    </p>
-  )}
-</div>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">
+                  {option.label || option.title || option.text || `Option ${index + 1}`}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-[10px] italic text-slate-400">
+            No menu options
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+) : type === "button" ? (
+  /* BUTTON NODE - MENU STYLE */
+  <div className="px-4 pb-4 pt-3">
+    <div className="rounded-xl bg-slate-50 p-3">
+      <p className="text-xs leading-5 text-slate-600">
+        {data.message || "Please select an option"}
+      </p>
 
+      <div className="mt-3 space-y-2">
+        {buttonOptions.length > 0 ? (
+          buttonOptions.map((button, index) => {
+            const buttonType = String(
+              button.type ||
+              button.buttonType ||
+              button.button_type ||
+              "reply"
+            ).toLowerCase();
+
+            const isUrlButton = buttonType === "url";
+            const sourceHandle = `source-option-${index}`;
+
+            return (
+              <div
+                key={sourceHandle}
+                className="
+                  relative
+                  flex
+                  min-h-[34px]
+                  items-center
+                  rounded-lg
+                  border
+                  border-purple-100
+                  bg-white
+                  px-3
+                  py-2
+                  pl-7
+                "
+              >
+                {!isUrlButton && (
+                  <Handle
+                    type="source"
+                    position={Position.Left}
+                    id={sourceHandle}
+                    className="
+                      !absolute
+                      !left-[-7px]
+                      !top-1/2
+                      !z-50
+                      !h-3
+                      !w-3
+                      !-translate-y-1/2
+                      !cursor-crosshair
+                      !border-2
+                      !border-white
+                      !bg-purple-500
+                      hover:!bg-purple-700
+                    "
+                  />
+                )}
+
+                <span
+                  className="
+                    mr-2
+                    flex
+                    h-5
+                    w-5
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-purple-100
+                    text-[9px]
+                    font-bold
+                    text-purple-600
+                  "
+                >
+                  {index + 1}
+                </span>
+
+                <span
+                  className="
+                    min-w-0
+                    flex-1
+                    truncate
+                    text-[11px]
+                    font-semibold
+                    text-slate-700
+                  "
+                >
+                  {button.title ||
+                    button.label ||
+                    button.text ||
+                    `Button ${index + 1}`}
+                </span>
+
+                {isUrlButton && (
+                  <span className="ml-2 text-[9px] font-semibold text-blue-600">
+                    URL
+                  </span>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-[10px] italic text-slate-400">
+            No buttons configured
+          </p>
+        )}
+      </div>
     </div>
   </div>
 ) : (
-  /* =====================================================
-     NORMAL CONTENT
-  ====================================================== */
-
+  /* NORMAL CONTENT */
   <div className="px-4 pb-4 pt-3">
     {preview ? (
       <div className="rounded-xl bg-slate-50 px-3 py-2.5">
@@ -735,8 +811,8 @@ const palette = [
   ["userInput", "User Input"],
   ["api", "API"],
   ["media", "Media"],
-  ["media_template", "Media Template"],
-  ["delay", "Delay"],
+  // ["media_template", "Media Template"],
+  // ["delay", "Delay"],
   ["end", "End"],
 ];
 
@@ -829,10 +905,14 @@ const [form, setForm] = useState({
   // BUTTON
   // =====================================================
 
-  buttonText: "",
+  buttonType: "reply", 
 
-  buttonValue: "",
+        buttonText: "",
 
+        buttonValue: "",
+
+        buttonUrl: "",
+        extraButtons: [],
 
   condition: "",
 
@@ -899,6 +979,11 @@ const [form, setForm] = useState({
   apiTimeout: 30,
 
 
+
+  // =====================================================
+  // MEDIA
+  // =====================================================
+
   mediaId: "",
   mediaType: "image",
   mediaUrl: "",
@@ -912,11 +997,9 @@ const [form, setForm] = useState({
   // Upload state
   mediaUploading: false,
 
-  // Interactive media
+  // Media caption
   mediaBody: "",
-  mediaFooter: "",
-  mediaButtons: [],
-  
+
   // =====================================================
   // TEMPLATE
   // =====================================================
@@ -953,9 +1036,9 @@ const [form, setForm] = useState({
   // DELAY
   // =====================================================
 
-  delay: "5",
+  delay: "",
 
-  delayUnit: "seconds",
+  delayUnit: "",
 
 
   // =====================================================
@@ -1072,13 +1155,37 @@ cityValidation: "any",
       variable:
         node.data?.variable || "",
 
-      buttonText:
-        node.data?.buttonText || "",
+      // ===================================================
+// BUTTON CONFIG
+// ===================================================
 
-      buttonValue:
-      node.data?.buttonValue ||
-      node.data?.button_value ||
-      "",
+buttonType:
+  node.data?.buttonType ??
+  node.data?.button_type ??
+  "reply",
+
+buttonText:
+  node.data?.buttonText ??
+  node.data?.button_text ??
+  "",
+
+buttonValue:
+  node.data?.buttonValue ??
+  node.data?.button_value ??
+  "",
+
+buttonUrl:
+  node.data?.buttonUrl ??
+  node.data?.button_url ??
+  node.data?.url ??
+  "",
+
+
+  extraButtons: Array.isArray(node.data?.extraButtons)
+  ? node.data.extraButtons
+  : Array.isArray(node.data?.extra_buttons)
+  ? node.data.extra_buttons
+  : [],
 
       condition:
         node.data?.condition || "",
@@ -1575,34 +1682,34 @@ mediaUploading: false,
 // INTERACTIVE MEDIA BODY
 // ===================================================
 
-mediaBody:
-  node.data?.mediaBody ??
-  node.data?.media_body ??
-  node.data?.body ??
-  "",
+  mediaBody:
+        node.data?.mediaBody ??
+        node.data?.media_body ??
+        node.data?.caption ??
+        "",
 
 // ===================================================
 // INTERACTIVE MEDIA FOOTER
 // ===================================================
 
-mediaFooter:
-  node.data?.mediaFooter ??
-  node.data?.media_footer ??
-  node.data?.footer ??
-  "",
+// mediaFooter:
+//   node.data?.mediaFooter ??
+//   node.data?.media_footer ??
+//   node.data?.footer ??
+//   "",
 
 // ===================================================
 // INTERACTIVE MEDIA BUTTONS
 // ===================================================
 
-mediaButtons:
-  Array.isArray(node.data?.mediaButtons)
-    ? node.data.mediaButtons
-    : Array.isArray(node.data?.media_buttons)
-    ? node.data.media_buttons
-    : Array.isArray(node.data?.buttons)
-    ? node.data.buttons
-    : [],
+// mediaButtons:
+//   Array.isArray(node.data?.mediaButtons)
+//     ? node.data.mediaButtons
+//     : Array.isArray(node.data?.media_buttons)
+//     ? node.data.media_buttons
+//     : Array.isArray(node.data?.buttons)
+//     ? node.data.buttons
+//     : [],
 
 // ===================================================
 // MEDIA TEMPLATE
@@ -1850,6 +1957,7 @@ templateVariables:
         node.data?.city_validation ??
         "any",
     });
+    
   }, [node]);
 
   // =======================================================
@@ -1865,6 +1973,7 @@ templateVariables:
       [field]: value,
     }));
   };
+
 
   // =======================================================
   // MEDIA URL UPDATE
@@ -2687,6 +2796,26 @@ const update = () => {
     return;
   }
 
+    // =====================================================
+  // START NODE VALIDATION
+  // =====================================================
+
+ if (node.type === "start") {
+  const triggerType = String(
+    form.triggerType || node.data?.triggerType || "keyword"
+  ).trim().toLowerCase();
+
+  const triggerText = String(
+    form.triggerText ?? node.data?.triggerText ?? ""
+  ).trim();
+
+  if (triggerType === "keyword" && !triggerText) {
+    toast.error("Please enter a Trigger Message before saving.");
+    return;
+  }
+}
+
+
   pushHistory(
     nodes,
     edges
@@ -3012,9 +3141,7 @@ const update = () => {
         />
       </div>
 
-      {/* =====================================================
-          START
-      ====================================================== */}
+  
 {/* =====================================================
     START
 ====================================================== */}
@@ -3042,9 +3169,7 @@ const update = () => {
           Keyword / Message
         </option>
 
-        <option value="any">
-          Any Incoming Message
-        </option>
+     
       </select>
     </div>
 
@@ -3075,31 +3200,7 @@ const update = () => {
       </div>
     )}
 
-    {/* WELCOME MESSAGE */}
-
-    {/* <div>
-      <label className={labelClass}>
-        Welcome Message
-      </label>
-
-      <textarea
-        value={form.message}
-        onChange={(e) =>
-          updateField(
-            "message",
-            e.target.value
-          )
-        }
-        rows={5}
-        placeholder="Welcome! How can I help you?"
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        This message will be sent when the
-        workflow starts.
-      </p>
-    </div> */}
+ 
 
     {/* PREVIEW */}
 
@@ -3158,96 +3259,294 @@ const update = () => {
         </div>
       )}
 
-  {/* =====================================================
-    BUTTON
+
+
+{/* =====================================================
+    BUTTON NODE
 ====================================================== */}
 
 {node?.type === "button" && (
   <>
     {/* Button Message */}
     <div>
-      <label className={labelClass}>
-        Button Message
-      </label>
+      <label className={labelClass}>Button Message</label>
 
       <textarea
-        value={form.message}
-        onChange={(e) =>
-          updateField(
-            "message",
-            e.target.value
-          )
-        }
+        value={form.message || ""}
+        onChange={(e) => updateField("message", e.target.value)}
         rows={5}
+        maxLength={1024}
         placeholder="Please select an option..."
         className={textareaClass}
       />
-    </div>
 
-    {/* Button Text */}
-    <div>
-      <label className={labelClass}>
-        Button Text
-      </label>
-
-      <input
-        type="text"
-        value={form.buttonText}
-        onChange={(e) =>
-          updateField(
-            "buttonText",
-            e.target.value
-          )
-        }
-        placeholder="Verify Mobile"
-        className={inputClass}
-      />
-    </div>
-
-    {/* Button Value / Handle */}
-    <div>
-      <label className={labelClass}>
-        Button Value / Handle
-      </label>
-
-      <input
-        type="text"
-        value={form.buttonValue || ""}
-        onChange={(e) =>
-          updateField(
-            "buttonValue",
-            e.target.value
-          )
-        }
-        placeholder="verify_mobile"
-        className={inputClass}
-      />
-
-      <p className="mt-1 text-[11px] text-slate-500">
-        Example: verify_mobile
+      <p className="mt-1 text-right text-[11px] text-slate-500">
+        {(form.message || "").length}/1024
       </p>
+    </div>
+
+    {/* First Button Type */}
+    <div>
+      <label className={labelClass}>Button Type</label>
+
+      <select
+        value={form.buttonType || "reply"}
+        onChange={(e) => updateField("buttonType", e.target.value)}
+        className={inputClass}
+      >
+        <option value="reply">Reply Button</option>
+        <option value="url">URL Button</option>
+      </select>
+    </div>
+
+    {/* First Button Text */}
+    <div>
+      <label className={labelClass}>Button Text</label>
+
+      <input
+        type="text"
+        value={form.buttonText || ""}
+        onChange={(e) => updateField("buttonText", e.target.value)}
+        placeholder="Enter button text"
+        maxLength={20}
+        className={inputClass}
+      />
+    </div>
+
+
+
+    {/* First Button URL */}
+    {form.buttonType === "url" && (
+      <div>
+        <label className={labelClass}>Button URL</label>
+
+        <input
+          type="url"
+          value={form.buttonUrl || ""}
+          onChange={(e) => updateField("buttonUrl", e.target.value)}
+          placeholder="https://example.com"
+          className={inputClass}
+        />
+
+        <p className="mt-1 text-[11px] text-slate-500">
+          Enter the complete HTTPS URL.
+        </p>
+      </div>
+    )}
+
+    {/* Additional Buttons */}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label className={labelClass}>Additional Buttons</label>
+          <p className="mt-1 text-xs text-slate-500">
+            Maximum 3 buttons total
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={(form.extraButtons || []).length >= 2}
+          onClick={() => {
+            const buttons = form.extraButtons || [];
+
+            if (buttons.length >= 2) return;
+
+            updateField("extraButtons", [
+              ...buttons,
+              {
+                type: "reply",
+                text: "",
+                value: "",
+                url: "",
+              },
+            ]);
+          }}
+          style={{
+            backgroundColor:
+              (form.extraButtons || []).length >= 2
+                ? "#C4B5FD"
+                : "#7C3AED",
+            color: "#FFFFFF",
+            border: "none",
+            cursor:
+              (form.extraButtons || []).length >= 2
+                ? "not-allowed"
+                : "pointer",
+          }}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:brightness-90 disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          Add More
+        </button>
+      </div>
+
+      {(form.extraButtons || []).map((button, index) => {
+        const updateExtraButton = (field, value) => {
+          const updated = [...(form.extraButtons || [])];
+
+          updated[index] = {
+            ...updated[index],
+            [field]: value,
+          };
+
+          updateField("extraButtons", updated);
+        };
+
+        return (
+          <div
+            key={index}
+            className="space-y-3 rounded-xl border border-violet-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-slate-800">
+                Button {index + 2}
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateField(
+                    "extraButtons",
+                    (form.extraButtons || []).filter(
+                      (_, i) => i !== index
+                    )
+                  )
+                }
+                className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+              >
+                Remove
+              </button>
+            </div>
+
+            {/* Additional Button Type */}
+            <div>
+              <label className={labelClass}>Button Type</label>
+
+          <select
+  value={button.type || "reply"}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    const anotherUrlExists =
+      form.buttonType === "url" ||
+      (form.extraButtons || []).some(
+        (item, i) => i !== index && item.type === "url"
+      );
+
+    if (value === "url" && anotherUrlExists) {
+      return;
+    }
+
+    updateExtraButton("type", value);
+  }}
+  className={inputClass}
+>
+  <option value="reply">Reply Button</option>
+
+  <option
+    value="url"
+    disabled={
+      form.buttonType === "url" ||
+      (form.extraButtons || []).some(
+        (item, i) => i !== index && item.type === "url"
+      )
+    }
+  >
+    URL Button
+  </option>
+</select>
+            </div>
+
+            {/* Additional Button Text */}
+            <div>
+              <label className={labelClass}>Button Text</label>
+
+              <input
+                type="text"
+                value={button.text || ""}
+                onChange={(e) =>
+                  updateExtraButton("text", e.target.value)
+                }
+                placeholder="Enter button text"
+                maxLength={20}
+                className={inputClass}
+              />
+            </div>
+
+      
+
+            {/* Additional URL */}
+            {button.type === "url" && (
+              <div>
+                <label className={labelClass}>Button URL</label>
+
+                <input
+                  type="url"
+                  value={button.url || ""}
+                  onChange={(e) =>
+                    updateExtraButton("url", e.target.value)
+                  }
+                  placeholder="https://example.com"
+                  className={inputClass}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
 
     {/* Button Preview */}
     <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-      <p className="text-[10px] font-bold uppercase text-violet-500">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-violet-600">
         Button Preview
       </p>
 
-      <div className="mt-3 rounded-lg bg-white p-3">
-
-        <p className="text-sm text-slate-700">
+      <div className="mt-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
           {form.message || "Please select an option"}
         </p>
 
-        <div className="mt-3 rounded-lg bg-violet-100 px-3 py-2 text-center text-xs font-bold text-violet-700">
-          {form.buttonText || "Verify Mobile"}
-        </div>
+        <div className="mt-3 space-y-2">
+{/* First Button Preview */}
+<div className="rounded-lg bg-violet-100 px-3 py-2.5 text-center text-xs font-bold text-violet-700">
+  {form.buttonType === "url" ? (
+    <a
+      href={form.buttonUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block"
+      onClick={(e) => e.stopPropagation()}
+    >
+      ↗ {form.buttonText || "button"}
+    </a>
+  ) : (
+    form.buttonText || "button"
+  )}
+</div>
 
+
+          {/* Additional Buttons Preview */}
+          {(form.extraButtons || []).map((button, index) => (
+            <div
+              key={index}
+              className="rounded-lg bg-violet-100 px-3 py-2.5 text-center text-xs font-bold text-violet-700"
+            >
+              {button.type === "url" ? "↗ " : ""}
+              {button.text || `Button ${index + 2}`}
+            </div>
+          ))}
+        </div>
       </div>
+
+      <p className="mt-2 text-[11px] text-slate-500">
+        {(form.extraButtons || []).length + 1} of 3 buttons
+      </p>
     </div>
   </>
 )}
+
       {/* =====================================================
           MAIN MENU
       ====================================================== */}
@@ -6362,10 +6661,8 @@ order_id={{order_id}}`}
 {/* =====================================================
     NORMAL MEDIA NODE
 ====================================================== */}
-
 {node?.type === "media" && (
   <>
-
     {/* =================================================
         MEDIA TYPE
     ================================================== */}
@@ -6380,55 +6677,25 @@ order_id={{order_id}}`}
         onChange={(e) => {
           const type = e.target.value;
 
-          updateField(
-            "mediaType",
-            type
-          );
+          updateField("mediaType", type);
 
-          // ---------------------------------------------
-          // AUDIO DOES NOT SUPPORT INTERACTIVE BUTTONS
-          // ---------------------------------------------
+          // Clear caption for audio
           if (type === "audio") {
-            updateField(
-              "mediaButtons",
-              []
-            );
-
-            updateField(
-              "mediaBody",
-              ""
-            );
-
-            updateField(
-              "mediaFooter",
-              ""
-            );
+            updateField("mediaBody", "");
           }
         }}
         className={inputClass}
       >
-        <option value="image">
-          Image
-        </option>
-
-        <option value="document">
-          Document
-        </option>
-
-        <option value="video">
-          Video
-        </option>
-
-        <option value="audio">
-          Audio
-        </option>
+        <option value="image">Image</option>
+        <option value="document">Document</option>
+        <option value="video">Video</option>
+        <option value="audio">Audio</option>
       </select>
 
       <p className="mt-2 text-[11px] text-slate-400">
         Select the type of media you want to send through WhatsApp.
       </p>
     </div>
-
 
     {/* =================================================
         MEDIA UPLOAD
@@ -6439,93 +6706,32 @@ order_id={{order_id}}`}
         Upload Media
       </label>
 
-      <div
-        className="
-          mt-2
-          rounded-xl
-          border
-          border-dashed
-          border-fuchsia-300
-          bg-fuchsia-50/50
-          p-4
-        "
-      >
-
+      <div className="mt-2 rounded-xl border border-dashed border-fuchsia-300 bg-fuchsia-50/50 p-4">
         <label
           className={`
-            flex
-            cursor-pointer
-            flex-col
-            items-center
-            justify-center
-            rounded-xl
-            border
-            border-fuchsia-200
-            bg-white
-            px-4
-            py-6
-            text-center
-            transition
-            hover:border-fuchsia-400
-            hover:bg-fuchsia-50
-            ${
-              form.mediaUploading
-                ? "pointer-events-none opacity-60"
-                : ""
-            }
+            flex cursor-pointer flex-col items-center justify-center
+            rounded-xl border border-fuchsia-200 bg-white px-4 py-6
+            text-center transition hover:border-fuchsia-400 hover:bg-fuchsia-50
+            ${form.mediaUploading ? "pointer-events-none opacity-60" : ""}
           `}
         >
-
           {form.mediaUploading ? (
             <>
-              <Loader2
-                className="
-                  h-8
-                  w-8
-                  animate-spin
-                  text-fuchsia-600
-                "
-              />
+              <Loader2 className="h-8 w-8 animate-spin text-fuchsia-600" />
 
-              <span
-                className="
-                  mt-2
-                  text-sm
-                  font-semibold
-                  text-fuchsia-700
-                "
-              >
+              <span className="mt-2 text-sm font-semibold text-fuchsia-700">
                 Uploading...
               </span>
             </>
           ) : (
             <>
-              <Upload
-                className="
-                  h-8
-                  w-8
-                  text-fuchsia-600
-                "
-              />
+              <Upload className="h-8 w-8 text-fuchsia-600" />
 
-              <span
-                className="
-                  mt-2
-                  text-sm
-                  font-semibold
-                  text-slate-700
-                "
-              >
+              <span className="mt-2 text-sm font-semibold text-slate-700">
                 Upload Media
               </span>
 
-              <span
-                className="
-                  mt-1
-                  text-[11px]
-                  text-slate-400
-                "
-              >
+              <span className="mt-1 text-[11px] text-slate-400">
                 Image, Document, Audio or Video
               </span>
             </>
@@ -6536,23 +6742,21 @@ order_id={{order_id}}`}
             className="hidden"
             disabled={form.mediaUploading}
             accept="
-              image/*
-              ,application/pdf
-              ,application/msword
-              ,application/vnd.openxmlformats-officedocument.wordprocessingml.document
-              ,application/vnd.ms-excel
-              ,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-              ,application/vnd.ms-powerpoint
-              ,application/vnd.openxmlformats-officedocument.presentationml.presentation
-              ,text/plain
-              ,text/csv
-              ,audio/*
-              ,video/*
+              image/*,
+              application/pdf,
+              application/msword,
+              application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+              application/vnd.ms-excel,
+              application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,
+              application/vnd.ms-powerpoint,
+              application/vnd.openxmlformats-officedocument.presentationml.presentation,
+              text/plain,
+              text/csv,
+              audio/*,
+              video/*
             "
             onChange={(e) => {
-
-              const file =
-                e.target.files?.[0];
+              const file = e.target.files?.[0];
 
               if (file) {
                 uploadMedia(file);
@@ -6561,197 +6765,75 @@ order_id={{order_id}}`}
               e.target.value = "";
             }}
           />
-
         </label>
 
-
-        {/* =================================================
+        {/* =============================================
             UPLOADED MEDIA
-        ================================================== */}
+        ============================================== */}
 
         {form.mediaUrl && (
-          <div
-            className="
-              mt-3
-              rounded-xl
-              border
-              border-slate-200
-              bg-white
-              p-3
-            "
-          >
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex items-start gap-3">
+              {/* MEDIA ICON / THUMBNAIL */}
 
-            <div
-              className="
-                flex
-                items-start
-                gap-3
-              "
-            >
-
-              {/* =========================================
-                  MEDIA PREVIEW ICON
-              ========================================== */}
-
-              <div
-                className="
-                  flex
-                  h-14
-                  w-14
-                  shrink-0
-                  items-center
-                  justify-center
-                  overflow-hidden
-                  rounded-lg
-                  bg-fuchsia-50
-                "
-              >
-
-                {/* IMAGE */}
-
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-fuchsia-50">
                 {(
                   form.mediaMimeType === "image" ||
                   form.mediaMimeType?.startsWith("image/")
                 ) ? (
-
                   <img
                     src={form.mediaUrl}
-                    alt={
-                      form.mediaName ||
-                      "Uploaded media"
-                    }
-                    className="
-                      h-full
-                      w-full
-                      object-cover
-                    "
+                    alt={form.mediaName || "Uploaded media"}
+                    className="h-full w-full object-cover"
                   />
-
                 ) : (
-
-                  /* VIDEO */
-
-                  form.mediaMimeType === "video" ||
-                  form.mediaMimeType?.startsWith("video/")
-                ) ? (
-
-                  <Video
-                    className="
-                      h-7
-                      w-7
-                      text-fuchsia-600
-                    "
-                  />
-
-                ) : (
-
-                  /* AUDIO */
-
-                  form.mediaMimeType === "audio" ||
-                  form.mediaMimeType?.startsWith("audio/")
-                ) ? (
-
-                  <Volume2
-                    className="
-                      h-7
-                      w-7
-                      text-fuchsia-600
-                    "
-                  />
-
-                ) : (
-
-                  /* DOCUMENT */
-
-                  <FileText
-                    className="
-                      h-7
-                      w-7
-                      text-fuchsia-600
-                    "
-                  />
-
+                  (
+                    form.mediaMimeType === "video" ||
+                    form.mediaMimeType?.startsWith("video/")
+                  ) ? (
+                    <Video className="h-7 w-7 text-fuchsia-600" />
+                  ) : (
+                    (
+                      form.mediaMimeType === "audio" ||
+                      form.mediaMimeType?.startsWith("audio/")
+                    ) ? (
+                      <Volume2 className="h-7 w-7 text-fuchsia-600" />
+                    ) : (
+                      <FileText className="h-7 w-7 text-fuchsia-600" />
+                    )
+                  )
                 )}
-
               </div>
 
+              {/* FILE INFORMATION */}
 
-              {/* =========================================
-                  FILE INFO
-              ========================================== */}
-
-              <div
-                className="
-                  min-w-0
-                  flex-1
-                "
-              >
-
-                <p
-                  className="
-                    truncate
-                    text-sm
-                    font-semibold
-                    text-slate-700
-                  "
-                >
-                  {form.mediaName ||
-                    "Uploaded Media"}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-700">
+                  {form.mediaName || "Uploaded Media"}
                 </p>
 
-
-                <p
-                  className="
-                    mt-1
-                    text-[11px]
-                    text-slate-400
-                  "
-                >
-                  Type:{" "}
-                  {form.mediaMimeType ||
-                    form.mediaType ||
-                    "media"}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Type: {form.mediaMimeType || form.mediaType || "media"}
                 </p>
-
 
                 {form.mediaId && (
-                  <p
-                    className="
-                      mt-1
-                      text-[10px]
-                      text-slate-400
-                    "
-                  >
+                  <p className="mt-1 text-[10px] text-slate-400">
                     Media ID: {form.mediaId}
                   </p>
                 )}
 
-
-                <p
-                  className="
-                    mt-1
-                    truncate
-                    text-[10px]
-                    text-slate-400
-                  "
-                >
+                <p className="mt-1 truncate text-[10px] text-slate-400">
                   {form.mediaUrl}
                 </p>
-
               </div>
 
-
-              {/* =========================================
-                  REMOVE MEDIA
-              ========================================== */}
+              {/* REMOVE MEDIA */}
 
               <button
                 type="button"
                 onClick={() => {
-
                   setForm((previous) => ({
                     ...previous,
-
                     mediaId: "",
                     mediaUrl: "",
                     mediaName: "",
@@ -6759,41 +6841,21 @@ order_id={{order_id}}`}
                     mediaFilename: "",
                     fileName: "",
                   }));
-
                 }}
-                className="
-                  rounded-lg
-                  p-2
-                  text-slate-400
-                  transition
-                  hover:bg-red-50
-                  hover:text-red-500
-                "
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
                 title="Remove media"
               >
                 <X className="h-4 w-4" />
               </button>
-
             </div>
-
           </div>
         )}
-
       </div>
 
-
-      <p
-        className="
-          mt-2
-          text-[11px]
-          text-slate-400
-        "
-      >
+      <p className="mt-2 text-[11px] text-slate-400">
         Maximum file size: 50 MB.
       </p>
-
     </div>
-
 
     {/* =================================================
         MEDIA URL
@@ -6807,28 +6869,15 @@ order_id={{order_id}}`}
       <input
         type="url"
         value={form.mediaUrl || ""}
-        onChange={(e) =>
-          updateField(
-            "mediaUrl",
-            e.target.value
-          )
-        }
+        onChange={(e) => updateField("mediaUrl", e.target.value)}
         placeholder="https://example.com/media.jpg"
         className={inputClass}
       />
 
-      <p
-        className="
-          mt-2
-          text-[11px]
-          text-slate-400
-        "
-      >
+      <p className="mt-2 text-[11px] text-slate-400">
         Upload a file above or enter a public HTTPS URL manually.
       </p>
-
     </div>
-
 
     {/* =================================================
         DOCUMENT FILENAME
@@ -6836,52 +6885,30 @@ order_id={{order_id}}`}
 
     {form.mediaType === "document" && (
       <div>
-
         <label className={labelClass}>
           Filename
         </label>
 
         <input
           type="text"
-          value={
-            form.mediaFilename ||
-            form.fileName ||
-            ""
-          }
+          value={form.mediaFilename || form.fileName || ""}
           onChange={(e) => {
-
-            updateField(
-              "mediaFilename",
-              e.target.value
-            );
-
-            updateField(
-              "fileName",
-              e.target.value
-            );
-
+            updateField("mediaFilename", e.target.value);
+            updateField("fileName", e.target.value);
           }}
           placeholder="Jaquar-Catalog.pdf"
           className={inputClass}
         />
 
-        <p
-          className="
-            mt-2
-            text-[11px]
-            text-slate-400
-          "
-        >
+        <p className="mt-2 text-[11px] text-slate-400">
           Filename shown to the WhatsApp user.
         </p>
-
       </div>
     )}
 
-
     {/* =================================================
-        INTERACTIVE BODY
-        IMAGE / VIDEO / DOCUMENT ONLY
+        MEDIA CAPTION
+        IMAGE / VIDEO / DOCUMENT
     ================================================== */}
 
     {(
@@ -6889,511 +6916,100 @@ order_id={{order_id}}`}
       form.mediaType === "video" ||
       form.mediaType === "document"
     ) && (
-
       <div>
-
         <label className={labelClass}>
-          Message Body
+          Caption
         </label>
 
         <textarea
-          value={
-            form.mediaBody || ""
-          }
-          onChange={(e) =>
-            updateField(
-              "mediaBody",
-              e.target.value
-            )
-          }
+          value={form.mediaBody || ""}
+          onChange={(e) => updateField("mediaBody", e.target.value)}
           rows={3}
-          placeholder="Enter message body..."
+          placeholder="Enter media caption..."
           className={textareaClass}
         />
 
-        <p
-          className="
-            mt-2
-            text-[11px]
-            text-slate-400
-          "
-        >
-          This text is used with WhatsApp interactive buttons.
+        <p className="mt-2 text-[11px] text-slate-400">
+          Optional caption sent with the media.
         </p>
-
       </div>
     )}
-
-
-    {/* =================================================
-        FOOTER
-        IMAGE / VIDEO / DOCUMENT ONLY
-    ================================================== */}
-
-    {(
-      form.mediaType === "image" ||
-      form.mediaType === "video" ||
-      form.mediaType === "document"
-    ) && (
-
-      <div>
-
-        <label className={labelClass}>
-          Footer
-        </label>
-
-        <input
-          type="text"
-          value={
-            form.mediaFooter || ""
-          }
-          onChange={(e) =>
-            updateField(
-              "mediaFooter",
-              e.target.value
-            )
-          }
-          placeholder="Optional footer text"
-          className={inputClass}
-        />
-
-        <p
-          className="
-            mt-2
-            text-[11px]
-            text-slate-400
-          "
-        >
-          Optional footer shown below the message body.
-        </p>
-
-      </div>
-    )}
-
-
-    {/* =================================================
-        BUTTONS
-        IMAGE / VIDEO / DOCUMENT ONLY
-    ================================================== */}
-
-    {(
-      form.mediaType === "image" ||
-      form.mediaType === "video" ||
-      form.mediaType === "document"
-    ) && (
-
-      <div>
-
-        <div
-          className="
-            flex
-            items-center
-            justify-between
-          "
-        >
-
-          <label className={labelClass}>
-            Buttons
-          </label>
-
-          <span
-            className="
-              text-[10px]
-              text-slate-400
-            "
-          >
-            Maximum 3
-          </span>
-
-        </div>
-
-
-        <div className="mt-2 space-y-2">
-
-          {(
-            Array.isArray(form.mediaButtons)
-              ? form.mediaButtons
-              : []
-          ).map((button, index) => (
-
-            <div
-              key={index}
-              className="
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                p-3
-              "
-            >
-
-              <div className="flex gap-2">
-
-                {/* BUTTON ID */}
-
-                <input
-                  type="text"
-                  value={
-                    button?.id || ""
-                  }
-                  onChange={(e) => {
-
-                    const buttons = [
-                      ...(form.mediaButtons || [])
-                    ];
-
-                    buttons[index] = {
-                      ...buttons[index],
-                      id: e.target.value,
-                    };
-
-                    updateField(
-                      "mediaButtons",
-                      buttons
-                    );
-
-                  }}
-                  placeholder="Button ID"
-                  className={inputClass}
-                />
-
-
-                {/* BUTTON TITLE */}
-
-                <input
-                  type="text"
-                  value={
-                    button?.title || ""
-                  }
-                  onChange={(e) => {
-
-                    const buttons = [
-                      ...(form.mediaButtons || [])
-                    ];
-
-                    buttons[index] = {
-                      ...buttons[index],
-                      title: e.target.value,
-                    };
-
-                    updateField(
-                      "mediaButtons",
-                      buttons
-                    );
-
-                  }}
-                  placeholder="Button title"
-                  className={inputClass}
-                />
-
-
-                {/* REMOVE BUTTON */}
-
-                <button
-                  type="button"
-                  onClick={() => {
-
-                    const buttons = [
-                      ...(form.mediaButtons || [])
-                    ];
-
-                    buttons.splice(
-                      index,
-                      1
-                    );
-
-                    updateField(
-                      "mediaButtons",
-                      buttons
-                    );
-
-                  }}
-                  className="
-                    shrink-0
-                    rounded-lg
-                    p-2
-                    text-slate-400
-                    hover:bg-red-50
-                    hover:text-red-500
-                  "
-                  title="Remove button"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-
-              </div>
-
-            </div>
-
-          ))}
-
-
-          {/* ADD BUTTON */}
-
-          {(
-            Array.isArray(form.mediaButtons)
-              ? form.mediaButtons
-              : []
-          ).length < 3 && (
-
-            <button
-              type="button"
-              onClick={() => {
-
-                const buttons = [
-                  ...(form.mediaButtons || [])
-                ];
-
-                buttons.push({
-                  id:
-                    `source-option-${buttons.length}`,
-                  title:
-                    `Option ${buttons.length + 1}`,
-                });
-
-                updateField(
-                  "mediaButtons",
-                  buttons
-                );
-
-              }}
-              className="
-                w-full
-                rounded-xl
-                border
-                border-dashed
-                border-fuchsia-300
-                bg-fuchsia-50
-                px-3
-                py-3
-                text-xs
-                font-semibold
-                text-fuchsia-700
-                hover:bg-fuchsia-100
-              "
-            >
-              + Add Button
-            </button>
-
-          )}
-
-        </div>
-
-
-        <p
-          className="
-            mt-2
-            text-[11px]
-            text-slate-400
-          "
-        >
-          Maximum 3 WhatsApp interactive reply buttons.
-        </p>
-
-      </div>
-
-    )}
-
 
     {/* =================================================
         AUDIO INFORMATION
     ================================================== */}
 
     {form.mediaType === "audio" && (
-
-      <div
-        className="
-          rounded-xl
-          border
-          border-amber-200
-          bg-amber-50
-          p-4
-        "
-      >
-
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
         <div className="flex items-start gap-3">
-
-          <Volume2
-            className="
-              mt-0.5
-              h-5
-              w-5
-              shrink-0
-              text-amber-600
-            "
-          />
+          <Volume2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
 
           <div>
-
-            <p
-              className="
-                text-xs
-                font-bold
-                text-amber-700
-              "
-            >
+            <p className="text-xs font-bold text-amber-700">
               Audio Message
             </p>
 
-            <p
-              className="
-                mt-1
-                text-[11px]
-                leading-5
-                text-amber-700
-              "
-            >
-              Audio is sent as a normal WhatsApp audio
-              message. Interactive buttons are not available
-              for audio.
+            <p className="mt-1 text-[11px] leading-5 text-amber-700">
+              Audio is sent as a normal WhatsApp audio message.
+              Caption and interactive buttons are not configured for audio.
             </p>
-
           </div>
-
         </div>
-
       </div>
-
     )}
 
-
     {/* =================================================
-        PREVIEW
+        MEDIA PREVIEW
     ================================================== */}
 
-    <div
-      className="
-        rounded-xl
-        border
-        border-fuchsia-200
-        bg-fuchsia-50
-        p-4
-      "
-    >
-
+    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
       <div className="flex items-center gap-2">
+        <ImageIcon className="h-4 w-4 text-fuchsia-600" />
 
-        <ImageIcon
-          className="
-            h-4
-            w-4
-            text-fuchsia-600
-          "
-        />
-
-        <p
-          className="
-            text-[10px]
-            font-bold
-            uppercase
-            tracking-wide
-            text-fuchsia-600
-          "
-        >
+        <p className="text-[10px] font-bold uppercase tracking-wide text-fuchsia-600">
           Media Preview
         </p>
-
       </div>
 
+      <div className="mt-3 overflow-hidden rounded-xl bg-white shadow-sm">
+        {/* IMAGE */}
 
-      <div
-        className="
-          mt-3
-          overflow-hidden
-          rounded-xl
-          bg-white
-          shadow-sm
-        "
-      >
-
-        {/* =================================================
-            IMAGE PREVIEW
-        ================================================== */}
-
-        {form.mediaUrl &&
-        (
+        {form.mediaUrl && (
           form.mediaMimeType === "image" ||
           form.mediaMimeType?.startsWith("image/") ||
           form.mediaType === "image"
         ) ? (
-
           <img
             src={form.mediaUrl}
-            alt={
-              form.mediaName ||
-              "Media"
-            }
-            className="
-              max-h-64
-              w-full
-              object-contain
-            "
+            alt={form.mediaName || "Media"}
+            className="max-h-64 w-full object-contain"
           />
-
-        ) : form.mediaUrl &&
-          (
-            form.mediaMimeType === "video" ||
-            form.mediaMimeType?.startsWith("video/") ||
-            form.mediaType === "video"
-          ) ? (
-
-          /* =================================================
-              VIDEO PREVIEW
-          ================================================== */
+        ) : form.mediaUrl && (
+          form.mediaMimeType === "video" ||
+          form.mediaMimeType?.startsWith("video/") ||
+          form.mediaType === "video"
+        ) ? (
+          /* VIDEO */
 
           <div className="bg-black p-2">
-
             <video
               src={form.mediaUrl}
               controls
-              className="
-                max-h-64
-                w-full
-                rounded-lg
-              "
+              className="max-h-64 w-full rounded-lg"
             />
-
           </div>
+        ) : form.mediaUrl && (
+          form.mediaMimeType === "audio" ||
+          form.mediaMimeType?.startsWith("audio/") ||
+          form.mediaType === "audio"
+        ) ? (
+          /* AUDIO */
 
-        ) : form.mediaUrl &&
-          (
-            form.mediaMimeType === "audio" ||
-            form.mediaMimeType?.startsWith("audio/") ||
-            form.mediaType === "audio"
-          ) ? (
+          <div className="flex flex-col items-center justify-center p-6">
+            <Volume2 className="h-10 w-10 text-fuchsia-600" />
 
-          /* =================================================
-              AUDIO PREVIEW
-          ================================================== */
-
-          <div
-            className="
-              flex
-              flex-col
-              items-center
-              justify-center
-              p-6
-            "
-          >
-
-            <Volume2
-              className="
-                h-10
-                w-10
-                text-fuchsia-600
-              "
-            />
-
-            <p
-              className="
-                mt-2
-                text-xs
-                font-semibold
-                text-slate-700
-              "
-            >
-              {form.mediaName ||
-                "Audio File"}
+            <p className="mt-2 text-xs font-semibold text-slate-700">
+              {form.mediaName || "Audio File"}
             </p>
 
             <audio
@@ -7401,41 +7017,14 @@ order_id={{order_id}}`}
               controls
               className="mt-3 w-full"
             />
-
           </div>
-
         ) : form.mediaUrl ? (
+          /* DOCUMENT */
 
-          /* =================================================
-              DOCUMENT PREVIEW
-          ================================================== */
+          <div className="flex flex-col items-center justify-center p-8">
+            <FileText className="h-10 w-10 text-fuchsia-500" />
 
-          <div
-            className="
-              flex
-              flex-col
-              items-center
-              justify-center
-              p-8
-            "
-          >
-
-            <FileText
-              className="
-                h-10
-                w-10
-                text-fuchsia-500
-              "
-            />
-
-            <p
-              className="
-                mt-2
-                text-xs
-                font-semibold
-                text-slate-700
-              "
-            >
+            <p className="mt-2 text-xs font-semibold text-slate-700">
               {form.mediaName ||
                 form.mediaFilename ||
                 form.fileName ||
@@ -7446,1029 +7035,94 @@ order_id={{order_id}}`}
               href={form.mediaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="
-                mt-3
-                rounded-lg
-                bg-fuchsia-100
-                px-3
-                py-2
-                text-[11px]
-                font-bold
-                text-fuchsia-700
-                hover:bg-fuchsia-200
-              "
+              className="mt-3 rounded-lg bg-fuchsia-100 px-3 py-2 text-[11px] font-bold text-fuchsia-700 hover:bg-fuchsia-200"
             >
               Open Media
             </a>
-
           </div>
-
         ) : (
+          /* EMPTY PREVIEW */
 
-          /* =================================================
-              EMPTY PREVIEW
-          ================================================== */
-
-          <div
-            className="
-              flex
-              h-32
-              items-center
-              justify-center
-              bg-slate-100
-            "
-          >
-
-            <ImageIcon
-              className="
-                h-8
-                w-8
-                text-slate-300
-              "
-            />
-
+          <div className="flex h-32 items-center justify-center bg-slate-100">
+            <ImageIcon className="h-8 w-8 text-slate-300" />
           </div>
-
         )}
-
       </div>
 
+      {/* CAPTION PREVIEW */}
+
+      {form.mediaBody && form.mediaType !== "audio" && (
+        <div className="mt-3 rounded-lg bg-white p-3">
+          <p className="text-[10px] font-semibold uppercase text-slate-400">
+            Caption
+          </p>
+
+          <p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">
+            {form.mediaBody}
+          </p>
+        </div>
+      )}
     </div>
 
-
     {/* =================================================
-        CONFIGURATION INFO
+        MEDIA CONFIGURATION
     ================================================== */}
 
-    <div
-      className="
-        rounded-xl
-        border
-        border-fuchsia-200
-        bg-fuchsia-50
-        p-4
-      "
-    >
-
-      <p
-        className="
-          text-[10px]
-          font-bold
-          uppercase
-          tracking-wide
-          text-fuchsia-600
-        "
-      >
+    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-fuchsia-600">
         Media Configuration
       </p>
 
-
       <div className="mt-3 space-y-2 text-xs">
-
         {/* TYPE */}
 
         <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Type</span>
 
-          <span className="text-slate-500">
-            Type
-          </span>
-
-          <span
-            className="
-              font-bold
-              uppercase
-              text-slate-700
-            "
-          >
+          <span className="font-bold uppercase text-slate-700">
             {form.mediaType || "image"}
           </span>
-
         </div>
-
 
         {/* FILE */}
 
         <div className="flex justify-between gap-3">
+          <span className="text-slate-500">File</span>
 
-          <span className="text-slate-500">
-            File
+          <span className="max-w-[60%] truncate font-bold text-slate-700">
+            {form.mediaName || "Not uploaded"}
           </span>
-
-          <span
-            className="
-              max-w-[60%]
-              truncate
-              font-bold
-              text-slate-700
-            "
-          >
-            {form.mediaName ||
-              "Not uploaded"}
-          </span>
-
         </div>
-
 
         {/* MEDIA ID */}
 
         <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Media ID</span>
 
-          <span className="text-slate-500">
-            Media ID
-          </span>
-
-          <span
-            className="
-              max-w-[60%]
-              truncate
-              font-bold
-              text-slate-700
-            "
-          >
+          <span className="max-w-[60%] truncate font-bold text-slate-700">
             {form.mediaId || "—"}
           </span>
-
         </div>
 
-
-        {/* BUTTON COUNT */}
+        {/* CAPTION STATUS */}
 
         <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Caption</span>
 
-          <span className="text-slate-500">
-            Buttons
-          </span>
-
-          <span
-            className="
-              font-bold
-              text-slate-700
-            "
-          >
+          <span className="font-bold text-slate-700">
             {form.mediaType === "audio"
               ? "Not available"
-              : `${(
-                  Array.isArray(form.mediaButtons)
-                    ? form.mediaButtons
-                    : []
-                ).length}/3`}
+              : form.mediaBody?.trim()
+                ? "Added"
+                : "Optional"}
           </span>
-
         </div>
-
       </div>
-
     </div>
-
   </>
 )}
      
- {/* =====================================================
-    MEDIA TEMPLATE
-====================================================== */}
 
-{node?.type === "media_template" && (
-  <>
-    {/* TEMPLATE NAME */}
-
-    <div>
-      <label className={labelClass}>
-        Template Name
-      </label>
-
-      <input
-        type="text"
-        value={form.templateName || ""}
-        onChange={(e) =>
-          updateField(
-            "templateName",
-            e.target.value
-          )
-        }
-        placeholder="welcome_customer"
-        className={inputClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Enter the Media Template name configured
-        in your WhatsApp provider.
-      </p>
-    </div>
-
-    {/* TEMPLATE ID */}
-
-    <div>
-      <label className={labelClass}>
-        Template ID
-      </label>
-
-      <input
-        type="text"
-        value={form.templateId || ""}
-        onChange={(e) =>
-          updateField(
-            "templateId",
-            e.target.value
-          )
-        }
-        placeholder="TEMPLATE_ID_12345"
-        className={inputClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Provider template ID required.
-      </p>
-    </div>
-
-    {/* LANGUAGE */}
-
-    <div>
-      <label className={labelClass}>
-        Template Language
-      </label>
-
-      <select
-        value={form.templateLanguage || "en"}
-        onChange={(e) =>
-          updateField(
-            "templateLanguage",
-            e.target.value
-          )
-        }
-        className={inputClass}
-      >
-        <option value="en">
-          English
-        </option>
-
-        <option value="hi">
-          Hindi
-        </option>
-
-        <option value="en_US">
-          English (US)
-        </option>
-
-        <option value="en_GB">
-          English (UK)
-        </option>
-      </select>
-    </div>
-
-{/* =====================================================
-    MEDIA TEMPLATE MEDIA UPLOAD
-====================================================== */}
-
-<div>
-  <label className={labelClass}>
-    Template Media
-  </label>
-
-  <div className="
-    mt-2
-    rounded-xl
-    border
-    border-dashed
-    border-fuchsia-300
-    bg-fuchsia-50/50
-    p-4
-  ">
-
-    <label
-      className={`
-        flex
-        cursor-pointer
-        flex-col
-        items-center
-        justify-center
-        rounded-xl
-        border
-        border-fuchsia-200
-        bg-white
-        px-4
-        py-6
-        text-center
-        transition
-        hover:border-fuchsia-400
-        hover:bg-fuchsia-50
-        ${
-          form.templateMediaUploading
-            ? "pointer-events-none opacity-60"
-            : ""
-        }
-      `}
-    >
-
-      {form.templateMediaUploading ? (
-        <>
-          <Loader2
-            className="
-              h-8
-              w-8
-              animate-spin
-              text-fuchsia-600
-            "
-          />
-
-          <span className="
-            mt-2
-            text-sm
-            font-semibold
-            text-fuchsia-700
-          ">
-            Uploading...
-          </span>
-        </>
-      ) : (
-        <>
-          <Upload
-            className="
-              h-8
-              w-8
-              text-fuchsia-600
-            "
-          />
-
-          <span className="
-            mt-2
-            text-sm
-            font-semibold
-            text-slate-700
-          ">
-            Upload Media
-          </span>
-
-          <span className="
-            mt-1
-            text-[11px]
-            text-slate-400
-          ">
-            Image, PDF, Document, Audio or Video
-          </span>
-        </>
-      )}
-
-      <input
-        type="file"
-        className="hidden"
-        disabled={
-          form.templateMediaUploading
-        }
-        accept="
-          image/*
-          ,application/pdf
-          ,application/msword
-          ,application/vnd.openxmlformats-officedocument.wordprocessingml.document
-          ,application/vnd.ms-excel
-          ,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-          ,application/vnd.ms-powerpoint
-          ,application/vnd.openxmlformats-officedocument.presentationml.presentation
-          ,text/plain
-          ,text/csv
-          ,audio/*
-          ,video/*
-        "
-        onChange={(e) => {
-          const file =
-            e.target.files?.[0];
-
-          if (file) {
-            uploadTemplateMedia(file);
-          }
-
-          e.target.value = "";
-        }}
-      />
-    </label>
-
-    {/* =================================================
-        UPLOADED MEDIA
-    ================================================= */}
-
-    {form.templateMediaUrl && (
-      <div className="
-        mt-3
-        rounded-xl
-        border
-        border-slate-200
-        bg-white
-        p-3
-      ">
-
-        <div className="flex items-start gap-3">
-
-          {/* PREVIEW ICON */}
-
-          <div className="
-            flex
-            h-12
-            w-12
-            shrink-0
-            items-center
-            justify-center
-            overflow-hidden
-            rounded-lg
-            bg-fuchsia-50
-          ">
-
-            {(
-              form.templateMediaType === "image" ||
-              form.templateMediaType?.startsWith("image/")
-            ) ? (
-              <img
-                src={form.templateMediaUrl}
-                alt={
-                  form.templateMediaName ||
-                  "Uploaded media"
-                }
-                className="
-                  h-full
-                  w-full
-                  object-cover
-                "
-              />
-            ) : form.templateMediaType === "video" ||
-              form.templateMediaType?.startsWith("video/") ? (
-              <Video
-                className="
-                  h-6
-                  w-6
-                  text-fuchsia-600
-                "
-              />
-            ) : form.templateMediaType === "audio" ||
-              form.templateMediaType?.startsWith("audio/") ? (
-              <Volume2
-                className="
-                  h-6
-                  w-6
-                  text-fuchsia-600
-                "
-              />
-            ) : (
-              <FileText
-                className="
-                  h-6
-                  w-6
-                  text-fuchsia-600
-                "
-              />
-            )}
-
-          </div>
-
-          {/* FILE INFO */}
-
-          <div className="
-            min-w-0
-            flex-1
-          ">
-
-            <p className="
-              truncate
-              text-sm
-              font-semibold
-              text-slate-700
-            ">
-              {form.templateMediaName ||
-                "Uploaded Media"}
-            </p>
-
-            <p className="
-              mt-1
-              text-[11px]
-              text-slate-400
-            ">
-              Type:{" "}
-              {form.templateMediaType ||
-                "media"}
-            </p>
-
-            {form.templateMediaId && (
-              <p className="
-                mt-1
-                text-[10px]
-                text-slate-400
-              ">
-                Media ID:{" "}
-                {form.templateMediaId}
-              </p>
-            )}
-
-            <p className="
-              mt-1
-              truncate
-              text-[10px]
-              text-slate-400
-            ">
-              {form.templateMediaUrl}
-            </p>
-
-          </div>
-
-          {/* REMOVE */}
-
-          <button
-            type="button"
-            onClick={() => {
-              setForm((previous) => ({
-                ...previous,
-
-                templateMediaId: "",
-                templateMediaUrl: "",
-                templateImageUrl: "",
-                templateMediaName: "",
-                templateMediaType: "",
-              }));
-            }}
-            className="
-              rounded-lg
-              p-2
-              text-slate-400
-              transition
-              hover:bg-red-50
-              hover:text-red-500
-            "
-            title="Remove media"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-        </div>
-
-      </div>
-    )}
-
-  </div>
-
-  <p className="
-    mt-2
-    text-[11px]
-    text-slate-400
-  ">
-    Maximum file size: 50 MB.
-    Supported: Image, PDF, Document, Audio and Video.
-  </p>
-</div>
-
-    {/* =====================================================
-        MEDIA URL
-    ===================================================== */}
-<div>
-  <label className={labelClass}>
-    Template Media URL
-  </label>
-
-  <input
-    type="url"
-    value={
-      form.templateMediaUrl ||
-      form.templateImageUrl ||
-      ""
-    }
-    onChange={(e) => {
-      const url =
-        e.target.value;
-
-      const detectedType =
-        detectTemplateMediaTypeFromUrl(
-          url
-        );
-
-      setForm((previous) => ({
-        ...previous,
-
-        templateMediaUrl:
-          url,
-
-        // backward compatibility
-        templateImageUrl:
-          url,
-
-        ...(detectedType
-          ? {
-              templateMediaType:
-                detectedType,
-            }
-          : {}),
-      }));
-    }}
-    placeholder="https://example.com/media.jpg"
-    className={inputClass}
-  />
-
-  <p className="
-    mt-2
-    text-[11px]
-    text-slate-400
-  ">
-    Upload a file above or enter a public HTTPS
-    URL manually.
-  </p>
-</div>
-
-    {/* =====================================================
-        BODY
-    ===================================================== */}
-
-    <div>
-      <label className={labelClass}>
-        Template Body / Caption
-      </label>
-
-      <textarea
-        value={form.templateBody || ""}
-        onChange={(e) =>
-          updateField(
-            "templateBody",
-            e.target.value
-          )
-        }
-        rows={6}
-        placeholder="Hello {{1}}, welcome to our store!"
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        Enter the body/caption configured for
-        your Media Template.
-      </p>
-    </div>
-
-{/* =====================================================
-    PREVIEW
-===================================================== */}
-
-<div className="
-  rounded-xl
-  border
-  border-fuchsia-200
-  bg-fuchsia-50
-  p-4
-">
-
-  <div className="flex items-center gap-2">
-
-    <ImageIcon
-      className="
-        h-4
-        w-4
-        text-fuchsia-600
-      "
-    />
-
-    <p className="
-      text-[10px]
-      font-bold
-      uppercase
-      tracking-wide
-      text-fuchsia-600
-    ">
-      Media Template Preview
-    </p>
-
-  </div>
-
-  <div className="
-    mt-3
-    overflow-hidden
-    rounded-xl
-    bg-white
-    shadow-sm
-  ">
-
-    {/* IMAGE */}
-
-    {form.templateMediaUrl &&
-    (
-      form.templateMediaType === "image" ||
-      form.templateMediaType?.startsWith(
-        "image/"
-      )
-    ) ? (
-
-      <img
-        src={form.templateMediaUrl}
-        alt={
-          form.templateMediaName ||
-          "Template media"
-        }
-        className="
-          h-40
-          w-full
-          object-cover
-        "
-        onError={(e) => {
-          e.currentTarget.style.display =
-            "none";
-        }}
-      />
-
-    ) : form.templateMediaUrl &&
-      (
-        form.templateMediaType === "video" ||
-        form.templateMediaType?.startsWith(
-          "video/"
-        )
-      ) ? (
-
-      <div className="bg-black p-2">
-
-        <video
-          src={form.templateMediaUrl}
-          controls
-          className="
-            max-h-60
-            w-full
-            rounded-lg
-          "
-        />
-
-      </div>
-
-    ) : form.templateMediaUrl &&
-      (
-        form.templateMediaType === "audio" ||
-        form.templateMediaType?.startsWith(
-          "audio/"
-        )
-      ) ? (
-
-      <div className="
-        flex
-        flex-col
-        items-center
-        justify-center
-        bg-amber-50
-        p-6
-      ">
-
-        <Volume2
-          className="
-            h-10
-            w-10
-            text-amber-500
-          "
-        />
-
-        <p className="
-          mt-2
-          text-xs
-          font-semibold
-          text-slate-700
-        ">
-          {form.templateMediaName ||
-            "Audio File"}
-        </p>
-
-        <audio
-          src={form.templateMediaUrl}
-          controls
-          className="mt-3 w-full"
-        />
-
-      </div>
-
-    ) : form.templateMediaUrl ? (
-
-      <div className="
-        flex
-        flex-col
-        items-center
-        justify-center
-        bg-slate-100
-        p-6
-      ">
-
-        <FileText
-          className="
-            h-10
-            w-10
-            text-fuchsia-500
-          "
-        />
-
-        <span className="
-          mt-2
-          text-xs
-          font-semibold
-          text-slate-700
-        ">
-          {form.templateMediaName ||
-            "Uploaded Media"}
-        </span>
-
-        <span className="
-          mt-1
-          text-[10px]
-          uppercase
-          text-slate-400
-        ">
-          {form.templateMediaType ||
-            "document"}
-        </span>
-
-        <a
-          href={form.templateMediaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="
-            mt-3
-            rounded-lg
-            bg-fuchsia-100
-            px-3
-            py-2
-            text-[11px]
-            font-bold
-            text-fuchsia-700
-            hover:bg-fuchsia-200
-          "
-        >
-          Open Media
-        </a>
-
-      </div>
-
-    ) : (
-
-      <div className="
-        flex
-        h-32
-        items-center
-        justify-center
-        bg-slate-100
-      ">
-
-        <ImageIcon
-          className="
-            h-8
-            w-8
-            text-slate-300
-          "
-        />
-
-      </div>
-
-    )}
-
-    {/* BODY */}
-
-    <div className="p-4">
-
-      <p className="
-        whitespace-pre-wrap
-        text-sm
-        leading-5
-        text-slate-700
-      ">
-        {form.templateBody ||
-          "Template body / caption will appear here."}
-      </p>
-
-    </div>
-
-  </div>
-</div>
-    {/* =====================================================
-        CONFIGURATION INFO
-    ===================================================== */}
-
-    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4">
-
-      <p className="text-[10px] font-bold uppercase tracking-wide text-fuchsia-600">
-        Template Configuration
-      </p>
-
-      <div className="mt-3 space-y-2 text-xs">
-
-        <div className="flex justify-between gap-3">
-
-          <span className="text-slate-500">
-            Name
-          </span>
-
-          <span className="truncate font-bold text-slate-700">
-            {form.templateName ||
-              "Not configured"}
-          </span>
-
-        </div>
-
-        <div className="flex justify-between gap-3">
-
-          <span className="text-slate-500">
-            ID
-          </span>
-
-          <span className="truncate font-bold text-slate-700">
-            {form.templateId ||
-              "Not configured"}
-          </span>
-
-        </div>
-
-        <div className="flex justify-between gap-3">
-
-          <span className="text-slate-500">
-            Language
-          </span>
-
-          <span className="font-bold uppercase text-slate-700">
-            {form.templateLanguage ||
-              "en"}
-          </span>
-
-        </div>
-
-        <div className="flex justify-between gap-3">
-
-          <span className="text-slate-500">
-            Media
-          </span>
-
-          <span className="max-w-[60%] truncate font-bold text-slate-700">
-            {form.templateMediaName ||
-              "Not uploaded"}
-          </span>
-
-        </div>
-
-      </div>
-    </div>
-  </>
-)}
-  {/* =====================================================
-      DELAY
-  ====================================================== */}
-
-    {node?.type === "delay" && (
-      <>
-        <div>
-          <label className={labelClass}>
-            Delay
-          </label>
-
-          <input
-            type="number"
-            min="1"
-            value={form.delay}
-            onChange={(e) =>
-              updateField(
-                "delay",
-                e.target.value
-              )
-            }
-            className={inputClass}
-          />
-        </div>
-
-        <div>
-          <label className={labelClass}>
-            Delay Unit
-          </label>
-
-          <select
-            value={
-              form.delayUnit
-            }
-            onChange={(e) =>
-              updateField(
-                "delayUnit",
-                e.target.value
-              )
-            }
-            className={inputClass}
-          >
-            <option value="seconds">
-              Seconds
-            </option>
-
-            <option value="minutes">
-              Minutes
-            </option>
-
-            <option value="hours">
-              Hours
-            </option>
-
-            <option value="days">
-              Days
-            </option>
-          </select>
-        </div>
-
-        <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-          <p className="text-[10px] font-bold uppercase text-orange-500">
-            Wait Time
-          </p>
-
-          <p className="mt-2 text-lg font-bold text-orange-700">
-            {form.delay}{" "}
-            {form.delayUnit}
-          </p>
-        </div>
-      </>
-    )}
 
       {/* =====================================================
           END
@@ -8492,32 +7146,31 @@ order_id={{order_id}}`}
       ====================================================== */}
 
       <div className="border-t border-slate-100 pt-5">
-        <button
-          type="button"
-          onClick={update}
-          className="
-            flex
-            w-full
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            bg-indigo-600
-            px-5
-            py-3.5
-            text-sm
-            font-bold
-            text-white
-            shadow-md
-            shadow-indigo-500/20
-            transition
-            hover:bg-indigo-700
-          "
-        >
-          <Save className="h-4 w-4" />
-
-          Apply Changes
-        </button>
+<button
+  type="button"
+  onClick={update}
+  className="
+    flex
+    w-full
+    items-center
+    justify-center
+    gap-2
+    rounded-xl
+    bg-emerald-700
+    px-5
+    py-3.5
+    text-sm
+    font-bold
+    text-white
+    shadow-md
+    shadow-emerald-500/20
+    transition
+    hover:bg-emerald-800 cursor-pointer
+  "
+>
+  <Save className="h-4 w-4" />
+  Apply Changes
+</button>
 
         {node?.type !== "start" &&
           node?.type !== "end" && (
@@ -8560,7 +7213,45 @@ order_id={{order_id}}`}
 
 const WorkflowBuilder = () => {
 
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+const [showEmptyWorkflowOverlay, setShowEmptyWorkflowOverlay] =
+  useState(false);
+  const [showConfigPanel, setShowConfigPanel] = useState(true);
+
+useEffect(() => {
+  if (location.state?.showEmptyWorkflowOverlay) {
+    setShowEmptyWorkflowOverlay(true);
+
+    // Remove navigation state so refresh doesn't reopen the popup
+    navigate(location.pathname, {
+      replace: true,
+      state: {},
+    });
+  }
+}, [location.state, location.pathname, navigate]);
+
+
+    const [saved, setSaved] = useState(false);
+
+    const [showFirstWorkflowGuide, setShowFirstWorkflowGuide] =
+  useState(false);
+  useEffect(() => {
+  if (location.state?.showCreateWorkflowGuide) {
+    setShowFirstWorkflowGuide(true);
+
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    });
+  }
+}, [location.state, location.pathname, navigate]);
+
+
+    const [isLoadingWorkflowPage, setIsLoadingWorkflowPage] =
+    useState(true);
+
      /* =======================================================
      AUTH
   ======================================================= */
@@ -8589,7 +7280,7 @@ const WorkflowBuilder = () => {
 
   const [name, setName] =
     useState(
-      "New WhatsApp Workflow"
+      ""
     );
 
   const [
@@ -8609,12 +7300,33 @@ const WorkflowBuilder = () => {
    TENANT / BOT SELECTION
 ======================================================= */
 
+const storedUser = (() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem("user") ||
+      sessionStorage.getItem("user") ||
+      "{}"
+    );
+  } catch {
+    return {};
+  }
+})();
+
+const isSuperAdmin = Boolean(
+  storedUser?.is_super_admin ||
+  storedUser?.role === "super_admin" ||
+  storedUser?.role_name === "Super Admin"
+);
+
 const [tenants, setTenants] = useState([]);
 const [bots, setBots] = useState([]);
 
-const [selectedTenantId, setSelectedTenantId] = useState(
-  localStorage.getItem("workflow_tenant_id") || ""
-);
+const [selectedTenantId, setSelectedTenantId] = useState(() => {
+  if (isSuperAdmin) {
+    return localStorage.getItem("workflow_tenant_id") || "";
+  }
+  return storedUser?.tenant_id ? String(storedUser.tenant_id) : "";
+});
 
 const [selectedBotId, setSelectedBotId] = useState(
   localStorage.getItem("workflow_bot_id") || ""
@@ -8622,6 +7334,12 @@ const [selectedBotId, setSelectedBotId] = useState(
 
 const [loadingTenants, setLoadingTenants] = useState(false);
 const [loadingBots, setLoadingBots] = useState(false);
+
+const isPageLoading =
+  isLoadingWorkflowPage ||
+  loadingBots ||
+  loadingWorkflows;
+
 
 const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
 const [workflowFormName, setWorkflowFormName] = useState("");
@@ -8670,6 +7388,80 @@ const [reactFlowInstance, setReactFlowInstance] =
   setWorkflowFormName(workflow.name || "");
   setWorkflowFormDescription(workflow.description || "");
   setWorkflowModalOpen(true);
+};
+
+
+
+const DeletableEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+}) => {
+  const { deleteElements } = useReactFlow();
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={style}
+        markerEnd={markerEnd}
+      />
+
+      <EdgeLabelRenderer>
+        <button
+          type="button"
+          className="
+            nodrag nopan
+            absolute
+            flex items-center justify-center
+            w-6 h-6
+            rounded-full
+            bg-white
+            border border-red-200
+            text-red-500
+            shadow-sm
+            hover:bg-red-500
+            hover:text-red-500
+            transition-colors
+            cursor-pointer
+          "
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: "all",
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            deleteElements({
+              edges: [{ id }],
+            });
+          }}
+          title="Delete connection"
+        >
+          <Scissors size={13} />
+        </button>
+      </EdgeLabelRenderer>
+    </>
+  );
+};
+
+const edgeTypes = {
+  deletable: DeletableEdge,
 };
 
 
@@ -8854,17 +7646,16 @@ const onDrop = useCallback(
                             item[0] === type
                     )?.[1] || type,
 
-                message:
-                    type === "message"
-                        ? "Hello! Welcome."
-                        : type === "button"
-                        ? "Button Text"
-                        : type === "menu"
-                        ? "Please select an option:"
-                        : type === "userInput"
-                        ? "What is your name?"
-                        : "",
-
+               message:
+                type === "message"
+                    ? "Hello! Welcome."
+                    : type === "button"
+                    ? "Enter button message..."
+                    : type === "menu"
+                    ? "Please select an option:"
+                    : type === "userInput"
+                    ? "What is your name?"
+                    : "",
                 /* =============================================
                    USER INPUT
                 ============================================== */
@@ -8908,12 +7699,12 @@ const onDrop = useCallback(
 
                 buttonText:
                     type === "button"
-                        ? "Verify Mobile"
+                        ? "button text"
                         : "",
 
                     buttonValue:
                     type === "button"
-                      ? "verify_mobile"
+                      ? "button_value"
                       : "",
 
                 /* =============================================
@@ -9005,9 +7796,9 @@ const onDrop = useCallback(
                    DELAY
                 ============================================== */
 
-                delay: "5",
+                delay: "",
 
-                delayUnit: "seconds",
+                delayUnit: "",
             },
         };
 
@@ -9434,11 +8225,11 @@ const onDrop = useCallback(
 
 
 /* =======================================================
-   LOAD TENANTS / CLIENTS
+   LOAD TENANTS / CLIENTS (Super Admin only)
 ======================================================= */
 
 useEffect(() => {
-  if (!token) return;
+  if (!token || !isSuperAdmin) return;
 
   let cancelled = false;
 
@@ -9482,14 +8273,20 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [token]);
+}, [token, isSuperAdmin]);
 
 /* =======================================================
-   LOAD BOTS FOR SELECTED TENANT
+   LOAD BOTS (For user or selected tenant)
 ======================================================= */
 
 useEffect(() => {
-  if (!token || !selectedTenantId) {
+  if (!token) {
+    setBots([]);
+    return;
+  }
+
+  // Super admin must select a tenant first
+  if (isSuperAdmin && !selectedTenantId) {
     setBots([]);
     return;
   }
@@ -9514,26 +8311,33 @@ useEffect(() => {
         ? payload
         : payload?.data ?? [];
 
-      const tenantBots = (Array.isArray(list) ? list : [])
-        .filter(
+      let userBots = Array.isArray(list) ? list : [];
+
+      if (isSuperAdmin && selectedTenantId) {
+        userBots = userBots.filter(
           (bot) =>
             String(bot.tenant_id ?? bot.client?.id) ===
             String(selectedTenantId)
         );
+      }
 
       if (!cancelled) {
-        setBots(tenantBots);
+        setBots(userBots);
 
-        // Clear a previously selected bot if it belongs
-        // to a different tenant.
+        // Auto-select first bot if none selected or previous invalid
         setSelectedBotId((currentId) => {
-          const stillExists = tenantBots.some(
+          const stillExists = userBots.some(
             (bot) => String(bot.id) === String(currentId)
           );
 
           if (!stillExists) {
-            localStorage.removeItem("workflow_bot_id");
-            return "";
+            const nextBotId = userBots[0] ? String(userBots[0].id) : "";
+            if (nextBotId) {
+              localStorage.setItem("workflow_bot_id", nextBotId);
+            } else {
+              localStorage.removeItem("workflow_bot_id");
+            }
+            return nextBotId;
           }
 
           return currentId;
@@ -9544,12 +8348,9 @@ useEffect(() => {
 
       if (!cancelled) {
         setBots([]);
-        toast.error(
-          error.response?.data?.message ||
-          "Unable to load bots."
-        );
       }
     } finally {
+     
       if (!cancelled) setLoadingBots(false);
     }
   };
@@ -9559,104 +8360,37 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [token, selectedTenantId]);
+}, [token, selectedTenantId, isSuperAdmin]);
+
 
 /* =======================================================
-   LOAD BOTS FOR SELECTED TENANT
+   LOAD WORKFLOWS
 ======================================================= */
-
 useEffect(() => {
-  if (!token || !selectedTenantId) {
-    setBots([]);
-    return;
-  }
+  let isMounted = true;
 
-  let cancelled = false;
-
-  const loadBots = async () => {
-    setLoadingBots(true);
-
-    try {
-      const response = await axios.get(
-        `${API}/bots`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const payload = response.data?.data ?? response.data;
-      const list = Array.isArray(payload)
-        ? payload
-        : payload?.data ?? [];
-
-      const tenantBots = (Array.isArray(list) ? list : [])
-        .filter(
-          (bot) =>
-            String(bot.tenant_id ?? bot.client?.id) ===
-            String(selectedTenantId)
-        );
-
-      if (!cancelled) {
-        setBots(tenantBots);
-
-        // Clear a previously selected bot if it belongs
-        // to a different tenant.
-        setSelectedBotId((currentId) => {
-          const stillExists = tenantBots.some(
-            (bot) => String(bot.id) === String(currentId)
-          );
-
-          if (!stillExists) {
-            localStorage.removeItem("workflow_bot_id");
-            return "";
-          }
-
-          return currentId;
-        });
-      }
-    } catch (error) {
-      console.error("BOT LOAD ERROR:", error);
-
-      if (!cancelled) {
-        setBots([]);
-        toast.error(
-          error.response?.data?.message ||
-          "Unable to load bots."
-        );
-      }
-    } finally {
-      if (!cancelled) setLoadingBots(false);
-    }
-  };
-
-  loadBots();
-
-  return () => {
-    cancelled = true;
-  };
-}, [token, selectedTenantId]);
-
-
-  /* =======================================================
-     LOAD WORKFLOWS
-  ======================================================= */
-useEffect(() => {
   const loadWorkflows = async () => {
-    if (!token || !selectedTenantId || !selectedBotId) {
+    if (!token || (isSuperAdmin && !selectedTenantId)) {
       setWorkflows([]);
+      setLoadingWorkflows(false);
       return;
     }
 
     try {
       setLoadingWorkflows(true);
 
+      const params = {};
+
+      if (selectedBotId) {
+        params.bot_id = selectedBotId;
+      }
+
+      if (isSuperAdmin && selectedTenantId) {
+        params.tenant_id = selectedTenantId;
+      }
+
       const response = await axios.get(`${API}/workflows`, {
-        params: {
-          tenant_id: selectedTenantId,
-          bot_id: selectedBotId,
-        },
+        params,
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -9671,55 +8405,94 @@ useEffect(() => {
           ? payload.data
           : [];
 
+      if (!isMounted) return;
+
       setWorkflows(list);
 
-      console.log("Workflow API response:", response.data);
-      console.log("Loaded workflows:", list);
+    
+
+   
+
+  const urlParams = new URLSearchParams(window.location.search);
+
+    const urlWorkflowId = urlParams.get("workflow_id");
+
+    const savedWorkflowId =
+      urlWorkflowId || localStorage.getItem("workflow_id");
+
+      const savedWorkflowExists = list.some(
+        (workflow) =>
+          String(workflow.id) === String(savedWorkflowId)
+      );
+
+      if (savedWorkflowId && savedWorkflowExists) {
+        // Restore saved workflow selection
+        setWorkflowId(String(savedWorkflowId));
+      } else if (savedWorkflowId && !savedWorkflowExists) {
+        // Clear only if workflow is no longer in the loaded list
+        localStorage.removeItem("workflow_id");
+
+        setWorkflowId((currentId) =>
+          String(currentId) === String(savedWorkflowId)
+            ? null
+            : currentId
+        );
+
+        setNodes([]);
+        setEdges([]);
+        setSelected(null);
+        setHistory([]);
+        setFuture([]);
+
+        historyReady.current = true;
+        isLoadingWorkflow.current = false;
+      }
     } catch (error) {
       console.error(
         "Workflow loading error:",
         error.response?.data || error.message
       );
-      setWorkflows([]);
+
+      if (isMounted) {
+        setWorkflows([]);
+      }
     } finally {
-      setLoadingWorkflows(false);
+      if (isMounted) {
+        setLoadingWorkflows(false);
+        
+      }
     }
   };
 
   loadWorkflows();
-}, [token, selectedTenantId, selectedBotId]);
+
+  return () => {
+    isMounted = false;
+  };
+}, [token, selectedTenantId, selectedBotId, isSuperAdmin]);
 
   /* =======================================================
      SELECT WORKFLOW
   ======================================================= */
+const selectWorkflow = (id) => {
+    if (!id) return;
 
-  const selectWorkflow =
-    (id) => {
-      if (!id) {
-        return;
-      }
+    const selectedId = String(id);
 
-      localStorage.setItem(
-        "workflow_id",
-        String(id)
-      );
+      setIsLoadingWorkflowPage(true);
 
-      setWorkflowId(
-        String(id)
-      );
+    localStorage.setItem("workflow_id", selectedId);
+    setWorkflowId(selectedId);
 
-      historyReady.current =
-        false;
+    historyReady.current = false;
 
-      setHistory([]);
-      setFuture([]);
-
-      setNodes([]);
-      setEdges([]);
-
-      setSelected(null);
-    };
-
+    setHistory([]);
+    setFuture([]);
+    setNodes([]);
+    setEdges([]);
+    setSelected(null);
+     setWorkflowId(selectedId);
+};
   /* =======================================================
      NEW WORKFLOW
   ======================================================= */
@@ -9732,9 +8505,9 @@ useEffect(() => {
 
       setWorkflowId(null);
 
-      setName(
-        "New WhatsApp Workflow"
-      );
+      // setName(
+      //   "New WhatsApp Workflow"
+      // );
 
       historyReady.current =
         true;
@@ -9753,21 +8526,33 @@ useEffect(() => {
   ======================================================= */
 
   useEffect(() => {
-    if (
-      !token ||
-      !workflowId
-    ) {
-      return;
-    }
+  if (
+  !token ||
+  !workflowId ||
+  loadingWorkflows
+) {
+  return;
+}
+
+const workflowExists = workflows.some(
+  (workflow) => String(workflow.id) === String(workflowId)
+);
+
+if (!workflowExists) {
+  return;
+}
 
     const loadWorkflow =
       async () => {
+        setIsLoadingWorkflowPage(true);
         try {
           isLoadingWorkflow.current =
             true;
 
           historyReady.current =
             false;
+          
+            
 
           setHistory([]);
           setFuture([]);
@@ -9965,12 +8750,18 @@ useEffect(() => {
 
             isLoadingWorkflow.current =
               false;
+            setIsLoadingWorkflowPage(false);
           }, 100);
         } catch (error) {
-          console.error(
-            "WORKFLOW LOAD ERROR:",
-            error
-          );
+           setIsLoadingWorkflowPage(false);
+          console.error("WORKFLOW LOAD ERROR:", {
+        url: error.config?.url,
+        status: error.response?.status,
+        response: error.response?.data,
+        userId: JSON.parse(
+            localStorage.getItem("user") || "null"
+        )?.id,
+    });
 
           isLoadingWorkflow.current =
             false;
@@ -9983,10 +8774,12 @@ useEffect(() => {
         }
       };
 
-    loadWorkflow();
+      loadWorkflow();
   }, [
     token,
     workflowId,
+    workflows,
+    loadingWorkflows,
     setNodes,
     setEdges,
   ]);
@@ -10353,20 +9146,23 @@ useEffect(() => {
 }, [deleteNode]);
 
 
-const save = async (publish = false) => {
-  if (!token) {
-    toast.warning(
-      "Please login first."
-    );
 
+const save = async (publish = false) => {
+
+    
+  if (!token) {
+    toast.warning("Please login first.");
     return;
   }
 
   if (!name.trim()) {
-    toast.warning(
-      "Please enter workflow name."
-    );
+    toast.warning("Please enter workflow name.");
+    return;
+  }
 
+  // Publish se pehle Save required hai.
+  if (publish && !saved) {
+    toast.warning("Please save the workflow before publishing.");
     return;
   }
 
@@ -10374,199 +9170,100 @@ const save = async (publish = false) => {
 
   try {
     const headers = {
-      Authorization:
-        "Bearer " + token,
+      Authorization: "Bearer " + token,
     };
 
     let id = workflowId;
 
-    /* ===============================================
-       CREATE WORKFLOW
-    =============================================== */
-
+    /* CREATE WORKFLOW */
     if (!id) {
-      const response =
-        await axios.post(
-          API + "/workflows",
+      const response = await axios.post(
+        API + "/workflows",
+        {
+          name,
+          channel: "whatsapp",
+          tenant_id: selectedTenantId || null,
+          bot_id: selectedBotId || null,
+        },
+        { headers }
+      );
 
-         {
-            name,
-            channel: "whatsapp",
-            tenant_id: selectedTenantId,
-            bot_id: selectedBotId,
-          },
-          {
-            headers,
-          }
-        );
-
-      id =
-        response.data?.id ||
-        response.data?.data?.id;
+      id = response.data?.id || response.data?.data?.id;
 
       if (!id) {
-        throw new Error(
-          "Workflow ID was not returned."
-        );
+        throw new Error("Workflow ID was not returned.");
       }
 
-      setWorkflowId(
-        String(id)
-      );
+      setWorkflowId(String(id));
 
-      localStorage.setItem(
-        "workflow_id",
-        String(id)
-      );
+      localStorage.setItem("workflow_id", String(id));
 
-      const createdWorkflow =
-        response.data?.data ||
-        response.data;
+      const createdWorkflow = response.data?.data || response.data;
 
-      setWorkflows(
-        (current) => [
-          createdWorkflow,
-          ...current,
-        ]
-      );
+      setWorkflows((current) => [
+        createdWorkflow,
+        ...current,
+      ]);
     }
 
-    /* ===============================================
-       PREPARE EDGES
-       KEEP EXACT SOURCE/TARGET HANDLES
-    =============================================== */
+    /* PREPARE EDGES */
+    const edgesToSave = edges.map((edge) => ({
+      ...edge,
+      sourceHandle: edge.sourceHandle || null,
+      targetHandle: edge.targetHandle || null,
+      type: edge.type || "smoothstep",
+      label: edge.label || null,
+    }));
 
-    const edgesToSave =
-      edges.map((edge) => ({
-        ...edge,
-
-        /*
-         * Main Menu option handle
-         *
-         * Example:
-         * source-option-0
-         * source-option-1
-         * source-option-2
-         */
-        sourceHandle:
-          edge.sourceHandle ||
-          null,
-
-        /*
-         * Target node handle
-         *
-         * Example:
-         * target-top
-         * target-left
-         * target-right
-         * target-bottom
-         */
-        targetHandle:
-          edge.targetHandle ||
-          null,
-
-        /*
-         * Keep edge type
-         */
-        type:
-          edge.type ||
-          "smoothstep",
-
-        /*
-         * Keep label
-         */
-        label:
-          edge.label ||
-          null,
-      }));
-
-    /* ===============================================
-       UPDATE WORKFLOW
-    =============================================== */
-
+    /* SAVE WORKFLOW DATA */
     await axios.put(
       API + "/workflows/" + id,
-
       {
         name,
-
         nodes,
-
-        edges:
-          edgesToSave,
+        edges: edgesToSave,
       },
-
-      {
-        headers,
-      }
+      { headers }
     );
 
-    /* ===============================================
-       UPDATE DROPDOWN
-    =============================================== */
-
-    setWorkflows(
-      (current) =>
-        current.map(
-          (workflow) =>
-            String(
-              workflow.id
-            ) ===
-            String(id)
-              ? {
-                  ...workflow,
-                  name,
-                }
-              : workflow
-        )
+    /* UPDATE DROPDOWN */
+    setWorkflows((current) =>
+      current.map((workflow) =>
+        String(workflow.id) === String(id)
+          ? { ...workflow, name }
+          : workflow
+      )
     );
 
-    /* ===============================================
-       PUBLISH
-    =============================================== */
+    // Save successful: workflow ab saved hai.
+    setSaved(true);
 
+    /* PUBLISH */
     if (publish) {
       await axios.post(
-        API +
-          "/workflows/" +
-          id +
-          "/publish",
-
+        API + "/workflows/" + id + "/publish",
         {},
-
-        {
-          headers,
-        }
+        { headers }
       );
+
+      toast.success("Workflow published successfully.");
+    } else {
+      toast.success("Workflow saved successfully.");
     }
-
-    /* ===============================================
-       SUCCESS
-    =============================================== */
-
-    toast.success(
-      publish
-        ? "Workflow published successfully."
-        : "Workflow saved successfully."
-    );
-
   } catch (error) {
-    console.error(
-      "WORKFLOW ERROR:",
-      error
-    );
+    console.error("WORKFLOW ERROR:", error);
 
+    // Save ya publish fail hone par success assume na karein.
     toast.error(
-      error?.response
-        ?.data?.message ||
+      error?.response?.data?.message ||
         error.message ||
         "Something went wrong."
     );
-
   } finally {
     setSaving(false);
   }
 };
+
   /* =======================================================
      KEYBOARD SHORTCUTS
   ======================================================= */
@@ -10633,10 +9330,6 @@ const save = async (publish = false) => {
           return;
         }
 
-        /* =============================================
-           DELETE
-        ============================================== */
-
         if (
           event.key !==
             "Delete" &&
@@ -10677,27 +9370,65 @@ const save = async (publish = false) => {
     redo,
   ]);
 
-  /* =======================================================
-     MAIN UI
-  ======================================================= */
+
+useEffect(() => {
+  const canShowGuide =
+    !isLoadingWorkflowPage &&
+    !loadingWorkflows &&
+    !loadingBots &&
+    !loadingTenants &&
+    !workflowModalOpen &&
+    workflows.length === 0 &&
+    Boolean(token) &&
+    (!isSuperAdmin || Boolean(selectedTenantId)) &&
+    Boolean(selectedBotId);
+
+  setShowFirstWorkflowGuide(canShowGuide);
+}, [
+  isLoadingWorkflowPage,
+  loadingWorkflows,
+  loadingBots,
+  loadingTenants,
+  workflowModalOpen,
+  workflows.length,
+  token,
+  isSuperAdmin,
+  selectedTenantId,
+  selectedBotId,
+]);
+
+if (loadingBots) {
+  return (
+    <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600" />
+
+        <p className="text-sm font-semibold text-slate-700">
+          Loading your bot...
+        </p>
+
+        <p className="text-xs text-slate-500">
+          Please wait while your workflow loads.
+        </p>
+      </div>
+    </div>
+  );
+}
 
   return (
     <>
 
-    <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        newestOnTop
-        closeOnClick
-        pauseOnHover
-        theme="light"
-      />
+<ToastContainer
+  position="bottom-center"
+  autoClose={3000}
+  newestOnTop
+  closeOnClick
+  pauseOnHover
+  theme="light"
+/>
 
       <div className="flex h-screen flex-col overflow-hidden bg-slate-100">
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
+      
         <header
           className="
             z-20
@@ -10748,43 +9479,45 @@ const save = async (publish = false) => {
             </button>
 
             {/* =======================================================
-            TENANT SELECT
+            TENANT SELECT (Super Admin only)
         ======================================================= */}
 
-        <select
-          value={selectedTenantId}
-          disabled={loadingTenants}
-          onChange={(e) => {
-            const id = e.target.value;
+        {isSuperAdmin && (
+          <select
+            value={selectedTenantId}
+            disabled={loadingTenants}
+            onChange={(e) => {
+              const id = e.target.value;
 
-            setSelectedTenantId(id);
-            setSelectedBotId("");
+              setSelectedTenantId(id);
+              setSelectedBotId("");
 
-            localStorage.removeItem("workflow_bot_id");
-            localStorage.setItem("workflow_tenant_id", id);
+              localStorage.removeItem("workflow_bot_id");
+              localStorage.setItem("workflow_tenant_id", id);
 
-            // Reset workflow selection when changing tenant.
-            localStorage.removeItem("workflow_id");
-            setWorkflowId(null);
-            setWorkflows([]);
-            setNodes([]);
-            setEdges([]);
-            setSelected(null);
-            setHistory([]);
-            setFuture([]);
-          }}
-          className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
-        >
-          <option value="">
-            {loadingTenants ? "Loading clients..." : "Select Client"}
-          </option>
-
-          {tenants.map((tenant) => (
-            <option key={tenant.id} value={String(tenant.id)}>
-              {tenant.name}
+              // Reset workflow selection when changing tenant.
+              localStorage.removeItem("workflow_id");
+              setWorkflowId(null);
+              setWorkflows([]);
+              setNodes([]);
+              setEdges([]);
+              setSelected(null);
+              setHistory([]);
+              setFuture([]);
+            }}
+            className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+          >
+            <option value="">
+              {loadingTenants ? "Loading clients..." : "Select Client"}
             </option>
-          ))}
-        </select>
+
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={String(tenant.id)}>
+                {tenant.name}
+              </option>
+            ))}
+          </select>
+        )}
 
     {/* =======================================================
         BOT SELECT
@@ -10792,7 +9525,7 @@ const save = async (publish = false) => {
 
     <select
       value={selectedBotId}
-      disabled={!selectedTenantId || loadingBots}
+      disabled={(isSuperAdmin && !selectedTenantId) || loadingBots}
       onChange={(e) => {
         const id = e.target.value;
 
@@ -10804,7 +9537,7 @@ const save = async (publish = false) => {
           localStorage.removeItem("workflow_bot_id");
         }
 
-        // Prevent editing a workflow from the previous bot.
+    
         localStorage.removeItem("workflow_id");
         setWorkflowId(null);
         setWorkflows([]);
@@ -10817,7 +9550,7 @@ const save = async (publish = false) => {
       className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
     >
       <option value="">
-        {!selectedTenantId
+        {isSuperAdmin && !selectedTenantId
           ? "Select client first"
           : loadingBots
           ? "Loading bots..."
@@ -10831,80 +9564,89 @@ const save = async (publish = false) => {
       ))}
     </select>
           
-         {/* WORKFLOW SELECT + DELETE */}
 
-          <div className="relative flex items-center gap-2">
-            <div className="relative">
-              <select
-                value={workflowId || ""}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (id) selectWorkflow(id);
-                }}
-                disabled={loadingWorkflows || saving}
-                className="
-                  h-10 w-[220px] appearance-none
-                  rounded-xl border border-slate-200
-                  bg-white pl-4 pr-10 text-sm
-                  font-semibold text-slate-700
-                  shadow-sm outline-none transition
-                  hover:border-indigo-300
-                  focus:border-indigo-500
-                  focus:ring-4 focus:ring-indigo-500/10
-                  disabled:cursor-not-allowed
-                  disabled:bg-slate-100
-                  md:w-[200px]
-                "
-              >
-                <option value="">
-                  {loadingWorkflows
-                    ? "Loading workflows..."
-                    : workflows.length
-                      ? "Select Workflow"
-                      : "No workflows found"}
-                </option>
+{/* WORKFLOW SELECT + NEW WORKFLOW */}
 
-                {workflows.map((workflow) => (
-                  <option key={workflow.id} value={String(workflow.id)}>
-                    {workflow.name}
-                  </option>
-                ))}
-              </select>
+<div className="relative flex items-center gap-2">
 
-              <ChevronDown
-                className="
-                  pointer-events-none absolute right-3 top-1/2
-                  h-4 w-4 -translate-y-1/2 text-slate-400
-                "
-              />
-            </div>
+  {/* Dropdown sirf workflow create hone ke baad dikhega */}
+  {!loadingWorkflows && workflows.length > 0 && (
+    <div className="relative">
+      <select
+        value={workflowId || ""}
+        onChange={(e) => {
+          const id = e.target.value;
 
-          
+          if (id === "new") {
+            setWorkflowModalMode("add");
+            setWorkflowFormName("");
+            setWorkflowFormDescription("");
+            setWorkflowModalOpen(true);
+            return;
+          }
 
-            {/* NEW WORKFLOW */}
+          if (id) selectWorkflow(id);
+        }}
+        disabled={saving}
+        className="
+          h-10 w-[220px] appearance-none
+          rounded-xl border border-slate-200
+          bg-white pl-4 pr-10 text-sm
+          font-semibold text-slate-700 shadow-sm
+          outline-none transition hover:border-indigo-300
+          focus:border-indigo-500
+          focus:ring-4 focus:ring-indigo-500/10
+          disabled:cursor-not-allowed
+          disabled:bg-slate-100
+        "
+      >
+        <option value="" disabled>
+          Select Workflow
+        </option>
 
-         <button
-              type="button"
-              onClick={() => {
-                setWorkflowModalMode("add");
-                setWorkflowFormName("");
-                setWorkflowFormDescription("");
-                setWorkflowModalOpen(true);
-              }}
-              className="
-                inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60
-              "
-            >
-              <Plus className="h-4 w-4" />
-              New Add
-            </button>
-          </div>
+    
 
-          {/* ADD / UPDATE WORKFLOW MODAL */}
+        {workflows.map((workflow) => (
+          <option key={workflow.id} value={String(workflow.id)}>
+            {workflow.name}
+          </option>
+        ))}
+      </select>
+
+      <ChevronDown
+        className="
+          pointer-events-none absolute right-3 top-1/2
+          h-4 w-4 -translate-y-1/2 text-slate-400
+        "
+      />
+    </div>
+  )}
+
+  <button
+    type="button"
+    onClick={() => {
+      setWorkflowModalMode("add");
+      setWorkflowFormName("");
+      setWorkflowFormDescription("");
+      setWorkflowModalOpen(true);
+    }}
+    className="
+      inline-flex min-h-11 items-center justify-center gap-2
+      rounded-xl bg-emerald-700 px-5 py-3
+      text-sm font-bold text-white shadow-md
+      transition hover:bg-emerald-800
+    "
+  >
+    <Plus className="h-4 w-4" />
+    New Add
+  </button>
+
+</div>
+{/* ADD / UPDATE WORKFLOW MODAL */}
 
 {workflowModalOpen && (
   <div
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4"
+    className="fixed inset-0  flex items-center justify-center bg-slate-900/50 p-4"
     onClick={() => setWorkflowModalOpen(false)}
   >
     <div
@@ -10939,12 +9681,17 @@ const save = async (publish = false) => {
   const workflowName = workflowFormName.trim();
 
   if (!workflowName) {
-    toast.error("Please enter workflow name.");
+    toast.error("Please Add New workflow.");
     return;
   }
 
-  if (!selectedTenantId || !selectedBotId) {
-    toast.error("Please select a tenant and bot first.");
+  if (isSuperAdmin && !selectedTenantId) {
+    toast.error("Please select a client first.");
+    return;
+  }
+
+  if (!selectedBotId) {
+    toast.error("Please select a bot first.");
     return;
   }
 
@@ -10962,7 +9709,7 @@ const save = async (publish = false) => {
       name: workflowName,
       description: workflowFormDescription.trim() || null,
       channel: "whatsapp",
-      tenant_id: selectedTenantId,
+      ...(selectedTenantId ? { tenant_id: selectedTenantId } : {}),
       bot_id: selectedBotId,
     };
 
@@ -11093,7 +9840,7 @@ const save = async (publish = false) => {
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Add Workflow"}
@@ -11123,74 +9870,95 @@ const save = async (publish = false) => {
 
   {/* DELETE SELECTED WORKFLOW */}
 
-            <button
-              type="button"
-              title="Delete selected workflow"
-              aria-label="Delete selected workflow"
-              disabled={!workflowId || saving}
-              onClick={async () => {
-                const selectedWorkflow = workflows.find(
-                  (workflow) => String(workflow.id) === String(workflowId)
+        <button
+  type="button"
+  title="Delete selected workflow"
+  aria-label="Delete selected workflow"
+  disabled={!workflowId || saving}
+  onClick={() => {
+    const selectedWorkflow = workflows.find(
+      (workflow) => String(workflow.id) === String(workflowId)
+    );
+
+    if (!selectedWorkflow) {
+      toast.error("Please select a workflow first.");
+      return;
+    }
+
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium text-gray-800">
+          Are you sure you want to delete "{selectedWorkflow.name}"?
+        </p>
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="rounded-lg border px-3 py-1.5 text-sm"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+
+              try {
+                setSaving(true);
+
+                await axios.delete(`${API}/workflows/${workflowId}`, {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                  },
+                });
+
+                setWorkflows((previous) =>
+                  previous.filter(
+                    (workflow) => String(workflow.id) !== String(workflowId)
+                  )
                 );
 
-                if (!selectedWorkflow) {
-                  toast.error("Please select a workflow first.");
-                  return;
-                }
+                setWorkflowId(null);
+                localStorage.removeItem("workflow_id");
+                setNodes([]);
+                setEdges([]);
+                setSelected(null);
+                setName("");
 
-                const confirmed = window.confirm(
-                  `Are you sure you want to delete "${selectedWorkflow.name}"?`
+                toast.success("Workflow deleted successfully.");
+              } catch (error) {
+                console.error(
+                  "Delete workflow error:",
+                  error.response?.data || error.message
                 );
 
-                if (!confirmed) return;
-
-                try {
-                  setSaving(true);
-
-                  await axios.delete(`${API}/workflows/${workflowId}`, {
-                    headers: {
-                      Authorization: `Bearer ${token}`,
-                      Accept: "application/json",
-                    },
-                  });
-
-                  setWorkflows((previous) =>
-                    previous.filter(
-                      (workflow) => String(workflow.id) !== String(workflowId)
-                    )
-                  );
-
-                  setWorkflowId(null);
-                  localStorage.removeItem("workflow_id");
-                  setNodes([]);
-                  setEdges([]);
-                  setSelected(null);
-                  setName("New WhatsApp Workflow");
-
-                  toast.success("Workflow deleted successfully.");
-                } catch (error) {
-                  console.error(
-                    "Delete workflow error:",
-                    error.response?.data || error.message
-                  );
-
-                  toast.error(
-                    error.response?.data?.message || "Failed to delete workflow."
-                  );
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              className="
-                inline-flex h-10 shrink-0 items-center justify-center
-                rounded-xl border border-red-200 bg-white px-3
-                text-red-600 shadow-sm transition
-                hover:border-red-300 hover:bg-red-50
-                disabled:cursor-not-allowed disabled:opacity-40
-              "
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+                toast.error(
+                  error.response?.data?.message ||
+                    "Failed to delete workflow."
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
+  }}
+  className="
+    inline-flex h-10 shrink-0 items-center justify-center
+    rounded-xl border border-red-200 bg-white px-3
+    text-red-600 shadow-sm transition
+    hover:border-red-300 hover:bg-red-50
+    disabled:cursor-not-allowed disabled:opacity-40
+  "
+>
+  <Trash2 className="h-4 w-4" />
+</button>
                     
 
             {/* NAME */}
@@ -11225,17 +9993,29 @@ const save = async (publish = false) => {
 
              {/* SIMULATOR */}
 
-                <button
-                type="button"
-                onClick={() => navigate("/whatsapp-simulator")}
-                className="
-            inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60
-                "
-                >
-                <Play className="h-4 w-4" />
+             <button
+  type="button"
+  onClick={() => {
+    if (workflowId) {
+      localStorage.setItem("selected_workflow_id", String(workflowId));
+    }
 
-                Simulator
-                </button>
+    navigate(
+      workflowId
+        ? `/whatsapp-simulator?workflow_id=${workflowId}`
+        : "/whatsapp-simulator"
+    );
+  }}
+  className="
+    inline-flex min-h-11 items-center justify-center gap-2
+    rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold
+    text-white shadow-md transition hover:bg-emerald-800
+    disabled:cursor-not-allowed disabled:opacity-60
+  "
+>
+  <Play className="h-4 w-4" />
+  Simulator
+</button>
 
           </div>
 
@@ -11329,53 +10109,28 @@ const save = async (publish = false) => {
             </button>
           </div>
           
-            {/* SAVE */}
+ {/* SAVE */}
+        <button
+          type="button"
+          onClick={() => save(false)}
+          disabled={saving}
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 md:px-4"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : saved ? "Saved ✓" : "Save"}
+        </button>
 
-            <button
-              onClick={() =>
-                save(false)
-              }
-              disabled={saving}
-              className="
-                flex
-                items-center
-                gap-2
-                rounded-lg
-                border
-                border-slate-200
-                bg-white
-                px-3
-                py-2
-                text-sm
-                font-semibold
-                text-slate-700
-                shadow-sm
-                transition
-                hover:bg-slate-50
-                disabled:opacity-50
-                md:px-4
-              "
-            >
-              <Save className="h-4 w-4" />
-
-              {saving
-                ? "Saving..."
-                : "Save"}
-            </button>
-
-            {/* PUBLISH */}
-
-            <button
-              onClick={() =>
-                save(true)
-              }
-              disabled={saving}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 curosr-pointer"
-            >
-              <Send className="h-4 w-4" />
-
-              Publish
-            </button>
+        {/* PUBLISH */}
+        <button
+          type="button"
+          onClick={() => save(true)}
+          disabled={saving || !saved}
+          title={!saved ? "Save the workflow before publishing" : "Publish workflow"}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          Publish
+        </button>
 
          
           </div>
@@ -11446,7 +10201,7 @@ const save = async (publish = false) => {
 
         setNodes([]);
         setEdges([]);
-        setName("New WhatsApp Workflow");
+   
       } catch (error) {
         console.error(
           "Delete workflow error:",
@@ -11493,7 +10248,7 @@ const save = async (publish = false) => {
     "
   >
     <option value="">
-      {!selectedTenantId
+      {isSuperAdmin && !selectedTenantId
         ? "Select Client First"
         : !selectedBotId
           ? "Select Bot First"
@@ -11587,7 +10342,7 @@ const save = async (publish = false) => {
           {/* =================================================
               LEFT SIDEBAR
           ================================================= */}
-
+           
           <aside
             className="
               flex
@@ -11723,139 +10478,105 @@ const save = async (publish = false) => {
               </div>
             </div>
           </aside>
+        
 
           {/* =================================================
               CANVAS
           ================================================= */}
 
-            <section
-                ref={reactFlowWrapper}
-                className="
-                    relative
-                    h-full
-                    min-h-0
-                    min-w-0
-                    flex-1
-                    overflow-hidden
-                "
-            >
-                <ReactFlow
-                ref={reactFlowWrapper}
-
-                nodes={nodes.map((node) => ({
-                    ...node,
-
-                    selected:
-                        selected?.id === node.id,
-
-                  data: {
-                ...node.data,
-
-                // onDelete: () => {
-                //     deleteNode(node.id);
-                // },
-            },
-                }))}
-
-                edges={edges}
-
-                /* =================================================
-                REACT FLOW INSTANCE
-                ================================================= */
-
-                onInit={setReactFlowInstance}
-
-                /* =================================================
-                DRAG & DROP
-                ================================================= */
-
-                onDrop={onDrop}
-
-                onDragOver={onDragOver}
-
-
-
-                        onNodesChange={
-                            handleNodesChange
-                        }
-
-                        onEdgesChange={
-                            handleEdgesChange
-                        }
-
-                        onConnect={
-                            onConnect
-                        }
-
-                        onReconnect={
-                            onReconnect
-                        }
-
-                        edgesReconnectable={
-                            true
-                        }
-
-                        onNodeDragStart={
-                            handleNodeDragStart
-                        }
-
-                        onNodeClick={(
-                            _event,
-                            node
-                        ) =>
-                            setSelected(
-                            node
-                            )
-                        }
-
-                        onPaneClick={() =>
-                            setSelected(
-                            null
-                            )
-                        }
-
-                        nodeTypes={
-                            nodeTypes
-                        }
-
-                        defaultViewport={{
-                            x: 80,
-                            y: 80,
-                            zoom: 0.65,
-                        }}
-
-                        minZoom={0.4}
-
-                        maxZoom={1.5}
-
-                        fitView={false}
-
-                        proOptions={{
-                            hideAttribution:
-                            true,
-                        }}
+           <section
+              ref={reactFlowWrapper}
+              className="
+                  relative
+                  h-full
+                  min-h-0
+                  min-w-0
+                  flex-1
+                  overflow-hidden
+              "
+          >
+              <ReactFlow
+                  nodes={nodes.map((node) => ({
+                      ...node,
+                      selected: selected?.id === node.id,
+                      data: {
+                          ...node.data,
+                      },
+                  }))}
+                 edges={edges.map((edge) => ({
+                            ...edge,
+                            type: "deletable",
+                            }))}
+                  edgeTypes={edgeTypes}
+                  onInit={setReactFlowInstance}
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  onNodesChange={handleNodesChange}
+                  onEdgesChange={handleEdgesChange}
+                  onConnect={onConnect}
+                  onReconnect={onReconnect}
+                  edgesReconnectable={true}
+                  onNodeDragStart={handleNodeDragStart}
+                  onNodeClick={(_event, node) => setSelected(node)}
+                  onPaneClick={() => setSelected(null)}
+                  nodeTypes={nodeTypes}
+                  defaultViewport={{ x: 80, y: 80, zoom: 0.65 }}
+                  minZoom={0.4}
+                  maxZoom={1.5}
+                  fitView={false}
+                  proOptions={{ hideAttribution: true }}
+              >
+                  <MiniMap nodeStrokeWidth={3} pannable zoomable />
+                  <Controls />
+                  {!showConfigPanel && (
+                    <Panel position="top-right">
+                        <button
+                            type="button"
+                            onClick={() => setShowConfigPanel(true)}
+                            title="Show node configuration"
+                            aria-label="Show node configuration"
+                            className="
+                            group
+                            cursor-pointer
+                            relative
+                            flex h-9 w-9
+                            shrink-0
+                            items-center justify-center
+                            rounded-xl
+                            border border-slate-200
+                            bg-white
+                            text-slate-500
+                            shadow-sm
+                            transition-all duration-200 ease-in-out
+                            hover:border-indigo-200
+                            hover:bg-indigo-50
+                            hover:text-indigo-600
+                            hover:shadow-md
+                            active:scale-95
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-indigo-500/20
+                            "
                         >
-                        <MiniMap
-                            nodeStrokeWidth={
-                            3
-                            }
-                            pannable
-                            zoomable
-                        />
+                            <PanelRightOpen
+                            size={20}
+                            strokeWidth={1.8}
+                            className="transition-transform duration-200 group-hover:scale-110"
+                            />
 
-                        <Controls />
-
-                        <Background
-                            gap={20}
-                            size={1}
-                        />
-                        </ReactFlow>
-            </section>
+                      
+                        </button>
+                        </Panel>
+                    )}
+                  <Background gap={20} size={1} />
+              </ReactFlow>
+          </section>
 
           {/* =================================================
               RIGHT SIDEBAR
           ================================================= */}
 
+          {showConfigPanel && (
           <aside
             className="
               flex
@@ -11893,8 +10614,10 @@ const save = async (publish = false) => {
                 </p>
               </div>
 
+              
+
               {selected && (
-                <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold uppercase text-indigo-600">
+                <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold uppercase text-green-600">
                   <Settings2 className="h-3 w-3" />
 
                   {selected.type ===
@@ -11906,6 +10629,41 @@ const save = async (publish = false) => {
                     : selected.type}
                 </span>
               )}
+
+            {/* Hide Configuration Panel */}
+                <button
+                type="button"
+                onClick={() => setShowConfigPanel(false)}
+                title="Hide configuration panel"
+                aria-label="Hide configuration panel"
+                className="cursor-pointer
+                    group
+                    relative
+                    flex h-9 w-9
+                    shrink-0
+                    items-center justify-center
+                    rounded-xl
+                    border border-slate-200
+                    bg-white
+                    text-slate-500
+                    shadow-sm
+                    transition-all duration-200 ease-in-out
+                    hover:border-indigo-200
+                    hover:bg-indigo-50
+                    hover:text-indigo-600
+                    hover:shadow-md
+                    active:scale-95
+                    focus:outline-none
+                    focus:ring-2
+                    focus:ring-indigo-500/20
+                "
+                >
+                <PanelRightClose
+                    size={20}
+                    strokeWidth={1.8}
+                    className="transition-transform duration-200 group-hover:scale-110"
+                />
+                </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -11969,6 +10727,91 @@ const save = async (publish = false) => {
               )}
             </div>
           </aside>
+          )}
+
+
+{/* =================================================
+    FIRST WORKFLOW REQUIRED - FULL PAGE OVERLAY
+================================================= */}
+{showEmptyWorkflowOverlay && 
+ (
+  <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+
+<button
+  type="button"
+  onClick={() => {
+    setShowEmptyWorkflowOverlay(false);
+    navigate(-1);
+  }}
+  className="cursor-pointer absolute left-6 top-6 z-[10002] flex items-center gap-2 rounded-xl border border-white/30 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-lg transition-all duration-300 hover:-translate-x-1 hover:bg-slate-100 hover:shadow-xl active:scale-95"
+>
+  <ArrowLeft className="h-5 w-5 transition-transform duration-300 group-hover:-translate-x-1" />
+  Back
+</button>
+
+    {/* Animated arrow and instruction */}
+<div className="absolute right-8 top-24 z-[10001] hidden flex-col items-center gap-3 md:flex">
+
+  {/* Animated Arrow */}
+  <div className="animate-bounce">
+    <svg
+      width="55"
+      height="55"
+      viewBox="0 0 55 55"
+      fill="none"
+    >
+      <path
+        d="M27 5 L27 40 M13 27 L27 41 L41 27"
+        stroke="#F59E0B"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+
+  {/* Add Workflow Button */}
+<button
+  type="button"
+onClick={() => {
+  setShowEmptyWorkflowOverlay(false);
+  setIsLoadingWorkflowPage(false);
+  setWorkflowModalMode("add");
+  setWorkflowFormName("");
+  setWorkflowFormDescription("");
+  setWorkflowModalOpen(true);
+}}
+  className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-xl transition hover:bg-emerald-700"
+>
+  <Plus className="h-5 w-5" />
+  Add New Workflow
+</button>
+
+  <p className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow">
+    Start Here!
+  </p>
+</div>
+    {/* Warning card */}
+    <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-2xl">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+        <AlertTriangle className="h-8 w-8 text-red-600" />
+      </div>
+
+      <h2 className="text-2xl font-bold text-slate-900">
+        No Journey Created Yet!
+      </h2>
+
+      <p className="mt-3 text-sm leading-6 text-slate-600">
+        Create your first WhatsApp workflow to unlock the canvas
+        and start building your journey.
+      </p>
+
+      <div className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+        Please click Add New Workflow above.
+      </div>
+    </div>
+  </div>
+)}
         </main>
       </div>
     

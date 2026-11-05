@@ -67,4 +67,19 @@ return [
     'send_url' => env('OTP_SEND_URL', ''),
     'verify_url' => env('OTP_VERIFY_URL', ''),
 ],
+
+ 'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+
+'email' => [
+    'email_url' => env('EMAIL_API_URL'),
+    'api_key' => env('EMAIL_API_KEY'),
+    'from_email' => env('MAIL_FROM_ADDRESS'),
+    'from_name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
+],
+
+'razorpay' => [
+    'key' => env('RAZORPAY_KEY', 'rzp_test_SuOPCHwupVAzCH'),
+    'secret' => env('RAZORPAY_SECRET', 'Jnf1K3IbJQqpKN5ZbgUY1asa'),
+],
+
 ];

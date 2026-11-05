@@ -12,7 +12,7 @@ class Bot extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tenant_id',
+        'user_id',
         'name',
         'description',
         'status',
@@ -20,17 +20,34 @@ class Bot extends Model
     ];
 
     protected $casts = [
-        'tenant_id' => 'integer',
+        'user_id' => 'integer',
         'whatsapp_account_id' => 'integer',
     ];
 
-    public function tenant(): BelongsTo
+    /**
+     * User who owns this bot.
+     */
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * WhatsApp account connected to this bot.
+     */
+    public function whatsappAccount(): BelongsTo
+    {
+        return $this->belongsTo(
+            WhatsAppAccount::class,
+            'whatsapp_account_id'
+        );
+    }
+
+    /**
+     * Workflows connected to this bot.
+     */
     public function workflows(): HasMany
     {
-        return $this->hasMany(Workflow::class);
+        return $this->hasMany(Workflow::class, 'bot_id');
     }
 }

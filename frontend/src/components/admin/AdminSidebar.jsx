@@ -10,9 +10,13 @@ import {
   Settings,
   ChevronRight,
   Workflow,
+  ShieldCheck,
+  Wallet,
 } from "lucide-react";
 
+import React, { useState, useEffect, useMemo } from "react";
 import { NavLink } from "react-router-dom";
+import { getStoredUser, hasPermission, isSuperAdmin } from "../../utils/permission";
 
 const menuItems = [
   {
@@ -21,41 +25,61 @@ const menuItems = [
     path: "/dashboard",
     color: "text-emerald-700",
     bg: "bg-emerald-100",
+    permission: "dashboard.view",
   },
-  {
-    title: "Clients",
-    icon: Users,
-    path: "/clients",
-    color: "text-green-700",
-    bg: "bg-green-100",
-  },
-  {
-    title: "Client Users",
-    icon: UserRound,
-    path: "/client-users",
-    color: "text-teal-700",
-    bg: "bg-teal-100",
-  },
-  {
+
+    {
     title: "WhatsApp Accounts",
     icon: MessageCircle,
     path: "/whatsapp-accounts",
     color: "text-emerald-700",
     bg: "bg-emerald-100",
+    permission: "whatsapp_accounts.view",
   },
-  {
-    title: "Bots",
+
+    {
+    title: "Bot",
     icon: Bot,
     path: "/bots",
     color: "text-lime-800",
     bg: "bg-lime-100",
+    permission: "bots.view",
   },
+  
+
+  {
+    title: "Plans & Wallet",
+    icon: Wallet,
+    path: "/plans",
+    color: "text-emerald-700",
+    bg: "bg-emerald-100",
+  },
+  {
+    title: "Roles & Permissions",
+    icon: ShieldCheck,
+    path: "/roles-permissions",
+    color: "text-indigo-700",
+    bg: "bg-indigo-100",
+    permission: "roles.view",
+  },
+  {
+    title: "All Users",
+    icon: Users,
+    path: "/users",
+    color: "text-green-700",
+    bg: "bg-green-100",
+    permission: "clients.view",
+  },
+
+
+
   {
     title: "Usage",
     icon: BarChart3,
     path: "/usage",
     color: "text-green-700",
     bg: "bg-green-100",
+    permission: "usage.view",
   },
   {
     title: "System Logs",
@@ -63,6 +87,7 @@ const menuItems = [
     path: "/system-logs",
     color: "text-slate-700",
     bg: "bg-slate-100",
+    permission: "system_logs.view",
   },
   {
     title: "Workflow Builder",
@@ -70,6 +95,7 @@ const menuItems = [
     path: "/workflow-builder",
     color: "text-teal-700",
     bg: "bg-teal-100",
+    permission: "workflows.view",
   },
   {
     title: "Failed Workflows",
@@ -77,6 +103,7 @@ const menuItems = [
     path: "/failed-workflows",
     color: "text-rose-700",
     bg: "bg-rose-100",
+    permission: "failed_workflows.view",
   },
   {
     title: "Platform Settings",
@@ -84,10 +111,59 @@ const menuItems = [
     path: "/platform-settings",
     color: "text-amber-700",
     bg: "bg-amber-100",
+    permission: "platform_settings.view",
   },
 ];
 
 const AdminSidebar = () => {
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
+
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      setCurrentUser(getStoredUser());
+    };
+    window.addEventListener("storage", handleUserUpdate);
+    window.addEventListener("user-updated", handleUserUpdate);
+    return () => {
+      window.removeEventListener("storage", handleUserUpdate);
+      window.removeEventListener("user-updated", handleUserUpdate);
+    };
+  }, []);
+
+const visibleMenuItems = useMemo(() => {
+  const isSuper = isSuperAdmin(currentUser);
+
+  return menuItems
+    .filter((item) => {
+      const superAdminOnlyItems = [
+        "/whatsapp-accounts",
+        "/bots",
+        "/workflow-builder",
+      ];
+
+      if (
+        superAdminOnlyItems.includes(item.path) &&
+        !isSuper
+      ) {
+        return false;
+      }
+
+      return (
+        !item.permission ||
+        hasPermission(item.permission, currentUser)
+      );
+    })
+    .map((item) => {
+      if (item.path === "/plans" && isSuper) {
+        return {
+          ...item,
+          title: "Plans & Subscriptions",
+        };
+      }
+      return item;
+    });
+}, [currentUser]);
+
   return (
  <aside
   className="
@@ -148,7 +224,7 @@ const AdminSidebar = () => {
    
         {/* Menu items */}
         <nav className="space-y-1.5" aria-label="Admin navigation">
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
             const Icon = item.icon;
 
             return (

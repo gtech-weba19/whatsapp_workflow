@@ -10,60 +10,70 @@ use App\Services\WorkflowEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Models\WhatsAppAccount;
+use App\Services\WhatsAppService;
+
+use Illuminate\Contracts\Cache\LockTimeoutException;
 
 class WhatsAppWebhookController extends Controller
 {
-    /**
-     * ==========================================================================
-     * JOURNEYS
-     * ==========================================================================
-     */
-    public function journeys()
-    {
-        $journeys = Workflow::query()
-            ->where('channel', 'whatsapp')
-            ->where('status', 'published')
-            ->with([
-                'nodes' => function ($query) {
-                    $query->where('node_type', 'start');
-                },
-            ])
-            ->orderBy('name')
-            ->get();
 
-        $journeys->transform(function ($workflow) {
+public function journeys(Request $request)
+{
+    $user = $request->user();
 
-            $startNode = $workflow->nodes->first();
-
-            $config = $startNode?->configuration ?? [];
-
-            if (is_string($config)) {
-                $decoded = json_decode($config, true);
-
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $config = $decoded;
-                }
-            }
-
-            if (!is_array($config)) {
-                $config = [];
-            }
-
-            $trigger = $this->getTriggerFromConfig($config);
-
-            return [
-                'id' => $workflow->id,
-                'name' => $workflow->name,
-                'description' => $workflow->description,
-                'status' => $workflow->status,
-                'version' => $workflow->version,
-                'published_at' => $workflow->published_at,
-                'trigger' => $trigger,
-            ];
-        });
-
-        return response()->json($journeys);
+    if (!$user) {
+        return response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401);
     }
+
+    $journeys = Workflow::query()
+        ->where('user_id', $user->id)
+        ->where('channel', 'whatsapp')
+        ->whereHas('bot', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })
+        ->with([
+            'nodes' => function ($query) {
+                $query->where('node_type', 'start');
+            },
+        ])
+        ->orderBy('name')
+        ->get();
+
+    $journeys->transform(function ($workflow) {
+        $startNode = $workflow->nodes->first();
+
+        $config = $startNode?->configuration ?? [];
+
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $config = $decoded;
+            }
+        }
+
+        if (!is_array($config)) {
+            $config = [];
+        }
+
+        return [
+            'id' => $workflow->id,
+            'bot_id' => $workflow->bot_id,
+            'user_id' => $workflow->user_id,
+            'name' => $workflow->name,
+            'description' => $workflow->description,
+            'status' => $workflow->status,
+            'version' => $workflow->version,
+            'published_at' => $workflow->published_at,
+            'trigger' => $this->getTriggerFromConfig($config),
+        ];
+    });
+
+    return response()->json($journeys);
+}
 
     /**
      * ==========================================================================
@@ -74,13 +84,22 @@ class WhatsAppWebhookController extends Controller
         Request $request,
         WorkflowEngine $engine
     ) {
-           Log::info('ðŸ”¥ WEBHOOK HANDLE ENTERED');
 
-                $payload = $request->all();
+            $payload = $request->all();
 
-                Log::info('WHATSAPP WEBHOOK RECEIVED', [
-                    'payload' => $payload,
-                ]);
+
+                if (empty($payload)) {
+                    $rawBody = $request->getContent();
+                    $decodedPayload = json_decode($rawBody, true);
+
+                    if (
+                        json_last_error() === JSON_ERROR_NONE
+                        && is_array($decodedPayload)
+                    ) {
+                        $payload = $decodedPayload;
+                    }
+                }
+
 
         /**
          * ----------------------------------------------------------------------
@@ -96,21 +115,23 @@ class WhatsAppWebhookController extends Controller
             )
         );
 
-        if ($eventType === 'delivery events') {
-            Log::info('WHATSAPP DELIVERY EVENT IGNORED', [
-                'status' => data_get(
-                    $payload,
-                    'events.status'
-                ),
-                'payload' => $payload,
-            ]);
+            Log::info('WHATSAPP DELIVERY EVENT FULL PAYLOAD', [
+        'payload' => $payload,
+    ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Delivery event received.',
-            ], 200);
-        }
+     if ($eventType === 'delivery events') {
 
+    Log::info('WHATSAPP DELIVERY EVENT FULL PAYLOAD', [
+        'payload' => $payload,
+    ]);
+
+    $engine->handleDeliveryWebhook($payload);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Delivery event processed.',
+    ], 200);
+}
         /**
          * ----------------------------------------------------------------------
          * WEBHOOK SOURCE
@@ -855,20 +876,30 @@ class WhatsAppWebhookController extends Controller
          * EXTERNAL MESSAGE ID
          * ----------------------------------------------------------------------
          */
-        $externalMessageId =
-            data_get(
-                $payload,
-                'eventContent.message.id'
-            )
-            ??
-            data_get(
-                $payload,
-                'entry.0.changes.0.value.messages.0.id'
-            )
-            ??
-            $request->input('message_id')
-            ??
-            $request->input('external_message_id');
+        // $externalMessageId =
+        //     data_get(
+        //         $payload,
+        //         'eventContent.message.id'
+        //     )
+        //     ??
+        //     data_get(
+        //         $payload,
+        //         'entry.0.changes.0.value.messages.0.id'
+        //     )
+        //     ??
+        //     $request->input('message_id')
+        //     ??
+        //     $request->input('external_message_id');
+
+
+
+$externalMessageId =
+    data_get($payload, 'eventContent.message.id')
+    ?? data_get($payload, 'entry.0.changes.0.value.messages.0.id')
+    ?? $request->input('message_id')
+    ?? $request->input('external_message_id');
+
+
 
         /**
          * ----------------------------------------------------------------------
@@ -882,6 +913,54 @@ class WhatsAppWebhookController extends Controller
                     ? 'meta'
                     : 'simulator'
             );
+
+
+            /**
+ * ----------------------------------------------------------------------
+ * RESOLVE WHATSAPP ACCOUNT FROM WORKFLOW / BOT
+ * ----------------------------------------------------------------------
+ */
+
+
+$whatsappAccountId = null;
+$userId = null;
+
+if ($source === 'simulator' && $requestedWorkflowId) {
+
+    $workflowForAccount = Workflow::query()
+        ->where('id', $requestedWorkflowId)
+        ->where('channel', 'whatsapp')
+        ->where('status', 'published')
+        ->with('bot:id,user_id,whatsapp_account_id')
+        ->first();
+
+    if ($workflowForAccount) {
+        $userId = (int) $workflowForAccount->user_id;
+
+        $bot = $workflowForAccount->bot;
+
+        // Workflow owner and bot owner must match.
+        if ($bot && (int) $bot->user_id === $userId) {
+
+            $whatsappAccountId =
+                $workflowForAccount->whatsapp_account_id
+                ?? $bot->whatsapp_account_id;
+
+            if ($whatsappAccountId) {
+                $account = WhatsAppAccount::query()
+                    ->where('id', $whatsappAccountId)
+                    ->where('user_id', $userId)
+                    ->whereIn('status', ['active', 'connected'])
+                    ->first();
+
+                if (!$account) {
+                    $whatsappAccountId = null;
+                }
+            }
+        }
+    }
+}
+
 
         $normalizedText = strtolower(
             trim((string) $text)
@@ -932,208 +1011,629 @@ class WhatsAppWebhookController extends Controller
 
             'whatsapp_to' => $whatsappTo,
 
+          'whatsapp_account_id' => $whatsappAccountId,
+
             'source' => $source,
 
 
             'workflow_id' => $requestedWorkflowId,
         ];
 
-        Log::info('WHATSAPP NORMALIZED INPUT', [
-            'from' => $from,
-            'type' => $messageType,
-            'text' => $text,
-            'media_id' => $mediaId,
-            'media_url' => $mediaUrl,
-            'mime_type' => $mimeType,
-            'filename' => $mediaFilename,
-            'caption' => $mediaCaption,
-            'source' => $source,
-        ]);
 
 
-        $lockKey = 'whatsapp_workflow_lock:' . $from;
 
-    $lock = Cache::lock($lockKey, 120);
 
-if (! $lock->get()) {
+// $lockKey = 'whatsapp_workflow_lock:'
+//     . ($whatsappAccountId ?? 'provider')
+//     . ':'
+//     . $from;
 
-    Log::warning('WHATSAPP WORKFLOW ALREADY PROCESSING', [
-        'mobile' => $from,
-        'external_message_id' => $externalMessageId,
-        'message_type' => $messageType,
-    ]);
+// $lock = Cache::lock($lockKey, 60);
 
-    return response()->json([
-        'success' => true,
-        'received' => true,
-        'processing' => true,
-        'message' => 'Another WhatsApp request is already being processed.',
-    ], 200);
-}
+// try {
+//     $lock->block(30);
 
-try {
+// } catch (LockTimeoutException $e) {
 
-    $session = $engine->handleIncoming(
-        $from,
-        $text,
-        $input
-    );
+//     Log::error('WHATSAPP REQUEST LOCK TIMEOUT', [
+//         'mobile' => $from,
+//         'account_id' => $whatsappAccountId,
+//         'external_message_id' => $externalMessageId,
+//     ]);
 
-    if (!$session) {
+//     return response()->json([
+//         'success' => false,
+//         'received' => false,
+//         'processing' => false,
+//         'message' => 'Previous request is still processing.',
+//     ], 503);
+// }
+
+// try {
+//  if ($source !== 'simulator') {
+
+//         if (empty($whatsappTo)) {
+
+
+//             return response()->json([
+//                 'success' => false,
+//                 'error' => true,
+//                 'error_code' => 'WHATSAPP_ACCOUNT_NUMBER_NOT_FOUND',
+//                 'message' => 'Business WhatsApp number could not be identified.',
+//             ], 422);
+//         }
+
+//       $whatsappTo = preg_replace('/\D+/', '', (string) $whatsappTo);
+
+// if (empty($whatsappTo)) {
+//     return response()->json([
+//         'success' => false,
+//         'error' => true,
+//         'error_code' => 'WHATSAPP_NUMBER_MISSING',
+//         'message' => 'WhatsApp number is missing.',
+//     ], 422);
+// }
+
+// $account = WhatsAppAccount::query()
+//     ->whereIn('status', ['active', 'connected'])
+//     ->whereRaw(
+//         "REGEXP_REPLACE(waba_id, '[^0-9]', '') = ?",
+//         [$whatsappTo]
+//     )
+//     ->first();
+
+// if (!$account) {
+//     return response()->json([
+//         'success' => false,
+//         'error' => true,
+//         'error_code' => 'WHATSAPP_ACCOUNT_NOT_FOUND',
+//         'message' => 'No connected WhatsApp account found for this number.',
+//     ], 404);
+// }
+
+// $engine->useWhatsAppAccount(
+//     (int) $account->user_id,
+//     (string) $account->waba_id
+// );
+
+// $input['whatsapp_account_id'] = (int) $account->id;
+
+//         $engine->useWhatsAppAccount(
+//             (int) $account->user_id,
+//             $whatsappTo
+//         );
+
+//         $input['whatsapp_account_id'] = (int) $account->id;
+
+//     }
+
+
+
+// // Prevent duplicate invalid-input replies
+// if (!empty($externalMessageId)) {
+//     $dedupeKey = 'whatsapp_incoming_processed:'
+//         . ($whatsappAccountId ?? 'provider')
+//         . ':'
+//         . $externalMessageId;
+
+//     if (!Cache::add($dedupeKey, true, now()->addDay())) {
+//         Log::warning('WHATSAPP DUPLICATE MESSAGE IGNORED', [
+//             'external_message_id' => $externalMessageId,
+//             'from' => $from,
+//         ]);
+
+//         return response()->json([
+//             'success' => true,
+//             'received' => true,
+//             'duplicate' => true,
+//         ], 200);
+//     }
+// }
+
+// $session = $engine->handleIncoming($from, $text, $input);
+
+
+//     if (!$session) {
+//         return response()->json([
+//             'success' => false,
+//             'received' => true,
+//             'started' => false,
+//             'error' => true,
+//             'error_code' => 'WORKFLOW_NOT_FOUND',
+//             'message' =>
+//                 'No active journey found and no matching trigger was found.',
+//             'received_text' => $text,
+//             'normalized_text' => $normalizedText,
+//             'message_type' => $messageType,
+//             'media_id' => $mediaId,
+//             'media_url' => $mediaUrl,
+//             'phone_number_id' => $phoneNumberId,
+//             'whatsapp_to' => $whatsappTo,
+//         ], 422);
+
+//     }
+
+//      /**
+//          * ----------------------------------------------------------------------
+//          * REFRESH SESSION
+//          * ----------------------------------------------------------------------
+//          */
+//         $session->refresh();
+
+//         /**
+//          * ----------------------------------------------------------------------
+//          * WORKFLOW
+//          * ----------------------------------------------------------------------
+//          */
+//         $workflow = Workflow::query()
+//             ->where('id', $session->workflow_id)
+//             ->where('channel', 'whatsapp')
+//             ->first();
+
+//         /**
+//          * ----------------------------------------------------------------------
+//          * SAVE INBOUND BOT MESSAGE
+//          * ----------------------------------------------------------------------
+//          */
+//         $botMessage = new BotMessage();
+
+//         $botMessage->bot_session_id = $session->id;
+
+//         $botMessage->direction = 'inbound';
+
+//         $botMessage->message_type =
+//             $messageType
+//             ?:
+//             (
+//                 $sourceHandle
+//                     ? 'interactive'
+//                     : 'text'
+//             );
+
+
+//         $botMessage->text =
+//             $text
+//             ?:
+//             $mediaCaption
+//             ?:
+//             $interactiveTitle
+//             ?:
+//             $sourceHandle
+//             ?:
+//             '';
+
+//         $botMessage->payload = $payload;
+
+//         if (!empty($externalMessageId)) {
+//             $botMessage->external_message_id =
+//                 $externalMessageId;
+//         }
+
+//         $botMessage->save();
+
+//         /**
+//          * ----------------------------------------------------------------------
+//          * OUTBOUND MESSAGES
+//          * ----------------------------------------------------------------------
+//          */
+//         $messages = BotMessage::query()
+//             ->where(
+//                 'bot_session_id',
+//                 $session->id
+//             )
+//             ->where(
+//                 'direction',
+//                 'outbound'
+//             )
+//             ->latest('id')
+//             ->limit(20)
+//             ->get()
+//             ->reverse()
+//             ->values();
+
+//         /**
+//          * ----------------------------------------------------------------------
+//          * RESPONSE
+//          * ----------------------------------------------------------------------
+//          */
+//         return response()->json([
+//             'success' => true,
+
+//             'source' => $source,
+
+//             'workflow' => [
+//                 'id' => $workflow?->id,
+//                 'name' => $workflow?->name,
+//             ],
+
+//             'whatsapp_to' => $whatsappTo,
+
+//             'phone_number_id' => $phoneNumberId,
+
+//             'incoming' => [
+//                 'type' => $messageType,
+//                 'text' => $text,
+//                 'media_id' => $mediaId,
+//                 'media_url' => $mediaUrl,
+//                 'mime_type' => $mimeType,
+//                 'filename' => $mediaFilename,
+//                 'caption' => $mediaCaption,
+//                 'has_media' => !empty($mediaId)
+//                     || !empty($mediaUrl),
+//             ],
+
+//             'session' => [
+//                 'id' => $session->id,
+
+//                 'status' => $session->status,
+
+//                 'current_node_id' =>
+//                     $session->current_node_id,
+
+//                 'workflow_id' =>
+//                     $session->workflow_id,
+
+//                 'user_identifier' =>
+//                     $session->user_identifier,
+//             ],
+
+//             'messages' => $messages,
+//         ]);
+
+
+
+
+//   } finally {
+
+//     $lock->release();
+// }
+
+
+/*
+|--------------------------------------------------------------------------
+| WHATSAPP ACCOUNT IDENTIFICATION
+|--------------------------------------------------------------------------
+*/
+
+// if ($source !== 'simulator') {
+
+//     if (empty($whatsappTo)) {
+
+//         return response()->json([
+//             'success' => false,
+//             'error' => true,
+//             'error_code' => 'WHATSAPP_ACCOUNT_NUMBER_NOT_FOUND',
+//             'message' => 'Business WhatsApp number could not be identified.',
+//         ], 422);
+//     }
+
+//     $whatsappTo = preg_replace('/\D+/', '', (string) $whatsappTo);
+
+//     if (empty($whatsappTo)) {
+
+//         return response()->json([
+//             'success' => false,
+//             'error' => true,
+//             'error_code' => 'WHATSAPP_NUMBER_MISSING',
+//             'message' => 'WhatsApp number is missing.',
+//         ], 422);
+//     }
+
+//     $account = WhatsAppAccount::query()
+//         ->whereIn('status', ['active', 'connected'])
+//         ->whereRaw(
+//             "REGEXP_REPLACE(waba_id, '[^0-9]', '') = ?",
+//             [$whatsappTo]
+//         )
+//         ->first();
+
+//     if (!$account) {
+
+//         return response()->json([
+//             'success' => false,
+//             'error' => true,
+//             'error_code' => 'WHATSAPP_ACCOUNT_NOT_FOUND',
+//             'message' => 'No connected WhatsApp account found for this number.',
+//         ], 404);
+//     }
+
+//     $engine->useWhatsAppAccount(
+//         (int) $account->user_id,
+//         (string) $account->waba_id
+//     );
+
+//     $input['whatsapp_account_id'] = (int) $account->id;
+
+//     $whatsappAccountId = (int) $account->id;
+// }
+
+
+/*
+|--------------------------------------------------------------------------
+| WHATSAPP ACCOUNT IDENTIFICATION
+|--------------------------------------------------------------------------
+*/
+
+if ($source !== 'simulator') {
+
+    if (empty($whatsappTo)) {
         return response()->json([
             'success' => false,
-            'received' => true,
-            'started' => false,
             'error' => true,
-            'error_code' => 'WORKFLOW_NOT_FOUND',
-            'message' =>
-                'No active journey found and no matching trigger was found.',
-            'received_text' => $text,
-            'normalized_text' => $normalizedText,
-            'message_type' => $messageType,
-            'media_id' => $mediaId,
-            'media_url' => $mediaUrl,
-            'phone_number_id' => $phoneNumberId,
-            'whatsapp_to' => $whatsappTo,
+            'error_code' => 'WHATSAPP_ACCOUNT_NUMBER_NOT_FOUND',
+            'message' => 'Business WhatsApp number could not be identified.',
         ], 422);
-
     }
 
-     /**
-         * ----------------------------------------------------------------------
-         * REFRESH SESSION
-         * ----------------------------------------------------------------------
-         */
-        $session->refresh();
+    $whatsappTo = preg_replace('/\D+/', '', (string) $whatsappTo);
 
-        /**
-         * ----------------------------------------------------------------------
-         * WORKFLOW
-         * ----------------------------------------------------------------------
-         */
-        $workflow = Workflow::query()
-            ->where('id', $session->workflow_id)
-            ->where('channel', 'whatsapp')
-            ->first();
-
-        /**
-         * ----------------------------------------------------------------------
-         * SAVE INBOUND BOT MESSAGE
-         * ----------------------------------------------------------------------
-         */
-        $botMessage = new BotMessage();
-
-        $botMessage->bot_session_id = $session->id;
-
-        $botMessage->direction = 'inbound';
-
-        $botMessage->message_type =
-            $messageType
-            ?:
-            (
-                $sourceHandle
-                    ? 'interactive'
-                    : 'text'
-            );
-
-
-        $botMessage->text =
-            $text
-            ?:
-            $mediaCaption
-            ?:
-            $interactiveTitle
-            ?:
-            $sourceHandle
-            ?:
-            '';
-
-        $botMessage->payload = $payload;
-
-        if (!empty($externalMessageId)) {
-            $botMessage->external_message_id =
-                $externalMessageId;
-        }
-
-        $botMessage->save();
-
-        /**
-         * ----------------------------------------------------------------------
-         * OUTBOUND MESSAGES
-         * ----------------------------------------------------------------------
-         */
-        $messages = BotMessage::query()
-            ->where(
-                'bot_session_id',
-                $session->id
-            )
-            ->where(
-                'direction',
-                'outbound'
-            )
-            ->latest('id')
-            ->limit(20)
-            ->get()
-            ->reverse()
-            ->values();
-
-        /**
-         * ----------------------------------------------------------------------
-         * RESPONSE
-         * ----------------------------------------------------------------------
-         */
+    if (empty($whatsappTo)) {
         return response()->json([
-            'success' => true,
+            'success' => false,
+            'error' => true,
+            'error_code' => 'WHATSAPP_NUMBER_MISSING',
+            'message' => 'WhatsApp number is missing.',
+        ], 422);
+    }
 
-            'source' => $source,
+    $account = WhatsAppAccount::query()
+        ->whereIn('status', ['active', 'connected'])
+        ->whereRaw(
+            "REGEXP_REPLACE(waba_id, '[^0-9]', '') = ?",
+            [$whatsappTo]
+        )
+        ->first();
 
-            'workflow' => [
-                'id' => $workflow?->id,
-                'name' => $workflow?->name,
-            ],
+    if (!$account) {
+        return response()->json([
+            'success' => false,
+            'error' => true,
+            'error_code' => 'WHATSAPP_ACCOUNT_NOT_FOUND',
+            'message' => 'No connected WhatsApp account found for this number.',
+        ], 404);
+    }
 
-            'whatsapp_to' => $whatsappTo,
+    $whatsappAccountId = (int) $account->id;
+    $userId = (int) $account->user_id;
 
-            'phone_number_id' => $phoneNumberId,
-
-            'incoming' => [
-                'type' => $messageType,
-                'text' => $text,
-                'media_id' => $mediaId,
-                'media_url' => $mediaUrl,
-                'mime_type' => $mimeType,
-                'filename' => $mediaFilename,
-                'caption' => $mediaCaption,
-                'has_media' => !empty($mediaId)
-                    || !empty($mediaUrl),
-            ],
-
-            'session' => [
-                'id' => $session->id,
-
-                'status' => $session->status,
-
-                'current_node_id' =>
-                    $session->current_node_id,
-
-                'workflow_id' =>
-                    $session->workflow_id,
-
-                'user_identifier' =>
-                    $session->user_identifier,
-            ],
-
-            'messages' => $messages,
+    if (!$userId) {
+        Log::error('WHATSAPP ACCOUNT USER ID MISSING', [
+            'account_id' => $account->id,
+            'account_user_id' => $account->user_id,
         ]);
 
+        return response()->json([
+            'success' => false,
+            'error' => true,
+            'error_code' => 'WHATSAPP_ACCOUNT_USER_NOT_FOUND',
+            'message' => 'WhatsApp account owner not found.',
+        ], 422);
+    }
 
+    $engine->useWhatsAppAccount(
+        $userId,
+        (string) $account->waba_id
+    );
 
-
-   } finally {
-
-    $lock->release();
+    $input['whatsapp_account_id'] = $whatsappAccountId;
+    $input['user_id'] = $userId;
 }
 
+/*
+|--------------------------------------------------------------------------
+| PREVENT DUPLICATE INCOMING MESSAGES
+|--------------------------------------------------------------------------
+*/
+
+if (!empty($externalMessageId)) {
+
+    $dedupeKey = 'whatsapp_incoming_processed:'
+        . ($whatsappAccountId ?? 'provider')
+        . ':'
+        . $externalMessageId;
+
+    if (!Cache::add($dedupeKey, true, now()->addDay())) {
+
+        Log::warning('WHATSAPP DUPLICATE MESSAGE IGNORED', [
+            'external_message_id' => $externalMessageId,
+            'from' => $from,
+            'account_id' => $whatsappAccountId ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'received' => true,
+            'duplicate' => true,
+        ], 200);
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| HANDLE INCOMING MESSAGE
+|--------------------------------------------------------------------------
+*/
+// Incoming message ID ko WorkflowEngine tak pass karein
+$input['reply_to_message_id'] = $externalMessageId;
+
+$session = $engine->handleIncoming($from, $text, $input);
+
+if (!$session) {
+
+    Log::warning('INBOUND MESSAGE NOT SAVED - SESSION NOT FOUND', [
+        'from' => $from,
+        'message' => $text,
+        'whatsapp_account_id' => $whatsappAccountId,
+        'user_id' => $userId,
+        'input_user_id' => $input['user_id'] ?? null,
+        'input_whatsapp_account_id' => $input['whatsapp_account_id'] ?? null,
+        'normalized_text' => $normalizedText,
+    ]);
+
+    try {
+
+        $whatsapp = app(WhatsAppService::class)
+            ->useAccountById(
+                (int) $whatsappAccountId,
+                (int) $userId
+            );
+
+        $result = $whatsapp->sendText(
+            $from,
+            'No active journey found'
+        );
+
+        if (empty($result['success'])) {
+            Log::error('SESSION NOT FOUND REPLY FAILED', [
+                'from' => $from,
+                'whatsapp_account_id' => $whatsappAccountId,
+                'user_id' => $userId,
+                'result' => $result,
+            ]);
+        }
+
+    } catch (\Throwable $e) {
+
+        Log::error('SESSION NOT FOUND REPLY EXCEPTION', [
+            'from' => $from,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'user_id' => $userId,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
+    return response()->json([
+        'success' => false,
+        'received' => true,
+        'started' => false,
+        'error' => true,
+        'error_code' => 'WORKFLOW_NOT_FOUND',
+        'message' => 'No active journey found and no matching trigger was found.',
+        'received_text' => $text,
+        'normalized_text' => $normalizedText,
+        'message_type' => $messageType,
+        'media_id' => $mediaId,
+        'media_url' => $mediaUrl,
+        'phone_number_id' => $phoneNumberId,
+        'whatsapp_to' => $whatsappTo,
+    ], 422);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| REFRESH SESSION
+|--------------------------------------------------------------------------
+*/
+
+$session->refresh();
+
+
+/*
+|--------------------------------------------------------------------------
+| GET WORKFLOW
+|--------------------------------------------------------------------------
+*/
+
+$workflow = Workflow::query()
+    ->where('id', $session->workflow_id)
+    ->where('channel', 'whatsapp')
+    ->first();
+
+/*
+|--------------------------------------------------------------------------
+| SAVE INBOUND BOT MESSAGE
+|--------------------------------------------------------------------------
+*/
+
+$botMessage = new BotMessage();
+
+$botMessage->bot_session_id = $session->id;
+$botMessage->direction = 'inbound';
+
+// Sirf MID save hoga, WAMID nahi
+$botMessage->external_message_id = $externalMessageId ?: null;
+
+$botMessage->message_type = $messageType
+    ?: ($sourceHandle ? 'interactive' : 'text');
+
+$botMessage->text = $text
+    ?: $mediaCaption
+    ?: $interactiveTitle
+    ?: $sourceHandle
+    ?: '';
+
+$botMessage->payload = $payload;
+
+$botMessage->user_id = $session->user_id;
+$botMessage->bot_id = $session->bot_id;
+$botMessage->whatsapp_account_id = $session->whatsapp_account_id;
+
+$botMessage->save();
+
+
+/*
+|--------------------------------------------------------------------------
+| GET OUTBOUND MESSAGES
+|--------------------------------------------------------------------------
+*/
+
+$messages = BotMessage::query()
+    ->where('bot_session_id', $session->id)
+    ->where('direction', 'outbound')
+    ->latest('id')
+    ->limit(20)
+    ->get()
+    ->reverse()
+    ->values();
+
+
+/*
+|--------------------------------------------------------------------------
+| RESPONSE
+|--------------------------------------------------------------------------
+*/
+
+return response()->json([
+
+    'success' => true,
+
+    'source' => $source,
+
+    'workflow' => [
+        'id' => $workflow?->id,
+        'name' => $workflow?->name,
+    ],
+
+    'whatsapp_to' => $whatsappTo,
+
+    'phone_number_id' => $phoneNumberId,
+
+    'incoming' => [
+        'type' => $messageType,
+        'text' => $text,
+        'media_id' => $mediaId,
+        'media_url' => $mediaUrl,
+        'mime_type' => $mimeType,
+        'filename' => $mediaFilename,
+        'caption' => $mediaCaption,
+
+        'has_media' => !empty($mediaId)
+            || !empty($mediaUrl),
+    ],
+
+    'session' => [
+        'id' => $session->id,
+        'status' => $session->status,
+        'current_node_id' => $session->current_node_id,
+        'workflow_id' => $session->workflow_id,
+        'user_identifier' => $session->user_identifier,
+    ],
+
+    'messages' => $messages,
+
+]);
 
 
 

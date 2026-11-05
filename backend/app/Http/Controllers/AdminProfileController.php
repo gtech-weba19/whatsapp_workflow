@@ -70,7 +70,7 @@ class AdminProfileController extends Controller
 
         if ($mobileColumn) {
             $rules['mobile'] = [
-                'required',
+                'nullable',
                 'digits:10',
                 Rule::unique($table, $mobileColumn)->ignore($user->getKey()),
             ];

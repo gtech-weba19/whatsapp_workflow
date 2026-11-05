@@ -23,6 +23,8 @@ import {
     Check,
 } from "lucide-react";
 
+import { useSearchParams } from "react-router-dom";
+
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
 
@@ -196,8 +198,31 @@ function normalizeJourneyTrigger(journey) {
     return "";
 }
 
+const getAuthHeaders = () => {
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("auth_token") ||
+    localStorage.getItem("access_token");
+
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+
 export default function WhatsAppSimulator() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
+const selectedWorkflowId =
+  searchParams.get("workflow_id") ||
+  localStorage.getItem("selected_workflow_id") ||
+  "";
+
+  const [workflowSelectionApplied, setWorkflowSelectionApplied] =
+    useState(false);
+
 
     /* =========================================================
        MOBILE
@@ -252,142 +277,111 @@ export default function WhatsAppSimulator() {
        LOAD PUBLISHED JOURNEYS
     ========================================================== */
 
-    useEffect(() => {
-        const loadJourneys = async () => {
-            try {
-                setJourneysLoading(true);
+  useEffect(() => {
+    const loadJourneys = async () => {
+        try {
+            setJourneysLoading(true);
 
-                const response =
-                    await axios.get(
-                        `${API}/webhooks/whatsapp/journeys`
-                    );
+            const token =
+                localStorage.getItem("token") ||
+                localStorage.getItem("auth_token") ||
+                localStorage.getItem("access_token");
 
-                console.log(
-                    "JOURNEYS RESPONSE:",
-                    response.data
-                );
-
-                const list =
-                    Array.isArray(response.data)
-                        ? response.data
-                        : Array.isArray(
-                              response.data?.data
-                          )
-                        ? response.data.data
-                        : [];
-
-                console.log(
-                    "JOURNEY LIST:",
-                    list
-                );
-
-                setJourneys(list);
-
-                if (list.length > 0) {
-                    setSelectedJourney(
-                        (current) => {
-                            /*
-                            |--------------------------------------------------------------------------
-                            | CURRENT STATE
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if (current) {
-                                const exists =
-                                    list.some(
-                                        (
-                                            journey
-                                        ) =>
-                                            String(
-                                                journey.id
-                                            ) ===
-                                            String(
-                                                current
-                                            )
-                                    );
-
-                                if (exists) {
-                                    return String(
-                                        current
-                                    );
-                                }
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | LOCAL STORAGE
-                            |--------------------------------------------------------------------------
-                            */
-
-                            let savedJourney =
-                                "";
-
-                            try {
-                                savedJourney =
-                                    localStorage.getItem(
-                                        JOURNEY_STORAGE_KEY
-                                    ) || "";
-                            } catch (
-                                error
-                            ) {
-                                console.error(
-                                    "READ SAVED JOURNEY ERROR:",
-                                    error
-                                );
-                            }
-
-                            if (
-                                savedJourney &&
-                                list.some(
-                                    (
-                                        journey
-                                    ) =>
-                                        String(
-                                            journey.id
-                                        ) ===
-                                        String(
-                                            savedJourney
-                                        )
-                                )
-                            ) {
-                                return String(
-                                    savedJourney
-                                );
-                            }
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | FIRST JOURNEY
-                            |--------------------------------------------------------------------------
-                            */
-
-                            return String(
-                                list[0].id
-                            );
-                        }
-                    );
-                } else {
-                    setSelectedJourney("");
-                }
-            } catch (error) {
-                console.error(
-                    "JOURNEYS LOAD ERROR:",
-                    error
-                );
-
-                console.error(
-                    "JOURNEYS RESPONSE ERROR:",
-                    error.response?.data
-                );
-
+            if (!token) {
+                console.error("AUTH TOKEN NOT FOUND");
                 setJourneys([]);
-            } finally {
-                setJourneysLoading(false);
+                setSelectedJourney("");
+                return;
             }
-        };
 
-        loadJourneys();
-    }, []);
+            const response = await axios.get(
+                `${API}/webhooks/whatsapp/journeys`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: "application/json",
+                    },
+                }
+            );
+
+            console.log("JOURNEYS RESPONSE:", response.data);
+
+            const list = Array.isArray(response.data)
+                ? response.data
+                : Array.isArray(response.data?.data)
+                ? response.data.data
+                : [];
+setJourneys(list);
+
+const requestedWorkflowId = selectedWorkflowId
+    ? String(selectedWorkflowId)
+    : "";
+
+const workflowExists = requestedWorkflowId
+    ? list.some(
+          (journey) =>
+              String(journey.id) === requestedWorkflowId
+      )
+    : false;
+
+let nextJourneyId = "";
+
+if (workflowExists) {
+    // Dashboard se bheja gaya workflow select hoga
+    nextJourneyId = requestedWorkflowId;
+} else {
+    // URL workflow available nahi hai to saved selection use karein
+    let savedJourney = "";
+
+    try {
+        savedJourney =
+            localStorage.getItem(JOURNEY_STORAGE_KEY) || "";
+    } catch (error) {
+        console.error("READ SAVED JOURNEY ERROR:", error);
+    }
+
+    const savedJourneyExists = savedJourney
+        ? list.some(
+              (journey) =>
+                  String(journey.id) === String(savedJourney)
+          )
+        : false;
+
+    nextJourneyId = savedJourneyExists
+        ? String(savedJourney)
+        : list.length
+          ? String(list[0].id)
+          : "";
+}
+
+setSelectedJourney(nextJourneyId);
+
+if (nextJourneyId) {
+    localStorage.setItem(
+        "selected_workflow_id",
+        String(nextJourneyId)
+    );
+}
+
+setWorkflowSelectionApplied(true)
+        } catch (error) {
+            console.error("JOURNEYS LOAD ERROR:", error);
+            console.error(
+                "JOURNEYS RESPONSE ERROR:",
+                error.response?.data
+            );
+
+            setJourneys([]);
+            setSelectedJourney("");
+        } finally {
+            setJourneysLoading(false);
+        }
+    };
+
+    loadJourneys();
+}, [selectedWorkflowId]);
+
+
 
     /* =========================================================
        CHAT MESSAGES
@@ -477,19 +471,7 @@ export default function WhatsAppSimulator() {
             }
         });
 
-    /* =========================================================
-       QR MESSAGE
-    ========================================================== */
 
-    /*
-    |--------------------------------------------------------------------------
-    | IMPORTANT
-    |--------------------------------------------------------------------------
-    | Do NOT load old QR message from localStorage.
-    |
-    | Otherwise old "Hi" can remain even after workflow changes.
-    |--------------------------------------------------------------------------
-    */
 
     const [qrMessage, setQrMessage] =
         useState("");
@@ -497,9 +479,7 @@ export default function WhatsAppSimulator() {
     const [copied, setCopied] =
         useState(false);
 
-    /* =========================================================
-       CHAT SCROLL
-    ========================================================== */
+   
 
     const chatRef = useRef(null);
 
@@ -990,49 +970,49 @@ export default function WhatsAppSimulator() {
                        FINAL PAYLOAD
                     ------------------------------------------------------ */
 
-                    const finalPayload = {
-                        ...payload,
+             const finalPayload = {
+                    ...payload,
 
-                        from:
-                            cleanMobile ||
-                            payload.from ||
-                            mobile,
-                    };
+                    from: cleanMobile || payload.from || mobile,
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | IMPORTANT
-                    |--------------------------------------------------------------------------
-                    | No workflow_id here.
-                    |
-                    | Backend must determine workflow using keyword.
-                    |--------------------------------------------------------------------------
-                    */
+                    // Dropdown se selected workflow
+                    workflow_id: Number(selectedJourney),
+                };
 
-                    console.log(
-                        "WEBHOOK REQUEST:",
-                        finalPayload
-                    );
+                const token =
+                    localStorage.getItem("token") ||
+                    localStorage.getItem("auth_token") ||
+                    localStorage.getItem("access_token");
+
+                console.log("SELECTED WORKFLOW ID:", selectedJourney);
+                console.log("WEBHOOK REQUEST:", finalPayload);
+                console.log("AUTH TOKEN AVAILABLE:", Boolean(token));
+
+                console.log(
+                    "WEBHOOK REQUEST:",
+                    finalPayload
+                );
 
                     /* -----------------------------------------------------
                        LARAVEL WEBHOOK
                     ------------------------------------------------------ */
 
-                    const response =
-                        await axios.post(
+                  const response = await axios.post(
                             `${API}/webhooks/whatsapp`,
                             finalPayload,
                             {
                                 headers: {
-                                    "Content-Type":
-                                        "application/json",
+                                    "Content-Type": "application/json",
+                                    Accept: "application/json",
 
-                                    Accept:
-                                        "application/json",
+                                    ...(token
+                                        ? {
+                                            Authorization: `Bearer ${token}`,
+                                        }
+                                        : {}),
                                 },
                             }
                         );
-
                     console.log(
                         "WEBHOOK RESPONSE:",
                         response.data
@@ -1061,11 +1041,7 @@ export default function WhatsAppSimulator() {
                             ?.messages ||
                         [];
 
-                    console.log(
-                        "BOT MESSAGES:",
-                        botMessages
-                    );
-
+                 
                     appendBotMessages(
                         botMessages
                     );
@@ -1303,30 +1279,33 @@ export default function WhatsAppSimulator() {
             | RESET CURRENT WORKFLOW SESSION
             |--------------------------------------------------------------------------
             */
-
-            try {
+                try {
                 await axios.post(
                     `${API}/webhooks/whatsapp/reset`,
                     {
-                        from:
-                            cleanMobile,
-
-                        workflow_id:
-                            Number(
-                                selectedJourney
-                            ),
+                        from: cleanMobile,
+                        workflow_id: Number(selectedJourney),
+                    },
+                    {
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...getAuthHeaders(),
+                        },
                     }
                 );
             } catch (error) {
-                console.warn(
-                    "QR RESET WARNING:",
-                    error.response
-                        ?.data ||
-                        error.message
+                console.error(
+                    "QR RESET ERROR:",
+                    error.response?.data || error
                 );
-            }
 
-            /*
+                addBotMessage(
+                    error.response?.data?.message ||
+                    "Unable to reset the current session."
+                );
+
+                return;
+            }       /*
             |--------------------------------------------------------------------------
             | SMALL DELAY
             |--------------------------------------------------------------------------
@@ -1369,64 +1348,49 @@ export default function WhatsAppSimulator() {
        RESET CHAT
     ========================================================== */
 
-    const resetChat =
-        async () => {
-            if (loading) {
-                return;
+ const resetChat = async () => {
+    if (loading) {
+        return;
+    }
+
+    try {
+        setLoading(true);
+
+        await axios.post(
+            `${API}/webhooks/whatsapp/reset`,
+            {
+                from: cleanMobile,
+                workflow_id: selectedJourney
+                    ? Number(selectedJourney)
+                    : null,
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    ...getAuthHeaders(),
+                },
             }
+        );
+    } catch (error) {
+        console.error(
+            "SESSION RESET ERROR:",
+            error.response?.data || error
+        );
 
-            try {
-                setLoading(true);
+        addBotMessage(
+            error.response?.data?.message ||
+                "Unable to reset the current session."
+        );
+    } finally {
+        setMessages([]);
+        setSession(null);
+        setInput("");
 
-                await axios.post(
-                    `${API}/webhooks/whatsapp/reset`,
-                    {
-                        from:
-                            cleanMobile,
+        setQrMessage(selectedJourneyTrigger || "");
 
-                        workflow_id:
-                            selectedJourney
-                                ? Number(
-                                      selectedJourney
-                                  )
-                                : null,
-                    }
-                );
-            } catch (error) {
-                console.error(
-                    "SESSION RESET ERROR:",
-                    error
-                );
-            } finally {
-                /*
-                |--------------------------------------------------------------------------
-                | CLEAR UI
-                |--------------------------------------------------------------------------
-                */
-
-                setMessages([]);
-                setSession(null);
-                setInput("");
-
-                /*
-                |--------------------------------------------------------------------------
-                | RESTORE DYNAMIC TRIGGER
-                |--------------------------------------------------------------------------
-                */
-
-                if (
-                    selectedJourneyTrigger
-                ) {
-                    setQrMessage(
-                        selectedJourneyTrigger
-                    );
-                } else {
-                    setQrMessage("");
-                }
-
-                setLoading(false);
-            }
-        };
+        setLoading(false);
+    }
+};
 
     /* =========================================================
        COPY QR LINK
@@ -1738,34 +1702,65 @@ export default function WhatsAppSimulator() {
                         <div className="flex items-center gap-3">
                             {/* BACK */}
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    navigate(
-                                        "/"
-                                    )
-                                }
-                                className="
-                                    flex
-                                    h-10
-                                    w-10
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-xl
-                                    border
-                                    border-slate-200
-                                    bg-white
-                                    text-slate-600
-                                    transition
-                                    hover:border-emerald-200
-                                    hover:bg-emerald-50
-                                    hover:text-emerald-600
-                                "
-                                title="Back to Workflow Builder"
-                            >
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>
+                           <button
+    type="button"
+    onClick={async () => {
+        if (loading) return;
+
+        try {
+            // Backend session reset
+            await axios.post(
+                `${API}/webhooks/whatsapp/reset`,
+                {
+                    from: cleanMobile,
+                    workflow_id: selectedJourney
+                        ? Number(selectedJourney)
+                        : null,
+                },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...getAuthHeaders(),
+                    },
+                }
+            );
+        } catch (error) {
+            console.error(
+                "BACK RESET ERROR:",
+                error.response?.data || error
+            );
+        } finally {
+            // Clear simulator UI state
+            setMessages([]);
+            setSession(null);
+            setInput("");
+            setQrMessage("");
+
+            // Remove persisted simulator data
+            [
+                MESSAGES_STORAGE_KEY,
+                SESSION_STORAGE_KEY,
+                INPUT_STORAGE_KEY,
+                QR_MESSAGE_STORAGE_KEY,
+            ].forEach((key) => {
+                localStorage.removeItem(key);
+            });
+
+            // Return to Workflow Builder
+            navigate("/workflow-builder");
+        }
+    }}
+    className="
+        flex h-10 w-10 shrink-0 items-center justify-center
+        rounded-xl border border-slate-200 bg-white
+        text-slate-600 transition
+        hover:border-emerald-200 hover:bg-emerald-50
+        hover:text-emerald-600
+    "
+    title="Back to Workflow Builder"
+>
+    <ArrowLeft className="h-5 w-5" />
+</button>
 
                             <div>
                                 <h1
@@ -1937,6 +1932,15 @@ export default function WhatsAppSimulator() {
                                             workflowId
                                         );
 
+                                        if (workflowId) {
+                                            localStorage.setItem(
+                                                "selected_workflow_id",
+                                                String(workflowId)
+                                            );
+                                        } else {
+                                            localStorage.removeItem("selected_workflow_id");
+                                        }
+
                                         setMessages(
                                             []
                                         );
@@ -1949,11 +1953,7 @@ export default function WhatsAppSimulator() {
                                             ""
                                         );
 
-                                        /*
-                                        |--------------------------------------------------------------------------
-                                        | Find newly selected journey immediately
-                                        |--------------------------------------------------------------------------
-                                        */
+                                  
 
                                         const newJourney =
                                             journeys.find(
@@ -1973,12 +1973,7 @@ export default function WhatsAppSimulator() {
                                                 newJourney
                                             );
 
-                                        /*
-                                        |--------------------------------------------------------------------------
-                                        | DYNAMIC QR MESSAGE
-                                        |--------------------------------------------------------------------------
-                                        */
-
+                                 
                                         setQrMessage(
                                             newTrigger
                                         );
@@ -2002,12 +1997,7 @@ export default function WhatsAppSimulator() {
                                             return;
                                         }
 
-                                        /*
-                                        |--------------------------------------------------------------------------
-                                        | SAVE DYNAMIC TRIGGER
-                                        |--------------------------------------------------------------------------
-                                        */
-
+                                 
                                         if (
                                             newTrigger
                                         ) {
@@ -2026,11 +2016,7 @@ export default function WhatsAppSimulator() {
                                             }
                                         }
 
-                                        /*
-                                        |--------------------------------------------------------------------------
-                                        | RESET BACKEND SESSION
-                                        |--------------------------------------------------------------------------
-                                        */
+                                    
 
                                         try {
                                             const cleanMobileValue =
@@ -2044,16 +2030,19 @@ export default function WhatsAppSimulator() {
                                             if (
                                                 cleanMobileValue
                                             ) {
-                                                await axios.post(
+                                               await axios.post(
                                                     `${API}/webhooks/whatsapp/reset`,
                                                     {
-                                                        from:
-                                                            cleanMobileValue,
-
-                                                        workflow_id:
-                                                            Number(
-                                                                workflowId
-                                                            ),
+                                                        from: cleanMobileValue,
+                                                        workflow_id: workflowId
+                                                            ? Number(workflowId)
+                                                            : null,
+                                                    },
+                                                    {
+                                                        headers: {
+                                                            "Content-Type": "application/json",
+                                                            ...getAuthHeaders(),
+                                                        },
                                                     }
                                                 );
                                             }

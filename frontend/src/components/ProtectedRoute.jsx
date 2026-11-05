@@ -1,38 +1,41 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 const ProtectedRoute = () => {
-  const location = useLocation();
+    const location = useLocation();
 
-  const token =
-    localStorage.getItem("token") ||
-    localStorage.getItem("auth_token") ||
-    localStorage.getItem("access_token") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("auth_token") ||
-    sessionStorage.getItem("access_token");
+    const token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("auth_token") ||
+        localStorage.getItem("access_token") ||
+        sessionStorage.getItem("token") ||
+        sessionStorage.getItem("auth_token") ||
+        sessionStorage.getItem("access_token");
 
-  // Login nahi hai to login page par bhejein.
-  if (!token) {
-    return <Navigate to="/" replace state={{ from: location }} />;
-  }
+    const clearAuth = () => {
+        [
+            "token",
+            "auth_token",
+            "access_token",
+            "user",
+        ].forEach((key) => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        });
+    };
 
-  let user = null;
+    if (!token) {
+        clearAuth();
 
-  try {
-    user =
-      JSON.parse(localStorage.getItem("user") || "null") ||
-      JSON.parse(sessionStorage.getItem("user") || "null");
-  } catch {
-    user = null;
-  }
+        return (
+            <Navigate
+                to="/"
+                replace
+                state={{ from: location }}
+            />
+        );
+    }
 
-  // User data nahi hai to login par bhejein.
-  if (!user) {
-    return <Navigate to="/" replace state={{ from: location }} />;
-  }
-
-  // Authenticated user ko protected route access dein.
-  return <Outlet />;
+    return <Outlet />;
 };
 
 export default ProtectedRoute;

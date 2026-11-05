@@ -8,46 +8,93 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Workflow extends Model
 {
-protected $fillable = [
-    'tenant_id',
-    'bot_id',
-    'name',
-    'description',
-    'channel',
-    'status',
-    'version',
-    'created_by',
-    'published_at',
-];
+    protected $fillable = [
+        'user_id',
+        'bot_id',
+        'name',
+        'description',
+        'channel',
+        'status',
+        'version',
+        'created_by',
+        'whatsapp_account_id',
+        'published_at',
+    ];
 
     protected $casts = [
-        'tenant_id' => 'integer',
+        'user_id' => 'integer',
         'bot_id' => 'integer',
+        'whatsapp_account_id' => 'integer',
         'published_at' => 'datetime',
     ];
 
-    public function tenant(): BelongsTo
+    /**
+     * User who owns this workflow.
+     */
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Tenant::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Bot connected to this workflow.
+     */
     public function bot(): BelongsTo
     {
         return $this->belongsTo(Bot::class, 'bot_id');
     }
 
+    /**
+     * WhatsApp account connected to this workflow.
+     */
+    public function whatsappAccount(): BelongsTo
+    {
+        return $this->belongsTo(
+            WhatsAppAccount::class,
+            'whatsapp_account_id'
+        );
+    }
+
+    /**
+     * Workflow nodes.
+     */
     public function nodes(): HasMany
     {
-        return $this->hasMany(WorkflowNode::class);
+        return $this->hasMany(WorkflowNode::class, 'workflow_id');
     }
 
+    /**
+     * Workflow edges.
+     */
     public function edges(): HasMany
     {
-        return $this->hasMany(WorkflowEdge::class);
+        return $this->hasMany(WorkflowEdge::class, 'workflow_id');
     }
 
+    /**
+     * Customer sessions belonging to this workflow.
+     */
     public function sessions(): HasMany
     {
-        return $this->hasMany(BotSession::class);
+        return $this->hasMany(BotSession::class, 'workflow_id');
+    }
+
+    /**
+     * Alias for sessions.
+     */
+    public function botSessions(): HasMany
+    {
+        return $this->hasMany(BotSession::class, 'workflow_id');
+    }
+
+    /**
+     * Workflow execution history.
+     */
+    public function workflowExecutions(): HasMany
+    {
+        return $this->hasMany(
+            WorkflowExecution::class,
+            'workflow_id'
+        );
     }
 }

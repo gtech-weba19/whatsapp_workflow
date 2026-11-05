@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
@@ -31,13 +30,13 @@ class AdminAuditLogController extends Controller
         abort_unless($user, 401, 'Unauthenticated.');
 
         $validated = $request->validate([
-            'search' => ['nullable', 'string', 'max:150'],
-            'action' => ['nullable', 'string', 'max:100'],
+            'search'      => ['nullable', 'string', 'max:150'],
+            'action'      => ['nullable', 'string', 'max:100'],
             'entity_type' => ['nullable', 'string', 'max:100'],
-            'user_id' => ['nullable', 'integer', 'min:1'],
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'user_id'     => ['nullable', 'integer', 'min:1'],
+            'from'        => ['nullable', 'date'],
+            'to'          => ['nullable', 'date', 'after_or_equal:from'],
+            'per_page'    => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $query = AuditLog::query()->with([
@@ -49,7 +48,7 @@ class AdminAuditLogController extends Controller
         $this->applyAccessScope($query, $user);
 
         // Search by action, entity type, entity ID or IP address.
-        if (!empty($validated['search'])) {
+        if (! empty($validated['search'])) {
             $search = $validated['search'];
 
             $query->where(function ($q) use ($search) {
@@ -61,12 +60,12 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by action.
-        if (!empty($validated['action'])) {
+        if (! empty($validated['action'])) {
             $query->where('action', $validated['action']);
         }
 
         // Filter by entity type.
-        if (!empty($validated['entity_type'])) {
+        if (! empty($validated['entity_type'])) {
             $query->where(
                 'entity_type',
                 $validated['entity_type']
@@ -74,7 +73,7 @@ class AdminAuditLogController extends Controller
         }
 
         // Only super admins can filter across different users.
-        if (!empty($validated['user_id'])) {
+        if (! empty($validated['user_id'])) {
             if ($user->role === 'super_admin') {
                 $query->where('user_id', $validated['user_id']);
             } elseif ($user->tenant_id !== null) {
@@ -93,7 +92,7 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by starting date.
-        if (!empty($validated['from'])) {
+        if (! empty($validated['from'])) {
             $query->whereDate(
                 'created_at',
                 '>=',
@@ -102,7 +101,7 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by ending date.
-        if (!empty($validated['to'])) {
+        if (! empty($validated['to'])) {
             $query->whereDate(
                 'created_at',
                 '<=',
@@ -118,7 +117,7 @@ class AdminAuditLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Audit logs retrieved successfully.',
-            'data' => $logs,
+            'data'    => $logs,
         ]);
     }
 
@@ -147,7 +146,7 @@ class AdminAuditLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Audit log retrieved successfully.',
-            'data' => $auditLog,
+            'data'    => $auditLog,
         ]);
     }
 
@@ -184,73 +183,70 @@ class AdminAuditLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Audit log filters retrieved successfully.',
-            'data' => [
-                'actions' => $actions,
+            'data'    => [
+                'actions'      => $actions,
                 'entity_types' => $entityTypes,
             ],
         ]);
     }
 
-
 /**
  * Delete one audit log.
  */
-public function destroy(Request $request, $id)
-{
-    $user = $request->user();
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
 
-    abort_unless($user, 401, 'Unauthenticated.');
+        abort_unless($user, 401, 'Unauthenticated.');
 
-    $log = $this->applyAccessScope(
-        AuditLog::query(),
-        $user
-    )->whereKey($id)->first();
+        $log = $this->applyAccessScope(
+            AuditLog::query(),
+            $user
+        )->whereKey($id)->first();
 
-    if (!$log) {
+        if (! $log) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Audit log not found or access denied.',
+            ], 404);
+        }
+
+        $log->delete();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Audit log not found or access denied.',
-        ], 404);
+            'success' => true,
+            'message' => 'Audit log deleted successfully.',
+        ]);
     }
-
-    $log->delete();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Audit log deleted successfully.',
-    ]);
-}
 
 /**
  * Delete multiple audit logs.
  */
-public function bulkDestroy(Request $request)
-{
-    $user = $request->user();
+    public function bulkDestroy(Request $request)
+    {
+        $user = $request->user();
 
-    abort_unless($user, 401, 'Unauthenticated.');
+        abort_unless($user, 401, 'Unauthenticated.');
 
-    $validated = $request->validate([
-        'ids' => ['required', 'array', 'min:1'],
-        'ids.*' => ['required', 'integer', 'distinct'],
-    ]);
+        $validated = $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct'],
+        ]);
 
-    $query = $this->applyAccessScope(
-        AuditLog::query(),
-        $user
-    );
+        $query = $this->applyAccessScope(
+            AuditLog::query(),
+            $user
+        );
 
-    $deletedCount = $query
-        ->whereIn('id', $validated['ids'])
-        ->delete();
+        $deletedCount = $query
+            ->whereIn('id', $validated['ids'])
+            ->delete();
 
-    return response()->json([
-        'success' => true,
-        'message' => "{$deletedCount} audit log(s) deleted successfully.",
-        'deleted_count' => $deletedCount,
-    ]);
-}
-
-
+        return response()->json([
+            'success' => true,
+            'message' => "{$deletedCount} audit log(s) deleted successfully.",
+            'deleted_count' => $deletedCount,
+        ]);
+    }
 
 }

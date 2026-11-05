@@ -2,247 +2,252 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
-use Illuminate\Http\JsonResponse;
+use App\Models\User;
+use App\Models\Bot;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AdminClientController extends Controller
 {
-
+    /**
+     * Fetch all users with optional business profile details.
+     * Existing route remains /clients.
+     */
     public function index(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'status' => [
-                'sometimes',
-                'nullable',
-                Rule::in(['active', 'inactive', 'suspended']),
-            ],
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Tenant::query();
+        // Start from users so users without a business profile are included.
+        $query = User::query()->with('businessProfile');
 
-        if (!empty($validated['search'])) {
-            $search = trim($validated['search']);
+        if ($request->filled('search')) {
+            $search = trim($request->input('search'));
 
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('slug', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%");
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('role', 'like', "%{$search}%")
+                    ->orWhere('status', 'like', "%{$search}%")
+                    ->orWhere('onboarding_step', 'like', "%{$search}%")
+                    ->orWhereHas('businessProfile', function ($business) use ($search) {
+                        $business->where('business_name', 'like', "%{$search}%")
+                            ->orWhere('business_type', 'like', "%{$search}%")
+                            ->orWhere('industry', 'like', "%{$search}%")
+                            ->orWhere('city', 'like', "%{$search}%")
+                            ->orWhere('country', 'like', "%{$search}%")
+                            ->orWhere('website', 'like', "%{$search}%")
+                            ->orWhere('gstin', 'like', "%{$search}%");
+                    });
             });
         }
 
-        if (!empty($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
+        $users = $query
+            ->orderByDesc('users.id')
+            ->paginate($request->integer('per_page', 10));
 
-        $clients = $query
-            ->withCount(['users', 'bots'])
-            ->latest()
-            ->get();
+        $users->getCollection()->transform(function (User $user) {
+            return $this->formatUser($user);
+        });
 
         return response()->json([
             'success' => true,
-            'message' => 'Clients fetched successfully.',
-            'data' => $clients->map(
-                fn (Tenant $client) => $this->formatClient($client)
-            )->values(),
+            'message' => 'Users fetched successfully.',
+            'data' => $users,
         ]);
     }
 
-
-    public function show(Tenant $client): JsonResponse
+    /**
+     * Show one user with business profile details.
+     */
+    public function show(User $client): JsonResponse
     {
-        $client->loadCount(['users', 'bots']);
+        $client->load('businessProfile');
 
         return response()->json([
             'success' => true,
-            'message' => 'Client fetched successfully.',
-            'data' => $this->formatClient($client),
+            'message' => 'User details fetched successfully.',
+            'data' => $this->formatUser($client),
         ]);
     }
 
-
+    /**
+     * Create a business profile for an existing user.
+     *
+     * The existing apiResource route still calls this method via POST /clients.
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => [
+            'user_id' => [
                 'required',
-                'string',
-                'min:2',
-                'max:255',
+                'integer',
+                'exists:users,id',
+                Rule::unique('business_profiles', 'user_id'),
             ],
-
-            'slug' => [
-                'nullable',
-                'string',
-                'max:255',
-                'alpha_dash',
-                'unique:tenants,slug',
-            ],
-
-            'email' => [
-                'nullable',
-                'email:rfc',
-                'max:255',
-                'unique:tenants,email',
-            ],
-
-            'mobile' => [
-                'nullable',
-                'regex:/^[6-9][0-9]{9}$/',
-                'unique:tenants,mobile',
-            ],
-
-            'status' => [
-                'sometimes',
-                'required',
-                Rule::in(['active', 'inactive', 'suspended']),
-            ],
+            'business_name' => ['required', 'string', 'max:190'],
+            'business_type' => ['nullable', 'string', 'max:100'],
+            'industry' => ['nullable', 'string', 'max:120'],
+            'country' => ['required', 'string', 'max:100'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'gstin' => ['nullable', 'string', 'max:30'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'address' => ['nullable', 'string'],
         ]);
 
-        $name = trim($validated['name']);
+        $profile = DB::transaction(function () use ($validated) {
+            return \App\Models\BusinessProfile::create([
+                'user_id' => $validated['user_id'],
+                'business_name' => $validated['business_name'],
+                'business_type' => $validated['business_type'] ?? null,
+                'industry' => $validated['industry'] ?? null,
+                'country' => $validated['country'],
+                'website' => $validated['website'] ?? null,
+                'gstin' => $validated['gstin'] ?? null,
+                'city' => $validated['city'] ?? null,
+                'address' => $validated['address'] ?? null,
+            ]);
+        });
 
-        if (mb_strlen($name) < 2) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Client name must contain at least 2 characters.',
-                'errors' => [
-                    'name' => ['Client name must contain at least 2 characters.'],
-                ],
-            ], 422);
-        }
-
-        $slugInput = trim((string) ($validated['slug'] ?? ''));
-
-        $originalSlug = Str::slug(
-            $slugInput !== '' ? $slugInput : $name
-        );
-
-        if ($originalSlug === '') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please provide a name that can generate a valid slug.',
-                'errors' => [
-                    'slug' => ['A valid slug could not be generated.'],
-                ],
-            ], 422);
-        }
-
-
-        $slug = $originalSlug;
-        $counter = 1;
-
-        while (Tenant::where('slug', $slug)->exists()) {
-            $slug = $originalSlug . '-' . $counter;
-            $counter++;
-        }
-
-        $client = Tenant::create([
-            'name' => $name,
-            'slug' => $slug,
-            'email' => $validated['email'] ?? null,
-            'mobile' => $validated['mobile'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
-
-        $client->loadCount(['users', 'bots']);
+        $user = User::with('businessProfile')->findOrFail($validated['user_id']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Client created successfully.',
-            'data' => $this->formatClient($client),
+            'message' => 'User business profile created successfully.',
+            'data' => $this->formatUser($user),
         ], 201);
     }
 
-
-    public function update(
-        Request $request,
-        Tenant $client
-    ): JsonResponse {
-
-        $input = $request->all();
-
-        if (isset($input['slug']) && is_string($input['slug'])) {
-            $input['slug'] = Str::slug(trim($input['slug']));
-        }
-
-        if (isset($input['name']) && is_string($input['name'])) {
-            $input['name'] = trim($input['name']);
-        }
-
-        $request->replace($input);
-
+    /**
+     * Update user information and/or business profile.
+     */
+    public function update(Request $request, User $client): JsonResponse
+    {
         $validated = $request->validate([
-            'name' => [
-                'sometimes',
-                'required',
-                'string',
-                'min:2',
-                'max:255',
-            ],
-
-            'slug' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:255',
-                'alpha_dash',
-                Rule::unique('tenants', 'slug')->ignore($client->id),
-            ],
-
+            // users table
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => [
                 'sometimes',
-                'nullable',
-                'email:rfc',
+                'required',
+                'email',
                 'max:255',
-                Rule::unique('tenants', 'email')->ignore($client->id),
+                Rule::unique('users', 'email')->ignore($client->id),
             ],
-
-            'mobile' => [
-                'sometimes',
-                'nullable',
-                'regex:/^[6-9][0-9]{9}$/',
-                Rule::unique('tenants', 'mobile')->ignore($client->id),
-            ],
-
+            'mobile' => ['sometimes', 'nullable', 'string', 'max:20'],
             'status' => [
                 'sometimes',
                 'required',
                 Rule::in(['active', 'inactive', 'suspended']),
             ],
+            'role' => ['sometimes', 'required', 'string', 'max:50'],
+            'role_id' => ['sometimes', 'nullable', 'integer'],
+
+            // business_profiles table
+            'business_name' => ['sometimes', 'required', 'string', 'max:190'],
+            'business_type' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'industry' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'country' => ['sometimes', 'required', 'string', 'max:100'],
+            'website' => ['sometimes', 'nullable', 'url', 'max:255'],
+            'gstin' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'city' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'address' => ['sometimes', 'nullable', 'string'],
         ]);
 
-        if (isset($validated['slug']) && $validated['slug'] === '') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Slug cannot be empty.',
-                'errors' => [
-                    'slug' => ['Slug cannot be empty.'],
-                ],
-            ], 422);
-        }
+        DB::transaction(function () use ($validated, $client) {
+            // Update users table.
+            $userFields = [
+                'name',
+                'email',
+                'mobile',
+                'status',
+                'role',
+                'role_id',
+            ];
 
-        $client->update($validated);
+            $userData = [];
 
-        $client->loadCount(['users', 'bots']);
+            foreach ($userFields as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $userData[$field] = $validated[$field];
+                }
+            }
+
+            if ($userData !== []) {
+                $client->update($userData);
+            }
+
+            // Update business profile only when one already exists.
+            $businessFields = [
+                'business_name',
+                'business_type',
+                'industry',
+                'country',
+                'website',
+                'gstin',
+                'city',
+                'address',
+            ];
+
+            $businessData = [];
+
+            foreach ($businessFields as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $businessData[$field] = $validated[$field];
+                }
+            }
+
+            if ($businessData !== []) {
+                $profile = $client->businessProfile()->first();
+
+                if (!$profile) {
+                    abort(422, 'This user does not have a business profile. Create the business profile first.');
+                }
+
+                $profile->update($businessData);
+            }
+        });
+
+        $client->refresh()->load('businessProfile');
 
         return response()->json([
             'success' => true,
-            'message' => 'Client updated successfully.',
-            'data' => $this->formatClient($client),
+            'message' => 'User updated successfully.',
+            'data' => $this->formatUser($client),
         ]);
     }
 
+    /**
+     * Delete a user account.
+     *
+     * This deletes the user, not just their business profile.
+     */
+    public function destroy(User $client): JsonResponse
+    {
+        DB::transaction(function () use ($client) {
+            // Delete the associated business profile first.
+            $client->businessProfile()->delete();
 
-    public function status(
-        Request $request,
-        Tenant $client
-    ): JsonResponse {
+            // Delete the user account.
+            $client->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Update user status.
+     * Matches the existing PATCH /clients/{client}/status route.
+     */
+    public function status(Request $request, User $client): JsonResponse
+    {
         $validated = $request->validate([
             'status' => [
                 'required',
@@ -254,53 +259,53 @@ class AdminClientController extends Controller
             'status' => $validated['status'],
         ]);
 
-        $client->loadCount(['users', 'bots']);
+        $client->load('businessProfile');
 
         return response()->json([
             'success' => true,
-            'message' => 'Client status updated successfully.',
-            'data' => $this->formatClient($client),
+            'message' => 'User status updated successfully.',
+            'data' => $this->formatUser($client),
         ]);
     }
 
-
-    public function destroy(Tenant $client): JsonResponse
+    /**
+     * Format the user and related business details.
+     */
+    private function formatUser(User $user): array
     {
+        $profile = $user->businessProfile;
 
-        if (
-            $client->users()->exists() ||
-            $client->bots()->exists()
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Client cannot be deleted because it has users or bots.',
-            ], 422);
-        }
-
-        $client->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Client deleted successfully.',
-        ]);
-    }
-
-
-    private function formatClient(Tenant $client): array
-    {
         return [
-            'id' => $client->id,
-            'name' => $client->name,
-            'slug' => $client->slug,
-            'email' => $client->email,
-            'mobile' => $client->mobile,
-            'status' => $client->status,
+            // User details
+            'id' => $user->id,
+            'user_id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'mobile' => $user->mobile,
+            'status' => $user->status,
+            'role' => $user->role,
+            'role_id' => $user->role_id,
+            'onboarding_step' => $user->onboarding_step,
+            'email_verified_at' => $user->email_verified_at,
+            'onboarding_completed_at' => $user->onboarding_completed_at,
 
-            'users_count' => (int) ($client->users_count ?? 0),
-            'bots_count' => (int) ($client->bots_count ?? 0),
+            // Business profile (nullable if not created yet)
+            'business_profile_id' => $profile?->id,
+            'business_name' => $profile?->business_name,
+            'business_type' => $profile?->business_type,
+            'industry' => $profile?->industry,
+            'country' => $profile?->country,
+            'website' => $profile?->website,
+            'gstin' => $profile?->gstin,
+            'city' => $profile?->city,
+            'address' => $profile?->address,
 
-            'created_at' => $client->created_at?->toISOString(),
-            'updated_at' => $client->updated_at?->toISOString(),
+            // Counts
+            'bots_count' => Bot::where('user_id', $user->id)->count(),
+            'has_business_profile' => $profile !== null,
+
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
         ];
     }
 }

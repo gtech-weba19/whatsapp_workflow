@@ -3,20 +3,74 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BotSession extends Model
 {
-    protected $fillable = ['workflow_id', 'channel', 'user_identifier', 'current_node_id', 'status', 'variables', 'last_message_at'];
+    protected $fillable = [
+        'user_id',
+        'workflow_id',
+        'whatsapp_account_id',
+        'channel',
+        'user_identifier',
+        'current_node_id',
+        'status',
+        'variables',
+        'last_message_at',
+    ];
 
-    protected $casts = ['variables' => 'array', 'last_message_at' => 'datetime'];
+    protected $casts = [
+        'user_id' => 'integer',
+        'workflow_id' => 'integer',
+        'whatsapp_account_id' => 'integer',
+        'variables' => 'array',
+        'last_message_at' => 'datetime',
+    ];
 
-    public function workflow()
+    /**
+     * User who owns this session.
+     */
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Workflow::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function messages()
+    /**
+     * Workflow associated with this session.
+     */
+    public function workflow(): BelongsTo
     {
-        return $this->hasMany(BotMessage::class);
+        return $this->belongsTo(Workflow::class, 'workflow_id');
+    }
+
+    /**
+     * WhatsApp account associated with this session.
+     */
+    public function whatsappAccount(): BelongsTo
+    {
+        return $this->belongsTo(
+            WhatsAppAccount::class,
+            'whatsapp_account_id'
+        );
+    }
+
+    /**
+     * Messages exchanged in this session.
+     */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(BotMessage::class, 'bot_session_id');
+    }
+
+    /**
+     * Executions associated with this session.
+     */
+    public function workflowExecutions(): HasMany
+    {
+        return $this->hasMany(
+            WorkflowExecution::class,
+            'bot_session_id'
+        );
     }
 }

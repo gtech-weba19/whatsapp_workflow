@@ -10,6 +10,8 @@ use App\Models\Workflow;
 use App\Models\WorkflowExecution;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\WhatsAppAccount;
+
 
 class WorkflowEngine
 {
@@ -17,6 +19,19 @@ class WorkflowEngine
         private WhatsAppService $whatsapp,
 
     ) {}
+
+
+
+    public function useWhatsAppAccount(
+    int $userId,
+    string $whatsappTo
+): void {
+    $this->whatsapp->useAccountForUser(
+        $userId,
+        $whatsappTo
+    );
+}
+
 /**
  * Send OTP for API node.
  */
@@ -1574,160 +1589,118 @@ private function replaceApiVariables(
     );
 }
 
-    public function findWorkflowByTrigger(string $message): ?Workflow
-    {
-        $message = mb_strtolower(
-            trim($message)
-        );
 
-        if ($message === '') {
-            return null;
-        }
+public function findWorkflowByTrigger(
+    string $message,
+    ?int $whatsappAccountId = null
+): ?Workflow {
 
-        $workflows = Workflow::query()
-            ->where('channel', 'whatsapp')
-            ->where('status', 'published')
-            ->get();
+    $message = mb_strtolower(trim($message));
 
-        foreach ($workflows as $workflow) {
 
-            $startNode = $workflow->nodes()
-                ->where('node_type', 'start')
-                ->first();
-
-            if (! $startNode) {
-                continue;
-            }
-
-            $cfg = $startNode->configuration ?? [];
-
-            if (is_string($cfg)) {
-
-                $decoded = json_decode(
-                    $cfg,
-                    true
-                );
-
-                if (
-                    json_last_error() === JSON_ERROR_NONE
-                    &&
-                    is_array($decoded)
-                ) {
-                    $cfg = $decoded;
-                }
-            }
-
-            if (! is_array($cfg)) {
-                continue;
-            }
-
-            $triggers = [];
-
-            if (
-                isset($cfg['triggerText'])
-                &&
-                ! is_array($cfg['triggerText'])
-            ) {
-                $triggers[] = $cfg['triggerText'];
-            }
-
-            if (
-                isset($cfg['trigger'])
-                &&
-                ! is_array($cfg['trigger'])
-            ) {
-                $triggers[] = $cfg['trigger'];
-            }
-
-            if (isset($cfg['triggers'])) {
-
-                if (is_array($cfg['triggers'])) {
-
-                    foreach ($cfg['triggers'] as $trigger) {
-                        $triggers[] = $trigger;
-                    }
-
-                } else {
-
-                    $triggers[] = $cfg['triggers'];
-                }
-            }
-
-            if (
-                isset($cfg['keyword'])
-                &&
-                ! is_array($cfg['keyword'])
-            ) {
-                $triggers[] = $cfg['keyword'];
-            }
-
-            if (isset($cfg['keywords'])) {
-
-                if (is_array($cfg['keywords'])) {
-
-                    foreach ($cfg['keywords'] as $trigger) {
-                        $triggers[] = $trigger;
-                    }
-
-                } else {
-
-                    $triggers[] = $cfg['keywords'];
-                }
-            }
-
-            $normalizedTriggers = [];
-
-            foreach ($triggers as $trigger) {
-
-                if (
-                    is_array($trigger)
-                    ||
-                    is_object($trigger)
-                ) {
-                    continue;
-                }
-
-                $trigger = mb_strtolower(
-                    trim((string) $trigger)
-                );
-
-                if ($trigger === '') {
-                    continue;
-                }
-
-                $normalizedTriggers[] = $trigger;
-            }
-
-            $normalizedTriggers = array_values(
-                array_unique(
-                    $normalizedTriggers
-                )
-            );
-
-            foreach ($normalizedTriggers as $trigger) {
-
-                if ($message === $trigger) {
-
-                    return $workflow;
-                }
-            }
-        }
-
+    if ($message === '' || $whatsappAccountId === null) {
         return null;
     }
 
-    public function findActiveSession(string $user): ?BotSession
-    {
-        return BotSession::query()
-            ->where('channel', 'whatsapp')
-            ->where('user_identifier', $user)
-            ->whereIn('status', [
-                'active',
-                'waiting',
-            ])
-            ->orderByDesc('id')
-            ->first();
+    $workflows = Workflow::query()
+        ->where('channel', 'whatsapp')
+        ->where('status', 'published')
+        ->where('whatsapp_account_id', $whatsappAccountId)
+        ->with(['nodes' => function ($query) {
+            $query->where('node_type', 'start');
+        }])
+        ->get();
+
+
+
+    foreach ($workflows as $workflow) {
+
+        $startNode = $workflow->nodes->first();
+
+        if (!$startNode) {
+            Log::warning('WHATSAPP TRIGGER START NODE MISSING', [
+                'workflow_id' => $workflow->id,
+            ]);
+
+            continue;
+        }
+
+        $cfg = $startNode->configuration ?? [];
+
+        if (is_string($cfg)) {
+            $decoded = json_decode($cfg, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $cfg = $decoded;
+            }
+        }
+
+        if (!is_array($cfg)) {
+
+
+            continue;
+        }
+
+        $triggers = [];
+
+        foreach (
+            ['triggerText', 'trigger', 'keyword', 'triggers', 'keywords']
+            as $key
+        ) {
+            if (!array_key_exists($key, $cfg)) {
+                continue;
+            }
+
+            $value = $cfg[$key];
+
+            foreach (is_array($value) ? $value : [$value] as $trigger) {
+                if (is_scalar($trigger)) {
+                    $trigger = mb_strtolower(trim((string) $trigger));
+
+                    if ($trigger !== '') {
+                        $triggers[] = $trigger;
+                    }
+                }
+            }
+        }
+
+        $triggers = array_values(array_unique($triggers));
+
+
+
+        if (in_array($message, $triggers, true)) {
+
+
+            return $workflow;
+        }
     }
+
+    return null;
+}
+
+
+
+private function findActiveSession(
+    string $user,
+    ?int $whatsappAccountId = null
+): ?BotSession {
+
+    $query = BotSession::query()
+        ->where('channel', 'whatsapp')
+        ->where('user_identifier', $user)
+        ->whereIn('status', ['active', 'waiting']);
+
+    if ($whatsappAccountId !== null) {
+        $query->where(
+            'whatsapp_account_id',
+            $whatsappAccountId
+        );
+    } else {
+        $query->whereNull('whatsapp_account_id');
+    }
+
+    return $query->orderByDesc('id')->first();
+}
 
     private function getStartNode(Workflow $workflow)
     {
@@ -1736,138 +1709,179 @@ private function replaceApiVariables(
             ->first();
     }
 
-        public function handleIncoming(
-            string $user,
-            string $message,
-            array $incoming = []
-        ): ?BotSession {
+public function handleIncoming(
+    string $user,
+    string $message,
+    array $incoming = []
+): ?BotSession {
 
-            $user = trim($user);
-            $message = trim($message);
 
-            if ($user === '') {
-                return null;
-            }
+    $user = trim($user);
+    $message = trim($message);
 
-            $messageNormalized = mb_strtolower($message);
+    if ($user === '') {
+        return null;
+    }
 
-            /*
-            |--------------------------------------------------------------------------
-            | EXIT CURRENT JOURNEY
-            |--------------------------------------------------------------------------
-            */
+    // WhatsApp account ki database ID
+    $whatsappAccountId = isset($incoming['whatsapp_account_id'])
+        ? (int) $incoming['whatsapp_account_id']
+        : null;
 
-            $exitCommands = [
-                'exit',
-                'stop',
-                'cancel',
-                'quit',
-                'end',
-            ];
+    $messageNormalized = mb_strtolower($message);
 
-            if (in_array($messageNormalized, $exitCommands, true)) {
 
-                $session = $this->findActiveSession($user);
 
-                if ($session) {
+    /*
+    |--------------------------------------------------------------------------
+    | EXIT CURRENT JOURNEY
+    |--------------------------------------------------------------------------
+    */
 
-                    $session->update([
-                        'status' => 'completed',
-                        'current_node_id' => null,
-                        'last_message_at' => now(),
-                    ]);
+    $exitCommands = [
+        'exit',
+        'stop',
+        'cancel',
+        'quit',
+        'end',
+    ];
 
-                    $session->refresh();
+    if (in_array($messageNormalized, $exitCommands, true)) {
 
-                    $exitMessage =
-                        'You have exited the current journey. You can start again anytime.';
+        $session = $this->findActiveSession(
+            $user,
+            $whatsappAccountId
+        );
 
-                    $output = $this->whatsapp->sendText(
-                        $user,
-                        $exitMessage
-                    );
+        if ($session) {
+
+            $session->update([
+                'status' => 'completed',
+                'current_node_id' => null,
+                'last_message_at' => now(),
+            ]);
+
+            $session->refresh();
+
+            $exitMessage =
+                'You have exited the current journey. You can start again anytime.';
+
+            $output = $this->whatsapp->sendText(
+                $user,
+                $exitMessage
+            );
+
+            $this->saveOutbound(
+                $session,
+                'text',
+                $exitMessage,
+                $output
+            );
+
+            return $session;
+        }
+
+        return null;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DETECT MENU OPTION HANDLE
+    |--------------------------------------------------------------------------
+    |
+    | Example:
+    | source-option-0
+    | source-option-1
+    | source-option-2
+
+    |
+    */
+
+    $sourceHandle = trim(
+        (string) ($incoming['source_handle'] ?? '')
+    );
+
+    $isMenuOptionHandle =
+        preg_match('/^source-option-\d+$/i', $message) === 1
+        || preg_match('/^source-option-\d+$/i', $sourceHandle) === 1;
+
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIND EXISTING ACTIVE SESSION
+    |--------------------------------------------------------------------------
+    */
+
+    $existingSession = $this->findActiveSession(
+        $user,
+        $whatsappAccountId
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK NEW TRIGGER
+    |--------------------------------------------------------------------------
+    |
+    | Menu option ko trigger search mein nahi bhejna.
+    | Normal text trigger se journey switch ho sakti hai.
+    |
+    */
+
+    $triggerWorkflow = null;
+
+    if (!$isMenuOptionHandle) {
+
+        $triggerWorkflow = $this->findWorkflowByTrigger(
+            $message,
+            $whatsappAccountId
+        );
+    }
+
+    if ($triggerWorkflow) {
+
+
+        if (
+            $existingSession
+            && (int) $existingSession->workflow_id
+                === (int) $triggerWorkflow->id
+        ) {
+
+            $startNode = $triggerWorkflow->nodes()
+            ->where('node_type', 'start')
+            ->first();
+
+
+
+              $exitMessage = 'You have exited the current journey.';
+
+                    $exitResponse = $this->whatsapp->sendText(
+                    $existingSession->user_identifier,
+                    $exitMessage
+                );
 
                     $this->saveOutbound(
-                        $session,
-                        'text',
-                        $exitMessage,
-                        $output
-                    );
+            $existingSession,
+            'text',
+            $exitMessage,
+            $exitResponse
+        );
 
-                    return $session;
-                }
+         $existingSession->update([
+            'status' => 'completed',
+            'last_message_at' => now(),
+        ]);
 
-                return null;
-            }
+            return $existingSession;
+        }
 
-            /*
-            |--------------------------------------------------------------------------
-            | IMPORTANT:
-            | CHECK NEW TRIGGER FIRST
-            |--------------------------------------------------------------------------
-            |
-            | If user is already inside Journey A and sends the trigger
-            | of Journey B, Journey B must win.
-            |
-            */
+        /*
+        |--------------------------------------------------------------------------
+        | COMPLETE OLD JOURNEY
+        |--------------------------------------------------------------------------
+        */
 
-            $triggerWorkflow = $this->findWorkflowByTrigger($message);
-
-            if ($triggerWorkflow) {
-
-                $existingSession = $this->findActiveSession($user);
-
-                /*
-                |--------------------------------------------------------------------------
-                | SAME JOURNEY TRIGGER
-                |--------------------------------------------------------------------------
-                |
-                | If the same journey trigger is received again,
-                | do not create another session.
-                |
-                */
-
-                if (
-                    $existingSession
-                    &&
-                    (int) $existingSession->workflow_id ===
-                    (int) $triggerWorkflow->id
-                ) {
-
-                    Log::info(
-                        'WHATSAPP TRIGGER SAME JOURNEY',
-                        [
-                            'user' => $user,
-                            'workflow_id' => $triggerWorkflow->id,
-                            'session_id' => $existingSession->id,
-                            'message' => $message,
-                        ]
-                    );
-
-                    return $existingSession;
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | DIFFERENT JOURNEY TRIGGER
-                |--------------------------------------------------------------------------
-                |
-                | Close old journey first.
-                |
-                */
-
-                if ($existingSession) {
-
-                    Log::info(
-                        'WHATSAPP JOURNEY SWITCH',
-                        [
-                            'user' => $user,
-                            'old_session_id' => $existingSession->id,
-            'old_workflow_id' => $existingSession->workflow_id,
-            'new_workflow_id' => $triggerWorkflow->id,
-            'trigger' => $message,
-        ]
-                    );
+        if ($existingSession) {
 
             $existingSession->update([
                 'status' => 'completed',
@@ -1891,168 +1905,114 @@ private function replaceApiVariables(
 
     /*
     |--------------------------------------------------------------------------
-    | FIND EXISTING ACTIVE SESSION
+    | NO ACTIVE SESSION
     |--------------------------------------------------------------------------
     */
 
-    $existingSession = $this->findActiveSession($user);
-
-    if ($existingSession) {
+   if (!$existingSession) {
 
 
+    $invalidMessage =
+        'Invalid Input';
 
-        $existingSession->refresh();
+    try {
+        $output = $this->whatsapp->sendText(
+            $user,
+            $invalidMessage
+        );
 
-        $workflow = Workflow::query()
-            ->where('id', $existingSession->workflow_id)
-            ->where('channel', 'whatsapp')
-            ->where('status', 'published')
-            ->first();
 
-        if (! $workflow) {
+    } catch (\Throwable $e) {
 
-            Log::warning(
-                'WHATSAPP ACTIVE SESSION WORKFLOW NOT FOUND',
-                [
-                    'user' => $user,
-                    'session_id' => $existingSession->id,
-                    'workflow_id' => $existingSession->workflow_id,
-                ]
-            );
+        Log::error('WHATSAPP INVALID INPUT REPLY FAILED', [
+            'user' => $user,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'message' => $message,
+            'error' => $e->getMessage(),
+        ]);
+    }
 
-            $existingSession->update([
-                'status' => 'completed',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
+    return null;
+}
+    /*
+    |--------------------------------------------------------------------------
+    | LOAD CURRENT WORKFLOW
+    |--------------------------------------------------------------------------
+    */
 
-            return null;
-        }
+    $workflow = Workflow::query()
+        ->where('id', $existingSession->workflow_id)
+        ->where('channel', 'whatsapp')
+        ->where('status', 'published')
+        ->where('whatsapp_account_id', $whatsappAccountId)
+        ->first();
 
-        /*
-        |--------------------------------------------------------------------------
-        | CURRENT NODE
-        |--------------------------------------------------------------------------
-        */
+    if (!$workflow) {
 
-        $currentNodeId =
-            $existingSession->current_node_id;
-
-        /*
-        |--------------------------------------------------------------------------
-        | NO CURRENT NODE
-        |--------------------------------------------------------------------------
-        */
-
-        if (! $currentNodeId) {
-
-            $startNode =
-                $this->getStartNode($workflow);
-
-            if (! $startNode) {
-
-                Log::warning(
-                    'WHATSAPP START NODE NOT FOUND',
-                    [
-                        'user' => $user,
-                        'workflow_id' => $workflow->id,
-                        'session_id' => $existingSession->id,
-                    ]
-                );
-
-                return $existingSession;
-            }
-
-            $existingSession->update([
-                'current_node_id' => $startNode->node_id,
-                'status' => 'active',
-                'last_message_at' => now(),
-            ]);
-
-            $existingSession->refresh();
-
-            $this->execute(
-                $workflow,
-                $existingSession,
-                (string) $startNode->node_id,
-                []
-            );
-
-            $existingSession->refresh();
-
-            return $existingSession;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | VERIFY CURRENT NODE STILL EXISTS
-        |--------------------------------------------------------------------------
-        */
-
-        $currentNodeExists =
-            $workflow->nodes()
-                ->where(
-                    'node_id',
-                    $currentNodeId
-                )
-                ->exists();
-
-        if (! $currentNodeExists) {
-
-            Log::warning(
-                'WHATSAPP CURRENT NODE NOT FOUND',
-                [
-                    'user' => $user,
-                    'workflow_id' => $workflow->id,
-                    'session_id' => $existingSession->id,
-                    'current_node_id' => $currentNodeId,
-                ]
-            );
-
-            $existingSession->update([
-                'status' => 'completed',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
-
-            return $existingSession;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | PREPARE NODE INPUT
-        |--------------------------------------------------------------------------
-        */
-
-        $nodeInput = $incoming;
-
-        $nodeInput['text'] = $message;
-
-        /*
-        |--------------------------------------------------------------------------
-        | EXECUTE CURRENT NODE
-        |--------------------------------------------------------------------------
-        */
-
-        Log::info(
-            'WHATSAPP EXECUTE CURRENT NODE',
+        Log::warning(
+            'WHATSAPP SESSION WORKFLOW NOT FOUND FOR ACCOUNT',
             [
+                'session_id' => $existingSession->id,
+                'workflow_id' => $existingSession->workflow_id,
+                'whatsapp_account_id' => $whatsappAccountId,
+            ]
+        );
+
+        return null;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REFRESH SESSION
+    |--------------------------------------------------------------------------
+    */
+
+    $existingSession->refresh();
+
+    /*
+    |--------------------------------------------------------------------------
+    | CURRENT NODE
+    |--------------------------------------------------------------------------
+    */
+
+    $currentNodeId = $existingSession->current_node_id;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | NO CURRENT NODE
+    |--------------------------------------------------------------------------
+    */
+
+    if (!$currentNodeId) {
+
+        $startNode = $this->getStartNode($workflow);
+
+
+        if (!$startNode) {
+
+            Log::warning('WHATSAPP START NODE NOT FOUND', [
                 'user' => $user,
                 'workflow_id' => $workflow->id,
                 'session_id' => $existingSession->id,
-                'current_node_id' => $currentNodeId,
-                'message' => $message,
-                'message_type' => $incoming['message_type'] ?? null,
-                'external_message_id' =>
-                    $incoming['external_message_id'] ?? null,
-            ]
-        );
+            ]);
+
+            return $existingSession;
+        }
+
+        $existingSession->update([
+            'current_node_id' => $startNode->node_id,
+            'status' => 'active',
+            'last_message_at' => now(),
+        ]);
+
+        $existingSession->refresh();
 
         $this->execute(
             $workflow,
             $existingSession,
-            (string) $currentNodeId,
-            $nodeInput
+            (string) $startNode->node_id,
+            []
         );
 
         $existingSession->refresh();
@@ -2062,516 +2022,484 @@ private function replaceApiVariables(
 
     /*
     |--------------------------------------------------------------------------
-    | NO ACTIVE SESSION + NO TRIGGER
+    | VERIFY CURRENT NODE EXISTS
     |--------------------------------------------------------------------------
     */
 
-    Log::info(
-        'WHATSAPP NO ACTIVE JOURNEY',
-        [
+    $currentNodeExists = $workflow->nodes()
+        ->where('node_id', $currentNodeId)
+        ->exists();
+
+    if (!$currentNodeExists) {
+
+        Log::warning('WHATSAPP CURRENT NODE NOT FOUND', [
             'user' => $user,
-            'message' => $message,
-        ]
+            'workflow_id' => $workflow->id,
+            'session_id' => $existingSession->id,
+            'current_node_id' => $currentNodeId,
+        ]);
+
+        $existingSession->update([
+            'status' => 'completed',
+            'current_node_id' => null,
+            'last_message_at' => now(),
+        ]);
+
+        return $existingSession;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PREPARE NODE INPUT
+    |--------------------------------------------------------------------------
+    */
+
+    $nodeInput = $incoming;
+
+    $nodeInput['text'] = $message;
+
+    // Explicitly preserve the menu/button source handle.
+    if ($sourceHandle !== '') {
+        $nodeInput['source_handle'] = $sourceHandle;
+    }
+
+
+
+    $this->execute(
+        $workflow,
+        $existingSession,
+        (string) $currentNodeId,
+        $nodeInput
     );
 
-    return null;
+    $existingSession->refresh();
+
+    return $existingSession;
 }
 
-    public function start(
-        Workflow $workflow,
-        string $user,
-        array $incoming = []
-    ): BotSession {
 
-        $existingSession = $this->findActiveSession($user);
+public function start(
+    Workflow $workflow,
+    string $user,
+    array $incoming = []
+): BotSession {
 
-        if ($existingSession) {
+    // WhatsApp account ki database ID
+    $whatsappAccountId = $incoming['whatsapp_account_id'] ?? null;
 
-            return $existingSession;
-        }
+    // Workflow ka owner aur assigned Bot
+    $ownerId = $workflow->user_id;
+    $botId = $workflow->bot_id;
 
-        $session = BotSession::query()
-            ->where('channel', 'whatsapp')
-            ->where('user_identifier', $user)
-            ->where('workflow_id', $workflow->id)
-            ->orderByDesc('id')
-            ->first();
+    // Active session check karein
+    $existingSession = $this->findActiveSession(
+        $user,
+        $whatsappAccountId
+    );
 
-        if (! $session) {
+    // Sirf same workflow ki session return karein
+    if (
+        $existingSession &&
+        (int) $existingSession->workflow_id === (int) $workflow->id
+    ) {
+        $existingSession->update([
+            'user_id' => $ownerId,
+            'bot_id' => $botId,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'last_message_at' => now(),
+        ]);
 
-            $session = BotSession::create([
-                'channel' => 'whatsapp',
-                'user_identifier' => $user,
-                'workflow_id' => $workflow->id,
-                'variables' => [],
-                'status' => 'active',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
+        return $existingSession->refresh();
+    }
 
-        } else {
+    // Same account + customer + workflow ki session find karein
+    $sessionQuery = BotSession::query()
+        ->where('channel', 'whatsapp')
+        ->where('user_identifier', $user)
+        ->where('workflow_id', $workflow->id);
 
-            $session->update([
-                'workflow_id' => $workflow->id,
-                'variables' => [],
-                'status' => 'active',
-                'current_node_id' => null,
-                'last_message_at' => now(),
-            ]);
-        }
-
-        $startNode = $this->getStartNode($workflow);
-
-        if (! $startNode) {
-
-            return $session;
-        }
-
-        $this->execute(
-            $workflow,
-            $session,
-            (string) $startNode->node_id,
-            []
+    if ($whatsappAccountId !== null) {
+        $sessionQuery->where(
+            'whatsapp_account_id',
+            $whatsappAccountId
         );
+    } else {
+        $sessionQuery->whereNull('whatsapp_account_id');
+    }
 
-        $session->refresh();
+    $session = $sessionQuery
+        ->orderByDesc('id')
+        ->first();
 
+    if (! $session) {
+        // New session create karein
+        $session = BotSession::create([
+            'user_id' => $ownerId,
+            'bot_id' => $botId,
+            'workflow_id' => $workflow->id,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'channel' => 'whatsapp',
+            'user_identifier' => $user,
+            'variables' => [],
+            'status' => 'active',
+            'current_node_id' => null,
+            'last_message_at' => now(),
+        ]);
+    } else {
+        // Existing session update/reset karein
+        $session->update([
+            'user_id' => $ownerId,
+            'bot_id' => $botId,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'workflow_id' => $workflow->id,
+            'variables' => [],
+            'status' => 'active',
+            'current_node_id' => null,
+            'last_message_at' => now(),
+        ]);
+    }
+
+    $startNode = $this->getStartNode($workflow);
+
+    if (! $startNode) {
         return $session;
     }
 
-        public function execute(
-            Workflow $workflow,
-            BotSession $session,
-            string $nodeId,
-            array $input = []
-        ): void {
+    $this->execute(
+        $workflow,
+        $session,
+        (string) $startNode->node_id,
+        []
+    );
 
-            $node = $workflow->nodes()
-                ->where('node_id', $nodeId)
-                ->first();
+    return $session->refresh();
+}
 
-            if (! $node) {
+
+public function execute(
+    Workflow $workflow,
+    BotSession $session,
+    string $nodeId,
+    array $input = []
+): void {
+    $node = $workflow->nodes()
+        ->where('node_id', $nodeId)
+        ->first();
+
+    if (! $node) {
+
+        return;
+    }
+
+    // Workflow owner
+    $userId = $workflow->user_id ?? null;
+
+    // Bot linked to workflow
+    $botId = $workflow->bot_id ?? null;
+
+    $whatsappAccountId = $workflow->whatsapp_account_id ?? null;
+
+    if (!$whatsappAccountId && $userId) {
+        $whatsappAccountId = WhatsAppAccount::where('user_id', $userId)
+            ->value('id');
+    }
+
+    $log = WorkflowExecution::create([
+        'workflow_id' => $workflow->id,
+        'bot_session_id' => $session->id,
+
+        'user_id' => $userId,
+        'bot_id' => $botId,
+        'whatsapp_account_id' => $whatsappAccountId,
+
+        'node_id' => $nodeId,
+        'input_payload' => $input,
+        'started_at' => now(),
+    ]);
+
+
+    try {
+
+        $cfg = $node->configuration ?? [];
+
+        if (is_string($cfg)) {
+
+            $decoded = json_decode(
+                $cfg,
+                true
+            );
+
+            if (
+                json_last_error() === JSON_ERROR_NONE
+                &&
+                is_array($decoded)
+            ) {
+                $cfg = $decoded;
+            }
+        }
+
+        if (! is_array($cfg)) {
+            $cfg = [];
+        }
+
+        $type = $node->node_type;
+
+        $output = [];
+
+        if ($type === 'start') {
+
+            $startMessage = trim(
+                (string) (
+                    $cfg['message']
+                    ??
+                    $cfg['startMessage']
+                    ??
+                    $cfg['start_message']
+                    ??
+                    $cfg['text']
+                    ??
+                    ''
+                )
+            );
+
+            if ($startMessage !== '') {
+
+                $startMessage = $this->resolve(
+                    $startMessage,
+                    $session->variables ?? []
+                );
+
+                $output = $this->whatsapp->sendText(
+                    $session->user_identifier,
+                    $startMessage
+                );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $startMessage,
+                    $output
+                );
+            }
+
+            $next = $this->nextNode(
+                $workflow,
+                $nodeId
+            );
+
+            if ($next) {
+
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next
+                );
+
+            } else {
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'completed',
+                    'last_message_at' => now(),
+                ]);
+            }
+        } elseif ($type === 'message') {
+
+            $text = $this->resolve(
+                (string) (
+                    $cfg['message']
+                    ??
+                    $cfg['text']
+                    ??
+                    ''
+                ),
+                $session->variables ?? []
+            );
+
+            if ($text !== '') {
+
+                $output = $this->whatsapp->sendText(
+                    $session->user_identifier,
+                    $text
+                );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $text,
+                    $output
+                );
+            }
+
+            $next = $this->nextNode(
+                $workflow,
+                $nodeId
+            );
+
+            if ($next) {
+
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next
+                );
+            }
+        } elseif ($type === 'menu') {
+
+
+            if (! empty($input['source_handle'])) {
+
+                $sourceHandle =
+                    (string) $input['source_handle'];
+
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId,
+                    $sourceHandle
+                );
+
+                Log::info('Exe_sourceHandle'.$sourceHandle);
+
+                Log::info('Exe_next'.$next);
+
+                $variable =
+                    $cfg['variable'] ?? null;
+
+
+                if ($variable) {
+
+                    $selectedLabel =
+                        $this->getMenuOptionLabel(
+                            $cfg,
+                            $sourceHandle,
+                            $input
+                        );
+
+                    if (
+                        $selectedLabel !== null
+                        &&
+                        trim((string) $selectedLabel) !== ''
+                    ) {
+
+                        $variables =
+                            $session->variables ?? [];
+
+                        $variables[$variable] =
+                            trim(
+                                (string) $selectedLabel
+                            );
+
+                        $session->update([
+                            'variables' => $variables,
+                            'status' => 'active',
+                            'last_message_at' => now(),
+                        ]);
+
+                        $session->refresh();
+                    }
+                }
+
+                if ($next) {
+
+                    $this->goToNode(
+                        $workflow,
+                        $session,
+                        $next
+                    );
+
+                    return;
+                }
+
+                $validationMessage =
+                    $cfg['validation_message']
+                    ??
+                    $cfg['validationMessage']
+                    ??
+                    '⚠️ This option is not available right now. Please select another option.';
+
+                $validationMessage =
+                    $this->resolve(
+                        (string) $validationMessage,
+                        $session->variables ?? []
+                    );
+
+                $output =
+                    $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $validationMessage
+                    );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $validationMessage,
+                    $output
+                );
+
+                $this->sendMenu(
+                    $session,
+                    $cfg
+                );
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'waiting',
+                    'last_message_at' => now(),
+                ]);
 
                 return;
             }
 
-            $log = WorkflowExecution::create([
-                'workflow_id' => $workflow->id,
-                'bot_session_id' => $session->id,
-                'node_id' => $nodeId,
-                'input_payload' => $input,
-                'started_at' => now(),
-            ]);
+            if (array_key_exists('text', $input)) {
 
-            try {
-
-                $cfg = $node->configuration ?? [];
-
-                if (is_string($cfg)) {
-
-                    $decoded = json_decode(
-                        $cfg,
-                        true
-                    );
-
-                    if (
-                        json_last_error() === JSON_ERROR_NONE
-                        &&
-                        is_array($decoded)
-                    ) {
-                        $cfg = $decoded;
-                    }
-                }
-
-                if (! is_array($cfg)) {
-                    $cfg = [];
-                }
-
-                $type = $node->node_type;
-
-                $output = [];
-
-                if ($type === 'start') {
-
-                    $startMessage = trim(
+                $typedText =
+                    trim(
                         (string) (
-                            $cfg['message']
-                            ??
-                            $cfg['startMessage']
-                            ??
-                            $cfg['start_message']
-                            ??
-                            $cfg['text']
-                            ??
-                            ''
+                            $input['text'] ?? ''
                         )
                     );
 
-                    if ($startMessage !== '') {
-
-                        $startMessage = $this->resolve(
-                            $startMessage,
-                            $session->variables ?? []
-                        );
-
-                        $output = $this->whatsapp->sendText(
-                            $session->user_identifier,
-                            $startMessage
-                        );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $startMessage,
-                            $output
-                        );
-                    }
-
-                    $next = $this->nextNode(
-                        $workflow,
-                        $nodeId
+                $matchedOption =
+                    $this->findMenuOptionByText(
+                        $cfg,
+                        $typedText
                     );
 
-                    if ($next) {
+                if ($matchedOption !== null) {
 
-                        $this->goToNode(
-                            $workflow,
-                            $session,
-                            $next
-                        );
+                    $sourceHandle =
+                        $matchedOption['source_handle'];
 
-                    } else {
+                    $selectedLabel =
+                        $matchedOption['label'];
+
+                    $variable =
+                        $cfg['variable'] ?? null;
+
+                    if ($variable) {
+
+                        $variables =
+                            $session->variables ?? [];
+
+                        $variables[$variable] =
+                            $selectedLabel;
 
                         $session->update([
-                            'current_node_id' => $nodeId,
-                            'status' => 'completed',
+                            'variables' => $variables,
+                            'status' => 'active',
                             'last_message_at' => now(),
                         ]);
-                    }
-                } elseif ($type === 'message') {
 
-                    $text = $this->resolve(
-                        (string) (
-                            $cfg['message']
-                            ??
-                            $cfg['text']
-                            ??
-                            ''
-                        ),
-                        $session->variables ?? []
-                    );
-
-                    if ($text !== '') {
-
-                        $output = $this->whatsapp->sendText(
-                            $session->user_identifier,
-                            $text
-                        );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $text,
-                            $output
-                        );
+                        $session->refresh();
                     }
 
-                    $next = $this->nextNode(
-                        $workflow,
-                        $nodeId
-                    );
-
-                    if ($next) {
-
-                        $this->goToNode(
-                            $workflow,
-                            $session,
-                            $next
-                        );
-                    }
-                } elseif ($type === 'menu') {
-
-                    if (! empty($input['source_handle'])) {
-
-                        $sourceHandle =
-                            (string) $input['source_handle'];
-
-                        $next = $this->nextNode(
+                    $next =
+                        $this->nextNode(
                             $workflow,
                             $nodeId,
                             $sourceHandle
                         );
 
-                        $variable =
-                            $cfg['variable'] ?? null;
-
-                        if ($variable) {
-
-                            $selectedLabel =
-                                $this->getMenuOptionLabel(
-                                    $cfg,
-                                    $sourceHandle,
-                                    $input
-                                );
-
-                            if (
-                                $selectedLabel !== null
-                                &&
-                                trim((string) $selectedLabel) !== ''
-                            ) {
-
-                                $variables =
-                                    $session->variables ?? [];
-
-                                $variables[$variable] =
-                                    trim(
-                                        (string) $selectedLabel
-                                    );
-
-                                $session->update([
-                                    'variables' => $variables,
-                                    'status' => 'active',
-                                    'last_message_at' => now(),
-                                ]);
-
-                                $session->refresh();
-                            }
-                        }
-
-                        if ($next) {
-
-                            $this->goToNode(
-                                $workflow,
-                                $session,
-                                $next
-                            );
-
-                            return;
-                        }
-
-                        $validationMessage =
-                            $cfg['validation_message']
-                            ??
-                            $cfg['validationMessage']
-                            ??
-                            '⚠️ This option is not available right now. Please select another option.';
-
-                        $validationMessage =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
-
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $validationMessage
-                            );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $validationMessage,
-                            $output
-                        );
-
-                        $this->sendMenu(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' => $nodeId,
-                            'status' => 'waiting',
-                            'last_message_at' => now(),
-                        ]);
-
-                        return;
-                    }
-
-                    if (array_key_exists('text', $input)) {
-
-                        $typedText =
-                            trim(
-                                (string) (
-                                    $input['text'] ?? ''
-                                )
-                            );
-
-                        $matchedOption =
-                            $this->findMenuOptionByText(
-                                $cfg,
-                                $typedText
-                            );
-
-                        if ($matchedOption !== null) {
-
-                            $sourceHandle =
-                                $matchedOption['source_handle'];
-
-                            $selectedLabel =
-                                $matchedOption['label'];
-
-                            $variable =
-                                $cfg['variable'] ?? null;
-
-                            if ($variable) {
-
-                                $variables =
-                                    $session->variables ?? [];
-
-                                $variables[$variable] =
-                                    $selectedLabel;
-
-                                $session->update([
-                                    'variables' => $variables,
-                                    'status' => 'active',
-                                    'last_message_at' => now(),
-                                ]);
-
-                                $session->refresh();
-                            }
-
-                            $next =
-                                $this->nextNode(
-                                    $workflow,
-                                    $nodeId,
-                                    $sourceHandle
-                                );
-
-                            if ($next) {
-
-                                $this->goToNode(
-                                    $workflow,
-                                    $session,
-                                    $next
-                                );
-
-                                return;
-                            }
-                        }
-
-                        $validationMessage =
-                            $cfg['validation_message']
-                            ??
-                            $cfg['validationMessage']
-                            ??
-                            '⚠️ Please select one of the options above.';
-
-                        $validationMessage =
-                            $this->resolve(
-                                (string) $validationMessage,
-                                $session->variables ?? []
-                            );
-
-                        $output =
-                            $this->whatsapp->sendText(
-                                $session->user_identifier,
-                                $validationMessage
-                            );
-
-                        $this->saveOutbound(
-                            $session,
-                            'text',
-                            $validationMessage,
-                            $output
-                        );
-
-                        $this->sendMenu(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' => $nodeId,
-                            'status' => 'waiting',
-                            'last_message_at' => now(),
-                        ]);
-
-                        return;
-                    }
-
-                    $this->sendMenu(
-                        $session,
-                        $cfg
-                    );
-
-                    $session->update([
-                        'current_node_id' => $nodeId,
-                        'status' => 'waiting',
-                        'last_message_at' => now(),
-                    ]);
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | DOCUMENT / PDF
-                |--------------------------------------------------------------------------
-                */
-
-                elseif (
-                    $type === 'document'
-                    ||
-                    $type === 'pdf'
-                ) {
-
-                    $mediaUrl = $this->resolveMediaUrl(
-                        $cfg,
-                        $workflow
-                    );
-
-                    $filename = $cfg['filename']
-                        ?? $cfg['file_name']
-                        ?? $cfg['fileName']
-                        ?? $cfg['name']
-                        ?? '';
-
-                    $caption = $cfg['caption']
-                        ?? $cfg['message']
-                        ?? $cfg['text']
-                        ?? '';
-
-                    $mediaUrl = $this->resolve(
-                        (string) $mediaUrl,
-                        $session->variables ?? []
-                    );
-
-                    $filename = $this->resolve(
-                        (string) $filename,
-                        $session->variables ?? []
-                    );
-
-                    $caption = $this->resolve(
-                        (string) $caption,
-                        $session->variables ?? []
-                    );
-
-                    if ($mediaUrl === '') {
-
-                        throw new \RuntimeException(
-                            'Document/PDF media URL is empty.'
-                        );
-                    }
-
-                    $output = $this->whatsapp->sendDocument(
-                        $session->user_identifier,
-                        $mediaUrl,
-                        $filename,
-                        $caption
-                    );
-
-                    $this->saveOutbound(
-                        $session,
-                        'document',
-                        $caption !== '' ? $caption : $filename,
-                        $output
-                    );
-
-                    $next = $this->nextNode(
-                        $workflow,
-                        $nodeId
-                    );
-
                     if ($next) {
 
                         $this->goToNode(
@@ -2579,10 +2507,143 @@ private function replaceApiVariables(
                             $session,
                             $next
                         );
+
+                        return;
                     }
                 }
 
-                /*
+                $validationMessage =
+                    $cfg['validation_message']
+                    ??
+                    $cfg['validationMessage']
+                    ??
+                    '⚠️ Please select one of the options above.';
+
+                $validationMessage =
+                    $this->resolve(
+                        (string) $validationMessage,
+                        $session->variables ?? []
+                    );
+
+                $output =
+                    $this->whatsapp->sendText(
+                        $session->user_identifier,
+                        $validationMessage
+                    );
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $validationMessage,
+                    $output
+                );
+
+                $this->sendMenu(
+                    $session,
+                    $cfg
+                );
+
+                $session->update([
+                    'current_node_id' => $nodeId,
+                    'status' => 'waiting',
+                    'last_message_at' => now(),
+                ]);
+
+                return;
+            }
+
+            $this->sendMenu(
+                $session,
+                $cfg
+            );
+
+            $session->update([
+                'current_node_id' => $nodeId,
+                'status' => 'waiting',
+                'last_message_at' => now(),
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | DOCUMENT / PDF
+        |--------------------------------------------------------------------------
+        */
+
+        elseif (
+            $type === 'document'
+            ||
+            $type === 'pdf'
+        ) {
+
+            $mediaUrl = $this->resolveMediaUrl(
+                $cfg,
+                $workflow
+            );
+
+            $filename = $cfg['filename']
+                ?? $cfg['file_name']
+                ?? $cfg['fileName']
+                ?? $cfg['name']
+                ?? '';
+
+            $caption = $cfg['caption']
+                ?? $cfg['message']
+                ?? $cfg['text']
+                ?? '';
+
+            $mediaUrl = $this->resolve(
+                (string) $mediaUrl,
+                $session->variables ?? []
+            );
+
+            $filename = $this->resolve(
+                (string) $filename,
+                $session->variables ?? []
+            );
+
+            $caption = $this->resolve(
+                (string) $caption,
+                $session->variables ?? []
+            );
+
+            if ($mediaUrl === '') {
+
+                throw new \RuntimeException(
+                    'Document/PDF media URL is empty.'
+                );
+            }
+
+            $output = $this->whatsapp->sendDocument(
+                $session->user_identifier,
+                $mediaUrl,
+                $filename,
+                $caption
+            );
+
+            $this->saveOutbound(
+                $session,
+                'document',
+                $caption !== '' ? $caption : $filename,
+                $output
+            );
+
+            $next = $this->nextNode(
+                $workflow,
+                $nodeId
+            );
+
+            if ($next) {
+
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next
+                );
+            }
+        }
+
+        /*
                 |--------------------------------------------------------------------------
                 | AUDIO
                 |--------------------------------------------------------------------------
@@ -3092,35 +3153,12 @@ private function replaceApiVariables(
                     // =======================================================
 
 
-                   elseif ($type === 'media') {
+     elseif ($type === 'media') {
 
-    $cfg = $node->configuration ?? [];
+          $cfg = $node->configuration ?? [];
 
     // =======================================================
     // RAW NODE DEBUG
-    // =======================================================
-
-    Log::warning(
-        'MEDIA NODE RAW NODE DEBUG',
-        [
-            'node_id' =>
-                $node->id ?? null,
-
-            'node_type' =>
-                $node->node_type ?? null,
-
-            'raw_config' =>
-                $node->configuration ?? null,
-
-            'raw_attributes' =>
-                method_exists($node, 'getAttributes')
-                    ? $node->getAttributes()
-                    : null,
-        ]
-    );
-
-    // =======================================================
-    // DECODE CONFIGURATION
     // =======================================================
 
     if (is_string($cfg)) {
@@ -3173,9 +3211,7 @@ private function replaceApiVariables(
         $mediaType = 'document';
     }
 
-    // =======================================================
-    // MEDIA URL
-    // =======================================================
+
 
     $mediaUrl =
         $cfg['mediaUrl']
@@ -3410,62 +3446,7 @@ private function replaceApiVariables(
         3
     );
 
-    // =======================================================
-    // DEBUG LOG
-    // =======================================================
 
-    Log::info(
-        'MEDIA NODE EXECUTING',
-        [
-            'workflow_id' =>
-                $workflow->id ?? null,
-
-            'node_id' =>
-                $node->id ?? null,
-
-            'node_type' =>
-                $node->node_type ?? null,
-
-            'type_variable' =>
-                $type,
-
-            'media_type' =>
-                $mediaType,
-
-            'media_url' =>
-                $mediaUrl,
-
-            'media_id' =>
-                $mediaId,
-
-            'media_name' =>
-                $mediaName,
-
-            'media_mime_type' =>
-                $mediaMimeType,
-
-            'file_name' =>
-                $fileName,
-
-            'caption' =>
-                $caption,
-
-            'body' =>
-                $body,
-
-            'footer' =>
-                $footer,
-
-            'buttons' =>
-                $buttons,
-
-            'buttons_count' =>
-                count($buttons),
-
-            'config' =>
-                $cfg,
-        ]
-    );
 
     // =======================================================
     // ALLOWED MEDIA TYPES
@@ -3609,274 +3590,379 @@ private function replaceApiVariables(
     // SEND MEDIA
     // =======================================================
 
-    try {
-
-        $response = [
-            'success' => false,
-            'error' =>
-                'Media send was not executed.',
-        ];
-
-        // ===================================================
-        // AUDIO
-        // ===================================================
-
-        if ($mediaType === 'audio') {
-
-            $response =
-                $this->whatsapp->sendAudio(
-                    $session->user_identifier,
-                    $mediaUrl
-                );
-        }
-
-        // ===================================================
-        // IMAGE / VIDEO / DOCUMENT WITH BUTTONS
-        // ===================================================
-
-
-elseif (
-    !empty($buttons)
-    &&
-    in_array(
-        $mediaType,
-        [
-            'image',
-            'video',
-            'document',
-        ],
-        true
-    )
-) {
-
-    Log::info('MEDIA BUTTON DEBUG', [
-        'mediaType' => $mediaType,
-        'mediaUrl' => $mediaUrl,
-        'body' => $body,
-        'footer' => $footer,
-        'fileName' => $fileName,
-        'buttons' => $buttons,
-        'buttons_count' => count($buttons),
-    ]);
-
-    $response =
-        $this->whatsapp->sendInteractiveWithMedia(
-            $session->user_identifier,
-            $mediaType,
-            $mediaUrl,
-            $body,
-            $buttons,
-            $footer,
-            $fileName
-        );
-}
-
-        // ===================================================
-        // NORMAL IMAGE
-        // ===================================================
-
-        elseif ($mediaType === 'image') {
-
-            $response =
-                $this->whatsapp->sendImage(
-                    $session->user_identifier,
-                    $mediaUrl,
-                    $body
-                );
-        }
-
-        // ===================================================
-        // NORMAL DOCUMENT
-        // ===================================================
-
-        elseif ($mediaType === 'document') {
-
-            $response =
-                $this->whatsapp->sendDocument(
-                    $session->user_identifier,
-                    $mediaUrl,
-                    $fileName,
-                    $caption
-                );
-        }
-
-        // ===================================================
-        // NORMAL VIDEO
-        // ===================================================
-
-        elseif ($mediaType === 'video') {
-
-            $response =
-                $this->whatsapp->sendVideo(
-                    $session->user_identifier,
-                    $mediaUrl,
-                    $caption
-                );
-        }
-
-        // ===================================================
-        // NORMALIZE MEDIA RESPONSE
-        // ===================================================
-
-        if (!is_array($response)) {
-
-            $response = [
-                'success' => false,
-                'response' =>
-                    $response,
-            ];
-        }
-
-        // ===================================================
-        // IMPORTANT:
-        // DO NOT SEND $body AS SEPARATE TEXT MESSAGE
-        // ===================================================
-
-        Log::info(
-            'MEDIA BODY NOT SENT SEPARATELY',
-            [
-                'workflow_id' =>
-                    $workflow->id ?? null,
-
-                'node_id' =>
-                    $node->id ?? null,
-
-                'media_type' =>
-                    $mediaType,
-
-                'body' =>
-                    $body,
-
-                'caption' =>
-                    $caption,
-
-                'reason' =>
-                    'Body must not be sent as a separate WhatsApp message.',
-            ]
-        );
-
-        // ===================================================
-        // SAVE MEDIA OUTBOUND
-        // ===================================================
-
-        $this->saveOutbound(
-            $session,
-            $mediaType,
-            $mediaUrl,
-            $response
-        );
-
-        // ===================================================
-        // MEDIA SENT LOG
-        // ===================================================
-
-        Log::info(
-            'MEDIA NODE SENT',
-            [
-                'workflow_id' =>
-                    $workflow->id ?? null,
-
-                'node_id' =>
-                    $node->id ?? null,
-
-                'node_type' =>
-                    $node->node_type ?? null,
-
-                'media_type' =>
-                    $mediaType,
-
-                'media_url' =>
-                    $mediaUrl,
-
-                'media_id' =>
-                    $mediaId,
-
-                'file_name' =>
-                    $fileName,
-
-                'caption' =>
-                    $caption,
-
-                'body' =>
-                    $body,
-
-                'footer' =>
-                    $footer,
-
-                'buttons_count' =>
-                    count($buttons),
-
-                'response' =>
-                    $response,
-            ]
-        );
-
-        // ===================================================
-        // EXIT BUTTON
-        // ===================================================
-
-        $exitMessage =
-            'You can exit this journey anytime.';
-
         try {
+    // MEDIA CAPTION FALLBACK
+    $caption = trim((string) (
+        !empty($caption)
+            ? $caption
+            : ($body ?? '')
+    ));
 
-            $exitResponse =
-                $this->whatsapp->sendInteractive(
-                    $session->user_identifier,
-                    $exitMessage,
+
+                $response = [
+                    'success' => false,
+                    'error' =>
+                        'Media send was not executed.',
+                ];
+
+                // ===================================================
+                // AUDIO
+                // ===================================================
+
+                if ($mediaType === 'audio') {
+
+                    $response =
+                        $this->whatsapp->sendAudio(
+                            $session->user_identifier,
+                            $mediaUrl
+                        );
+                }
+
+                // ===================================================
+                // IMAGE / VIDEO / DOCUMENT WITH BUTTONS
+                // ===================================================
+
+
+                    elseif (
+                        !empty($buttons)
+                        &&
+                        in_array(
+                            $mediaType,
+                            [
+                                'image',
+                                'video',
+                                'document',
+                            ],
+                            true
+                        )
+                    ) {
+
+
+
+                        $response =
+                            $this->whatsapp->sendInteractiveWithMedia(
+                                $session->user_identifier,
+                                $mediaType,
+                                $mediaUrl,
+                                $caption,
+                                $buttons,
+                                $footer,
+                                $fileName
+                            );
+                    }
+
+                // ===================================================
+                // NORMAL IMAGE
+                // ===================================================
+
+                elseif ($mediaType === 'image') {
+
+                    $response =
+                        $this->whatsapp->sendImage(
+                            $session->user_identifier,
+                            $mediaUrl,
+                            $caption
+                        );
+                }
+
+                // ===================================================
+                // NORMAL DOCUMENT
+                // ===================================================
+
+                elseif ($mediaType === 'document') {
+
+                    $response =
+                        $this->whatsapp->sendDocument(
+                            $session->user_identifier,
+                            $mediaUrl,
+                            $fileName,
+                            $caption
+                        );
+                }
+
+                // ===================================================
+                // NORMAL VIDEO
+                // ===================================================
+
+                elseif ($mediaType === 'video') {
+
+                    $response =
+                        $this->whatsapp->sendVideo(
+                            $session->user_identifier,
+                            $mediaUrl,
+                            $caption
+                        );
+                }
+
+                // ===================================================
+                // NORMALIZE MEDIA RESPONSE
+                // ===================================================
+
+                if (!is_array($response)) {
+
+                    $response = [
+                        'success' => false,
+                        'response' =>
+                            $response,
+                    ];
+                }
+
+                // ===================================================
+                // SAVE MEDIA OUTBOUND
+                // ===================================================
+
+                $this->saveOutbound(
+                    $session,
+                    $mediaType,
+                    $mediaUrl,
+                    $response
+                );
+
+
+                // ===================================================
+                // EXIT BUTTON
+                // ===================================================
+
+                // $exitMessage =
+                //     'You can exit this journey anytime.';
+
+                // try {
+
+                //     $exitResponse =
+                //         $this->whatsapp->sendInteractive(
+                //             $session->user_identifier,
+                //             $exitMessage,
+                //             [
+                //                 [
+                //                     'id' =>
+                //                         'exit',
+
+                //                     'title' =>
+                //                         'Exit',
+                //                 ],
+                //             ]
+                //         );
+
+                // } catch (\Throwable $e) {
+
+                //     Log::error(
+                //         'MEDIA EXIT BUTTON ERROR',
+                //         [
+                //             'workflow_id' =>
+                //                 $workflow->id ?? null,
+
+                //             'node_id' =>
+                //                 $node->id ?? null,
+
+                //             'error' =>
+                //                 $e->getMessage(),
+                //         ]
+                //     );
+
+                //     $exitResponse = [
+                //         'success' => false,
+                //         'error' =>
+                //             $e->getMessage(),
+                //     ];
+                // }
+
+                // if (!is_array($exitResponse)) {
+
+                //     $exitResponse = [
+                //         'success' => false,
+                //         'response' =>
+                //             $exitResponse,
+                //     ];
+                // }
+
+                // $this->saveOutbound(
+                //     $session,
+                //     'interactive',
+                //     $exitMessage,
+                //     $exitResponse
+                // );
+
+                // ===================================================
+                // NEXT NODE
+                // ===================================================
+
+                $next = $this->nextNode(
+                    $workflow,
+                    $nodeId
+                );
+
+                if ($next) {
+
+                    $this->goToNode(
+                        $workflow,
+                        $session,
+                        $next
+                    );
+
+                } else {
+
+                    $session->update([
+                        'current_node_id' =>
+                            $nodeId,
+
+                        'status' =>
+                            'completed',
+
+                        'last_message_at' =>
+                            now(),
+                    ]);
+                }
+
+                return;
+
+            } catch (\Throwable $e) {
+
+                // ===================================================
+                // MEDIA SEND ERROR
+                // ===================================================
+
+                Log::error(
+                    'NORMAL MEDIA NODE ERROR',
                     [
-                        [
-                            'id' =>
-                                'exit',
+                        'workflow_id' =>
+                            $workflow->id ?? null,
 
-                            'title' =>
-                                'Exit',
-                        ],
+                        'node_id' =>
+                            $node->id ?? null,
+
+                        'node_type' =>
+                            $node->node_type ?? null,
+
+                        'media_type' =>
+                            $mediaType,
+
+                        'media_url' =>
+                            $mediaUrl,
+
+                        'media_id' =>
+                            $mediaId,
+
+                        'file_name' =>
+                            $fileName,
+
+                        'error' =>
+                            $e->getMessage(),
+
+                        'line' =>
+                            $e->getLine(),
+
+                        'file' =>
+                            $e->getFile(),
                     ]
                 );
 
-        } catch (\Throwable $e) {
+                $errorMessage =
+                    '⚠️ Unable to send media.';
 
-            Log::error(
-                'MEDIA EXIT BUTTON ERROR',
-                [
-                    'workflow_id' =>
-                        $workflow->id ?? null,
+                try {
 
-                    'node_id' =>
-                        $node->id ?? null,
+                    $errorResponse =
+                        $this->whatsapp->sendText(
+                            $session->user_identifier,
+                            $errorMessage
+                        );
 
-                    'error' =>
-                        $e->getMessage(),
-                ]
+                } catch (\Throwable $sendError) {
+
+                    Log::error(
+                        'MEDIA ERROR MESSAGE SEND FAILED',
+                        [
+                            'workflow_id' =>
+                                $workflow->id ?? null,
+
+                            'node_id' =>
+                                $node->id ?? null,
+
+                            'error' =>
+                                $sendError->getMessage(),
+                        ]
+                    );
+
+                    $errorResponse = [
+                        'success' => false,
+                        'error' =>
+                            $sendError->getMessage(),
+                    ];
+                }
+
+                // ===================================================
+                // NORMALIZE ERROR RESPONSE
+                // ===================================================
+
+                if (!is_array($errorResponse)) {
+
+                    $errorResponse = [
+                        'success' => false,
+                        'response' =>
+                            $errorResponse,
+                    ];
+                }
+
+                // ===================================================
+                // SAVE ERROR OUTBOUND
+                // ===================================================
+
+                $this->saveOutbound(
+                    $session,
+                    'text',
+                    $errorMessage,
+                    $errorResponse
+                );
+
+                return;
+            }
+        }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VIDEO
+    |--------------------------------------------------------------------------
+    */
+    elseif ($type === 'video') {
+        $mediaUrl = $this->resolveMediaUrl(
+            $cfg,
+            $workflow
+        );
+
+        $caption = $cfg['caption']
+            ?? $cfg['message']
+            ?? $cfg['text']
+            ?? '';
+
+        $mediaUrl = $this->resolve(
+            (string) $mediaUrl,
+            $session->variables ?? []
+        );
+
+        $caption = $this->resolve(
+            (string) $caption,
+            $session->variables ?? []
+        );
+
+        if ($mediaUrl === '') {
+
+            throw new \RuntimeException(
+                'Video media URL is empty.'
             );
-
-            $exitResponse = [
-                'success' => false,
-                'error' =>
-                    $e->getMessage(),
-            ];
         }
 
-        if (!is_array($exitResponse)) {
-
-            $exitResponse = [
-                'success' => false,
-                'response' =>
-                    $exitResponse,
-            ];
-        }
+        $output = $this->whatsapp->sendVideo(
+            $session->user_identifier,
+            $mediaUrl,
+            $caption
+        );
 
         $this->saveOutbound(
             $session,
-            'interactive',
-            $exitMessage,
-            $exitResponse
+            'video',
+            $caption !== '' ? $caption : null,
+            $output
         );
-
-        // ===================================================
-        // NEXT NODE
-        // ===================================================
 
         $next = $this->nextNode(
             $workflow,
@@ -3890,262 +3976,133 @@ elseif (
                 $session,
                 $next
             );
-
-        } else {
-
-            $session->update([
-                'current_node_id' =>
-                    $nodeId,
-
-                'status' =>
-                    'completed',
-
-                'last_message_at' =>
-                    now(),
-            ]);
         }
 
-        return;
 
-    } catch (\Throwable $e) {
+    } elseif ($type === 'button') {
 
-        // ===================================================
-        // MEDIA SEND ERROR
-        // ===================================================
+        /*
+        |--------------------------------------------------------------------------
+        | BUTTON CLICK RECEIVED
+        |--------------------------------------------------------------------------
+        */
 
-        Log::error(
-            'NORMAL MEDIA NODE ERROR',
-            [
-                'workflow_id' =>
-                    $workflow->id ?? null,
-
-                'node_id' =>
-                    $node->id ?? null,
-
-                'node_type' =>
-                    $node->node_type ?? null,
-
-                'media_type' =>
-                    $mediaType,
-
-                'media_url' =>
-                    $mediaUrl,
-
-                'media_id' =>
-                    $mediaId,
-
-                'file_name' =>
-                    $fileName,
-
-                'error' =>
-                    $e->getMessage(),
-
-                'line' =>
-                    $e->getLine(),
-
-                'file' =>
-                    $e->getFile(),
-            ]
+        $sourceHandle = trim(
+            (string) ($input['source_handle'] ?? '')
         );
 
-        $errorMessage =
-            '⚠️ Unable to send media.';
+        if ($sourceHandle !== '') {
 
-        try {
-
-            $errorResponse =
-                $this->whatsapp->sendText(
-                    $session->user_identifier,
-                    $errorMessage
-                );
-
-        } catch (\Throwable $sendError) {
-
-            Log::error(
-                'MEDIA ERROR MESSAGE SEND FAILED',
-                [
-                    'workflow_id' =>
-                        $workflow->id ?? null,
-
-                    'node_id' =>
-                        $node->id ?? null,
-
-                    'error' =>
-                        $sendError->getMessage(),
-                ]
+            $next = $this->nextNode(
+                $workflow,
+                $nodeId,
+                $sourceHandle
             );
 
-            $errorResponse = [
-                'success' => false,
-                'error' =>
-                    $sendError->getMessage(),
-            ];
+            if ($next) {
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next
+                );
+
+                return;
+            }
+
+            // Invalid button ID / unavailable option
+            $validationMessage = $this->resolve(
+                (string) (
+                    $cfg['validation_message']
+                    ?? $cfg['validationMessage']
+                    ?? '⚠️ This button is not available right now. Please select a valid option.'
+                ),
+                $session->variables ?? []
+            );
+
+            $output = $this->whatsapp->sendText(
+                $session->user_identifier,
+                $validationMessage
+            );
+
+            $this->saveOutbound(
+                $session,
+                'text',
+                $validationMessage,
+                $output
+            );
+
+            $session->update([
+                'current_node_id' => $nodeId,
+                'status' => 'waiting',
+                'last_message_at' => now(),
+            ]);
+
+            return;
         }
 
-        // ===================================================
-        // NORMALIZE ERROR RESPONSE
-        // ===================================================
+        /*
+        |--------------------------------------------------------------------------
+        | TEXT RECEIVED INSTEAD OF BUTTON CLICK
+        |--------------------------------------------------------------------------
+        */
 
-        if (!is_array($errorResponse)) {
-
-            $errorResponse = [
-                'success' => false,
-                'response' =>
-                    $errorResponse,
-            ];
-        }
-
-        // ===================================================
-        // SAVE ERROR OUTBOUND
-        // ===================================================
-
-        $this->saveOutbound(
-            $session,
-            'text',
-            $errorMessage,
-            $errorResponse
+        $typedText = trim(
+            (string) ($input['text'] ?? '')
         );
 
-        return;
+        // Show validation only when the user actually sent text.
+        if ($typedText !== '') {
+
+            $validationMessage = $this->resolve(
+                (string) (
+                    $cfg['validation_message']
+                    ?? $cfg['validationMessage']
+                    ?? '⚠️ Please select one of the buttons above.'
+                ),
+                $session->variables ?? []
+            );
+
+            $output = $this->whatsapp->sendText(
+                $session->user_identifier,
+                $validationMessage
+            );
+
+            $this->saveOutbound(
+                $session,
+                'text',
+                $validationMessage,
+                $output
+            );
+
+            // Keep waiting at the same button node.
+            // Do not resend the previous buttons/message.
+            $session->update([
+                'current_node_id' => $nodeId,
+                'status' => 'waiting',
+                'last_message_at' => now(),
+            ]);
+
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | FIRST VISIT: SEND BUTTONS ONCE
+        |--------------------------------------------------------------------------
+        */
+
+                $this->sendButton(
+                    $workflow,
+                    $session,
+                    (string) $nodeId,
+                    $cfg
+                );
+                $session->update([
+            'current_node_id' => $nodeId,
+            'status' => 'waiting',
+            'last_message_at' => now(),
+        ]);
     }
-}
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | VIDEO
-                    |--------------------------------------------------------------------------
-                    */
-                    elseif ($type === 'video') {
-
-                        $mediaUrl = $this->resolveMediaUrl(
-                            $cfg,
-                            $workflow
-                        );
-
-                        $caption = $cfg['caption']
-                            ?? $cfg['message']
-                            ?? $cfg['text']
-                            ?? '';
-
-                        $mediaUrl = $this->resolve(
-                            (string) $mediaUrl,
-                            $session->variables ?? []
-                        );
-
-                        $caption = $this->resolve(
-                            (string) $caption,
-                            $session->variables ?? []
-                        );
-
-                        if ($mediaUrl === '') {
-
-                            throw new \RuntimeException(
-                                'Video media URL is empty.'
-                            );
-                        }
-
-                        $output = $this->whatsapp->sendVideo(
-                            $session->user_identifier,
-                            $mediaUrl,
-                            $caption
-                        );
-
-                        $this->saveOutbound(
-                            $session,
-                            'video',
-                            $caption !== '' ? $caption : null,
-                            $output
-                        );
-
-                        $next = $this->nextNode(
-                            $workflow,
-                            $nodeId
-                        );
-
-                        if ($next) {
-
-                            $this->goToNode(
-                                $workflow,
-                                $session,
-                                $next
-                            );
-                        }
-                    } elseif ($type === 'button') {
-
-                        if (! empty($input['source_handle'])) {
-
-                            $sourceHandle =
-                                (string) $input['source_handle'];
-
-                            $next =
-                                $this->nextNode(
-                                    $workflow,
-                                    $nodeId,
-                                    $sourceHandle
-                                );
-
-                            if ($next) {
-
-                                $this->goToNode(
-                                    $workflow,
-                                    $session,
-                                    $next
-                                );
-
-                                return;
-                            }
-
-                            $validationMessage =
-                                $cfg['validation_message']
-                                ??
-                                $cfg['validationMessage']
-                                ??
-                                '⚠️ This button is not available right now.';
-
-                            $validationMessage =
-                                $this->resolve(
-                                    (string) $validationMessage,
-                                    $session->variables ?? []
-                                );
-
-                            $output =
-                                $this->whatsapp->sendText(
-                                    $session->user_identifier,
-                                    $validationMessage
-                                );
-
-                            $this->saveOutbound(
-                                $session,
-                                'text',
-                                $validationMessage,
-                                $output
-                            );
-
-                            $this->sendButton(
-                                $session,
-                                $cfg
-                            );
-
-                            $session->update([
-                                'current_node_id' => $nodeId,
-                                'status' => 'waiting',
-                                'last_message_at' => now(),
-                            ]);
-
-                            return;
-                        }
-
-                        $this->sendButton(
-                            $session,
-                            $cfg
-                        );
-
-                        $session->update([
-                            'current_node_id' => $nodeId,
-                            'status' => 'waiting',
-                            'last_message_at' => now(),
-                        ]);
-                    }
 
                     /*
                     |--------------------------------------------------------------------------
@@ -6877,6 +6834,8 @@ elseif (
             'last_message_at' => now(),
         ]);
 
+
+
         $this->execute(
             $workflow,
             $session,
@@ -6924,6 +6883,22 @@ elseif (
             : null;
     }
 
+
+
+private function resolveButtonSourceHandle(
+    Workflow $workflow,
+    string $nodeId
+): string {
+    $edge = $workflow->edges()
+        ->where('source', $nodeId)
+        ->whereNotNull('source_handle')
+        ->orderBy('id')
+        ->first();
+
+    return $edge
+        ? (string) $edge->source_handle
+        : '';
+}
     /*
     |--------------------------------------------------------------------------
     | RESOLVE VARIABLES
@@ -7136,82 +7111,66 @@ elseif (
         return (string) $mediaUrl;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | FIND MENU OPTION BY TEXT
-    |--------------------------------------------------------------------------
-    */
+private function findMenuOptionByText(
+    array $cfg,
+    string $typedText
+): ?array {
 
-    private function findMenuOptionByText(
-        array $cfg,
-        string $typedText
-    ): ?array {
+    $typedText = trim($typedText);
 
-        $typedText =
-            trim($typedText);
+    $options = $cfg['menuOptions']
+        ?? $cfg['options']
+        ?? $cfg['menu_options']
+        ?? [];
 
-        if ($typedText === '') {
-            return null;
+    Log::info('FIND MENU OPTION DEBUG', [
+        'typed_text' => $typedText,
+        'options' => $options,
+    ]);
+
+    if ($typedText === '' || !is_array($options)) {
+        return null;
+    }
+
+    foreach ($options as $index => $option) {
+        if (!is_array($option)) {
+            continue;
         }
 
-        $options =
-            $cfg['menuOptions']
-            ??
-            $cfg['options']
-            ??
-            $cfg['menu_options']
-            ??
-            [];
+        $label = trim((string) (
+            $option['label']
+            ?? $option['title']
+            ?? $option['text']
+            ?? ''
+        ));
 
-        if (! is_array($options)) {
-            return null;
-        }
+        $handle = (string) (
+            $option['source_handle']
+            ?? $option['sourceHandle']
+            ?? "source-option-{$index}"
+        );
 
-        foreach ($options as $index => $option) {
+        Log::info('MENU OPTION COMPARISON', [
+            'typed_text' => $typedText,
+            'label' => $label,
+            'handle' => $handle,
+            'matches' => strcasecmp($typedText, $label) === 0,
+        ]);
 
-            if (! is_array($option)) {
-                continue;
-            }
-
-            $label =
-                trim(
-                    (string) (
-                        $option['label']
-                        ??
-                        $option['title']
-                        ??
-                        $option['text']
-                        ??
-                        ''
-                    )
-                );
-
-            if ($label === '') {
-                continue;
-            }
-
-            if (
-                strcasecmp(
-                    $typedText,
-                    $label
-                ) !== 0
-            ) {
-                continue;
-            }
-
-            $sourceHandle =
-                "source-option-{$index}";
-
+        if (
+            $label !== ''
+            && strcasecmp($typedText, $label) === 0
+        ) {
             return [
-                'source_handle' => $sourceHandle,
+                'source_handle' => $handle,
                 'label' => $label,
                 'index' => $index,
             ];
         }
-
-        return null;
     }
 
+    return null;
+}
     /*
     |--------------------------------------------------------------------------
     | GET MENU OPTION LABEL
@@ -7317,27 +7276,21 @@ elseif (
         return $input['title'] ?? null;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SEND INPUT PROMPT
-    |--------------------------------------------------------------------------
-    */
-
-  private function sendInputPrompt(
+/*
+|--------------------------------------------------------------------------
+| SEND INPUT PROMPT
+|--------------------------------------------------------------------------
+*/
+private function sendInputPrompt(
     BotSession $session,
     array $cfg
 ): void {
 
-    $prompt =
-        $cfg['prompt']
-        ??
-        $cfg['message']
-        ??
-        '';
+    $prompt = $cfg['prompt']
+        ?? $cfg['message']
+        ?? '';
 
-    if (
-        trim((string) $prompt) === ''
-    ) {
+    if (trim((string) $prompt) === '') {
         return;
     }
 
@@ -7347,12 +7300,10 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $variables =
-        $session->variables ?? [];
+    $variables = $session->variables ?? [];
 
     if (is_string($variables)) {
-        $variables =
-            json_decode($variables, true) ?? [];
+        $variables = json_decode($variables, true) ?? [];
     }
 
     /*
@@ -7361,11 +7312,10 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $prompt =
-        $this->resolve(
-            (string) $prompt,
-            $variables
-        );
+    $prompt = $this->resolve(
+        (string) $prompt,
+        $variables
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7373,67 +7323,42 @@ elseif (
     |--------------------------------------------------------------------------
     */
 
-    $rawAllowSkip =
-        $cfg['allow_skip']
-        ??
-        $cfg['allowSkip']
-        ??
-        $cfg['skip']
-        ??
-        $cfg['is_optional']
-        ??
-        $cfg['optional']
-        ??
-        false;
+    $rawAllowSkip = $cfg['allow_skip']
+        ?? $cfg['allowSkip']
+        ?? $cfg['skip']
+        ?? $cfg['is_optional']
+        ?? $cfg['optional']
+        ?? false;
 
     if (is_bool($rawAllowSkip)) {
-
-        $allowSkip =
-            $rawAllowSkip;
-
+        $allowSkip = $rawAllowSkip;
     } elseif (is_numeric($rawAllowSkip)) {
-
-        $allowSkip =
-            ((int) $rawAllowSkip) === 1;
-
+        $allowSkip = ((int) $rawAllowSkip) === 1;
     } else {
-
-        $allowSkip =
-            in_array(
-                strtolower(
-                    trim(
-                        (string) $rawAllowSkip
-                    )
-                ),
-                [
-                    '1',
-                    'true',
-                    'yes',
-                    'on',
-                    'enabled',
-                    'allow',
-                    'allowed',
-                ],
-                true
-            );
+        $allowSkip = in_array(
+            strtolower(trim((string) $rawAllowSkip)),
+            [
+                '1',
+                'true',
+                'yes',
+                'on',
+                'enabled',
+                'allow',
+                'allowed',
+            ],
+            true
+        );
     }
 
     /*
     |--------------------------------------------------------------------------
-    | BUTTONS
+    | BUTTONS - NO EXIT BUTTON
     |--------------------------------------------------------------------------
     */
 
     $buttons = [];
 
-    /*
-    |--------------------------------------------------------------------------
-    | SKIP BUTTON
-    |--------------------------------------------------------------------------
-    */
-
     if ($allowSkip) {
-
         $buttons[] = [
             'id' => 'skip',
             'title' => 'Skip',
@@ -7442,27 +7367,31 @@ elseif (
 
     /*
     |--------------------------------------------------------------------------
-    | EXIT BUTTON
+    | SEND MESSAGE
     |--------------------------------------------------------------------------
     */
 
-    $buttons[] = [
-        'id' => 'exit',
-        'title' => 'Exit',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | SEND INTERACTIVE MESSAGE
-    |--------------------------------------------------------------------------
-    */
-
-    $output =
-        $this->whatsapp->sendInteractive(
+    if (empty($buttons)) {
+        $output = $this->whatsapp->sendText(
             $session->user_identifier,
-            $prompt,
-            $buttons
+            $prompt
         );
+
+        $this->saveOutbound(
+            $session,
+            'text',
+            $prompt,
+            $output
+        );
+
+        return;
+    }
+
+    $output = $this->whatsapp->sendInteractive(
+        $session->user_identifier,
+        $prompt,
+        $buttons
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7477,7 +7406,6 @@ elseif (
         $output
     );
 }
-
     /*
     |--------------------------------------------------------------------------
     | SAVE OUTBOUND
@@ -7504,13 +7432,13 @@ elseif (
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SEND MENU
-    |--------------------------------------------------------------------------
-    */
 
-   private function sendMenu(
+/*
+|--------------------------------------------------------------------------
+| SEND MENU
+|--------------------------------------------------------------------------
+*/
+private function sendMenu(
     BotSession $session,
     array $cfg
 ): void {
@@ -7528,19 +7456,28 @@ elseif (
         ??
         'Please select an option.';
 
-    $variables =
-        $session->variables ?? [];
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $variables = $session->variables ?? [];
 
     if (is_string($variables)) {
-        $variables =
-            json_decode($variables, true) ?? [];
+        $variables = json_decode($variables, true) ?? [];
     }
 
-    $message =
-        $this->resolve(
-            (string) $message,
-            $variables
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE VARIABLES
+    |--------------------------------------------------------------------------
+    */
+
+    $message = $this->resolve(
+        (string) $message,
+        $variables
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -7557,7 +7494,7 @@ elseif (
         ??
         [];
 
-    if (! is_array($options)) {
+    if (!is_array($options)) {
         $options = [];
     }
 
@@ -7565,12 +7502,11 @@ elseif (
 
     foreach ($options as $index => $option) {
 
-        if (! is_array($option)) {
+        if (!is_array($option)) {
             continue;
         }
 
-        $sourceHandle =
-            "source-option-{$index}";
+        $sourceHandle = "source-option-{$index}";
 
         $label =
             $option['label']
@@ -7581,10 +7517,7 @@ elseif (
             ??
             'Option ' . ($index + 1);
 
-        $label =
-            trim(
-                (string) $label
-            );
+        $label = trim((string) $label);
 
         if ($label === '') {
             continue;
@@ -7600,18 +7533,23 @@ elseif (
 
     /*
     |--------------------------------------------------------------------------
-    | SEND MENU OPTIONS
+    | SEND MENU OPTIONS ONLY - NO EXIT BUTTON
     |--------------------------------------------------------------------------
     */
 
-    if (! empty($normalizedOptions)) {
+    if (!empty($normalizedOptions)) {
 
-        $whatsappResponse =
-            $this->whatsapp->sendMenuButtons(
-                $session->user_identifier,
-                $message,
-                $normalizedOptions
-            );
+        $whatsappResponse = $this->whatsapp->sendMenuButtons(
+            $session->user_identifier,
+            $message,
+            $normalizedOptions
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | SAVE OUTBOUND MENU MESSAGE
+        |--------------------------------------------------------------------------
+        */
 
         $payload = [
             'type' => 'menu',
@@ -7628,151 +7566,387 @@ elseif (
             'payload' => $payload,
         ]);
     }
+}
+
+
+
+// private function sendButton(
+//     Workflow $workflow,
+//     BotSession $session,
+//     string $nodeId,
+//     array $cfg
+// ): void {
+//     $message = $this->resolve(
+//         (string) ($cfg['message'] ?? $cfg['text'] ?? ''),
+//         $session->variables ?? []
+//     );
+
+//     $buttonType = strtolower(trim((string) (
+//         $cfg['buttonType']
+//         ?? $cfg['button_type']
+//         ?? 'reply'
+//     )));
+
+//     $buttonText = trim((string) (
+//         $cfg['buttonText']
+//         ?? $cfg['button_text']
+//         ?? $cfg['label']
+//         ?? $cfg['title']
+//         ?? 'Continue'
+//     ));
+
+//     $button = [
+//         'type'  => $buttonType,
+//         'title' => $buttonText,
+//     ];
+
+//     if ($buttonType === 'url') {
+//         $button['url'] = trim((string) (
+//             $cfg['buttonUrl']
+//             ?? $cfg['button_url']
+//             ?? $cfg['url']
+//             ?? ''
+//         ));
+//     } else {
+//         /*
+//          * Resolve the actual connected React Flow edge.
+//          * The nextNode() implementation and workflow edge
+//          * storage format must be checked before finalizing this.
+//          */
+//         $sourceHandle = $this->resolveButtonSourceHandle(
+//             $workflow,
+//             $nodeId
+//         );
+
+//         if ($sourceHandle === '') {
+//             Log::warning('Button node has no connected source handle', [
+//                 'workflow_id' => $workflow->id,
+//                 'node_id' => $nodeId,
+//             ]);
+
+//             return;
+//         }
+
+//         $button['source_handle'] = $sourceHandle;
+//     }
+
+//     $whatsappResponse = $this->whatsapp->sendInteractive(
+//         $session->user_identifier,
+//         $message,
+//         [$button]
+//     );
+
+//     BotMessage::create([
+//         'bot_session_id' => $session->id,
+//         'direction' => 'outbound',
+//         'message_type' => 'button',
+//         'text' => $message,
+//         'payload' => [
+//             'type' => 'button',
+//             'message' => $message,
+//             'button' => $button,
+//             'whatsapp_response' => $whatsappResponse,
+//         ],
+//     ]);
+// }
+
+
+private function sendButton(
+    Workflow $workflow,
+    BotSession $session,
+    string $nodeId,
+    array $cfg
+): void {
+    $message = $this->resolve(
+        (string) ($cfg['message'] ?? $cfg['text'] ?? ''),
+        $session->variables ?? []
+    );
 
     /*
     |--------------------------------------------------------------------------
-    | EXIT BUTTON
+    | Collect primary button
     |--------------------------------------------------------------------------
-    |
-    | WhatsApp allows only 3 reply buttons.
-    | Therefore Exit is sent as a separate interactive message.
-    |
     */
 
-    $exitMessage =
-        $cfg['exit_message']
-        ??
-        $cfg['exitMessage']
-        ??
-        'You can exit this journey anytime.';
-
-    $exitMessage =
-        $this->resolve(
-            (string) $exitMessage,
-            $variables
-        );
-
-    $exitResponse =
-        $this->whatsapp->sendInteractive(
-            $session->user_identifier,
-            $exitMessage,
-            [
-                [
-                    'id' => 'exit',
-                    'title' => 'Exit',
-                ],
-            ]
-        );
+    $buttons = [
+        [
+            'type' => strtolower((string) (
+                $cfg['buttonType']
+                ?? $cfg['button_type']
+                ?? 'reply'
+            )),
+            'title' => trim((string) (
+                $cfg['buttonText']
+                ?? $cfg['button_text']
+                ?? $cfg['label']
+                ?? $cfg['title']
+                ?? 'Continue'
+            )),
+            'url' => trim((string) (
+                $cfg['buttonUrl']
+                ?? $cfg['button_url']
+                ?? $cfg['url']
+                ?? ''
+            )),
+            'source_handle' => trim((string) (
+                $cfg['source_handle']
+                ?? $cfg['sourceHandle']
+                ?? ''
+            )),
+        ],
+    ];
 
     /*
     |--------------------------------------------------------------------------
-    | SAVE EXIT MESSAGE
+    | Collect extra buttons
+    |--------------------------------------------------------------------------
+    */
+
+    $extraButtons = $cfg['extraButtons']
+        ?? $cfg['extra_buttons']
+        ?? [];
+
+    foreach ($extraButtons as $extra) {
+        if (!is_array($extra)) {
+            continue;
+        }
+
+        $buttons[] = [
+            'type' => strtolower((string) (
+                $extra['type']
+                ?? $extra['buttonType']
+                ?? $extra['button_type']
+                ?? 'reply'
+            )),
+            'title' => trim((string) (
+                $extra['text']
+                ?? $extra['title']
+                ?? $extra['label']
+                ?? ''
+            )),
+            'url' => trim((string) (
+                $extra['url']
+                ?? $extra['buttonUrl']
+                ?? $extra['button_url']
+                ?? ''
+            )),
+            'source_handle' => trim((string) (
+                $extra['source_handle']
+                ?? $extra['sourceHandle']
+                ?? ''
+            )),
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load edges for this node
+    |--------------------------------------------------------------------------
+    */
+
+    $edges = $workflow->edges()
+        ->where('source', $nodeId)
+        ->get()
+        ->keyBy('source_handle');
+
+    $replyButtons = [];
+    $urlButtons = [];
+    $replyIndex = 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prepare buttons
+    |--------------------------------------------------------------------------
+    */
+
+    foreach ($buttons as $index => $button) {
+        $type = strtolower(trim((string) $button['type']));
+        $title = trim((string) $button['title']);
+        $url = trim((string) $button['url']);
+
+        if ($title === '') {
+            continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | URL button does not need an edge
+        |--------------------------------------------------------------------------
+        */
+
+        if ($type === 'url') {
+            if (
+                $url === ''
+                || !filter_var($url, FILTER_VALIDATE_URL)
+                || strtolower((string) parse_url(
+                    $url,
+                    PHP_URL_SCHEME
+                )) !== 'https'
+            ) {
+                throw new \RuntimeException(
+                    "Button '{$title}' requires a valid HTTPS URL."
+                );
+            }
+
+            if (count($urlButtons) >= 1) {
+                throw new \RuntimeException(
+                    'Only one URL button is supported.'
+                );
+            }
+
+            $urlButtons[] = [
+                'type' => 'url',
+                'title' => $title,
+                'url' => $url,
+            ];
+
+            continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reply button
+        |--------------------------------------------------------------------------
+        */
+
+        if ($type !== 'reply') {
+            throw new \RuntimeException(
+                "Unsupported button type '{$type}' for '{$title}'."
+            );
+        }
+
+        /*
+         * Prefer the exact handle supplied by the button configuration.
+         */
+        $handle = trim((string) $button['source_handle']);
+
+        if ($handle !== '') {
+            $edge = $edges->get($handle);
+        } else {
+            $edge = null;
+        }
+
+        /*
+         * Fallback to the conventional option handle.
+         */
+        if (!$edge) {
+            $handle = 'source-option-' . $index;
+            $edge = $edges->get($handle);
+        }
+
+        /*
+         * Fallback to source-bottom only when that saved edge exists.
+         */
+        if (!$edge) {
+            $bottomEdge = $edges->get('source-bottom');
+
+            if ($bottomEdge) {
+                $handle = 'source-bottom';
+                $edge = $bottomEdge;
+            }
+        }
+
+        /*
+         * Final fallback: sequential reply handle.
+         */
+        if (!$edge) {
+            $fallbackHandle = 'source-option-' . $replyIndex;
+            $fallbackEdge = $edges->get($fallbackHandle);
+
+            if ($fallbackEdge) {
+                $handle = $fallbackHandle;
+                $edge = $fallbackEdge;
+            }
+        }
+
+        if (!$edge) {
+            throw new \RuntimeException(
+                "No saved edge found for reply button '{$title}'. "
+                . 'Available handles: '
+                . $edges->keys()->implode(', ')
+            );
+        }
+
+        $replyButtons[] = [
+            'type' => 'reply',
+            'title' => $title,
+            'id' => $handle,
+            'source_handle' => $handle,
+        ];
+
+        $replyIndex++;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate limits
+    |--------------------------------------------------------------------------
+    */
+
+    if (count($replyButtons) > 3) {
+        throw new \RuntimeException(
+            'WhatsApp supports a maximum of 3 reply buttons.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | URL button first, then reply buttons
+    |--------------------------------------------------------------------------
+    */
+
+    $buttonsToSend = array_merge(
+        $urlButtons,
+        $replyButtons
+    );
+
+    if (empty($buttonsToSend)) {
+        throw new \RuntimeException(
+            "No valid buttons configured for node {$nodeId}."
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Send WhatsApp message
+    |--------------------------------------------------------------------------
+    */
+
+    $whatsappResponse = $this->whatsapp->sendInteractive(
+        $session->user_identifier,
+        $message,
+        $buttonsToSend
+    );
+
+    if (
+        empty($whatsappResponse['success'])
+        || !empty($whatsappResponse['error'])
+    ) {
+        throw new \RuntimeException(
+            $whatsappResponse['message']
+            ?? 'WhatsApp interactive message failed.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save outbound message
     |--------------------------------------------------------------------------
     */
 
     BotMessage::create([
         'bot_session_id' => $session->id,
         'direction' => 'outbound',
-        'message_type' => 'interactive',
-        'text' => $exitMessage,
+        'message_type' => 'button',
+        'text' => $message,
         'payload' => [
-            'type' => 'interactive',
-            'message' => $exitMessage,
-            'buttons' => [
-                [
-                    'id' => 'exit',
-                    'title' => 'Exit',
-                ],
-            ],
-            'whatsapp_response' => $exitResponse,
+            'type' => 'button',
+            'message' => $message,
+            'buttons' => $buttonsToSend,
+            'whatsapp_response' => $whatsappResponse,
         ],
     ]);
 }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SEND BUTTON
-    |--------------------------------------------------------------------------
-    */
-
-    private function sendButton(
-        BotSession $session,
-        array $cfg
-    ): void {
-
-        $message =
-            $cfg['message']
-            ??
-            $cfg['text']
-            ??
-            '';
-
-        $message =
-            $this->resolve(
-                (string) $message,
-                $session->variables ?? []
-            );
-
-        $buttonText =
-            $cfg['buttonText']
-            ??
-            $cfg['button_text']
-            ??
-            $cfg['label']
-            ??
-            $cfg['title']
-            ??
-            'Continue';
-
-        $sourceHandle =
-            $cfg['source_handle']
-            ??
-            $cfg['sourceHandle']
-            ??
-            'source-bottom';
-
-        $whatsappResponse =
-            $this->whatsapp->sendInteractive(
-                $session->user_identifier,
-                $message,
-                [
-                    [
-                        'id' => (string) $sourceHandle,
-
-                        'title' => (string) $buttonText,
-                    ],
-                ]
-            );
-
-        $payload = [
-            'type' => 'button',
-
-            'message' => $message,
-
-            'button' => [
-                'id' => (string) $sourceHandle,
-
-                'title' => (string) $buttonText,
-
-                'source_handle' => (string) $sourceHandle,
-            ],
-
-            'whatsapp_response' => $whatsappResponse,
-        ];
-
-        BotMessage::create([
-            'bot_session_id' => $session->id,
-
-            'direction' => 'outbound',
-
-            'message_type' => 'button',
-
-            'text' => $message,
-
-            'payload' => $payload,
-        ]);
-    }
-
     /*
     |--------------------------------------------------------------------------
     | EXECUTE API
@@ -8004,32 +8178,26 @@ elseif (
  * SEND TEXT WITH EXIT BUTTON
  * =====================================================
  */
+
 private function sendTextWithExit(
     BotSession $session,
     string $text
 ): array {
 
-    $output = $this->whatsapp->sendInteractive(
+    $output = $this->whatsapp->sendText(
         $session->user_identifier,
-        $text,
-        [
-            [
-                'id' => 'exit',
-                'title' => 'Exit',
-            ],
-        ]
+        $text
     );
 
     $this->saveOutbound(
         $session,
-        'interactive',
+        'text',
         $text,
         $output
     );
 
     return $output;
 }
-
 
 
 }
