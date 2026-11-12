@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   AlertCircle,
@@ -296,10 +296,11 @@ const FailedWorkflows = () => {
   const [to, setTo] = useState("");
 
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
   const [pagination, setPagination] = useState({
     current_page: 1,
     last_page: 1,
-    per_page: 10,
+    per_page: 15,
     total: 0,
   });
 
@@ -307,9 +308,16 @@ const FailedWorkflows = () => {
   const [retryingId, setRetryingId] = useState(null);
   const [retryError, setRetryError] = useState("");
   const [retrySuccess, setRetrySuccess] = useState("");
+  const abortRef = useRef(null);
 
   const fetchWorkflows = useCallback(
     async (showRefresh = false) => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       if (showRefresh) {
         setRefreshing(true);
       } else {
@@ -322,12 +330,13 @@ const FailedWorkflows = () => {
         const response = await api.get(FAILED_WORKFLOWS_URL, {
           params: {
             page,
-            per_page: 10,
+            per_page: perPage,
             search: search || undefined,
             status: status || undefined,
             from: from || undefined,
             to: to || undefined,
           },
+          signal: controller.signal,
         });
 
         const payload = response?.data?.data;
@@ -357,7 +366,7 @@ const FailedWorkflows = () => {
         setPagination({
           current_page: currentPage,
           last_page: Math.max(1, lastPage),
-          per_page: Number(paginator?.per_page ?? 10),
+          per_page: Number(paginator?.per_page ?? perPage),
           total: Number(
             paginator?.total ?? response?.data?.total ?? rows.length
           ),
@@ -367,24 +376,45 @@ const FailedWorkflows = () => {
           setPage(currentPage);
         }
       } catch (err) {
+        if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") {
+          return;
+        }
         setWorkflows([]);
         setPagination({
           current_page: 1,
           last_page: 1,
-          per_page: 10,
+          per_page: perPage,
           total: 0,
         });
         setError(getErrorMessage(err));
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (abortRef.current === controller) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [page, search, status, from, to]
+    [page, perPage, search, status, from, to]
   );
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      if (next !== search) {
+        setPage(1);
+        setSearch(next);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
+
+  useEffect(() => {
     fetchWorkflows();
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
   }, [fetchWorkflows]);
 
   // Close the details dialog with Escape.
@@ -1026,7 +1056,26 @@ const FailedWorkflows = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <span>Rows:</span>
+                <select
+                  value={perPage}
+                  onChange={(e) => {
+                    setPerPage(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  aria-label="Rows per page"
+                  className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {[10, 15, 30, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <button
                 type="button"
                 disabled={loading || pagination.current_page <= 1}

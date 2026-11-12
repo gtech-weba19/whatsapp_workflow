@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,27 +34,50 @@ class AdminFailedWorkflowController extends Controller
             'Workflow executions table has no workflow_id column.'
         );
 
+        $hasTenantId = Schema::hasColumn('workflows', 'tenant_id');
+        $hasCreatedBy = Schema::hasColumn('workflows', 'created_by');
+        $hasUserId = Schema::hasColumn('workflows', 'user_id');
+
+        $select = [
+            'e.*',
+            'w.name as workflow_name',
+        ];
+        if ($hasTenantId) {
+            $select[] = 'w.tenant_id as workflow_tenant_id';
+        }
+        if ($hasCreatedBy) {
+            $select[] = 'w.created_by as workflow_created_by';
+        }
+        if ($hasUserId) {
+            $select[] = 'w.user_id as workflow_user_id';
+        }
+
         $query = DB::table('workflow_executions as e')
             ->join('workflows as w', 'w.id', '=', 'e.workflow_id')
-            ->select([
-                'e.*',
-                'w.name as workflow_name',
-                'w.tenant_id as workflow_tenant_id',
-                'w.created_by as workflow_created_by',
-            ]);
+            ->select($select);
 
         // Super admin can view all executions.
-        if ($user->role === 'super_admin') {
+        if (strtolower((string) ($user->role ?? '')) === 'super_admin') {
             return $query;
         }
 
         // Tenant users can view executions belonging to their tenant.
-        if ($user->tenant_id !== null) {
+        if ($user->tenant_id !== null && $hasTenantId) {
             return $query->where('w.tenant_id', $user->tenant_id);
         }
 
-        // Users without a tenant can view only workflows they created.
-        if (Schema::hasColumn('workflows', 'created_by')) {
+        if ($hasUserId && $hasCreatedBy) {
+            return $query->where(function ($q) use ($user) {
+                $q->where('w.user_id', $user->id)
+                    ->orWhere('w.created_by', $user->id);
+            });
+        }
+
+        if ($hasUserId) {
+            return $query->where('w.user_id', $user->id);
+        }
+
+        if ($hasCreatedBy) {
             return $query->where('w.created_by', $user->id);
         }
 
@@ -96,35 +120,54 @@ class AdminFailedWorkflowController extends Controller
             $query->where('e.status', $status);
         }
 
-        // Search execution ID, workflow ID/name and error message.
+        // Search execution ID, workflow ID/name and error message (exact match when numeric for index speed).
         if (!empty($validated['search'])) {
-            $search = $validated['search'];
+            $search = trim((string) $validated['search']);
+            $hasErrorColumn = Schema::hasColumn('workflow_executions', 'error_message');
+            $isNumeric = ctype_digit($search);
 
-            $query->where(function ($q) use ($search) {
-                $q->where('e.id', 'like', "%{$search}%")
-                    ->orWhere('e.workflow_id', 'like', "%{$search}%")
-                    ->orWhere('w.name', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search, $hasErrorColumn, $isNumeric) {
+                if ($isNumeric) {
+                    $q->where('e.id', (int) $search)
+                        ->orWhere('e.workflow_id', (int) $search);
+                } else {
+                    $q->where('e.id', 'like', "%{$search}%")
+                        ->orWhere('e.workflow_id', 'like', "%{$search}%");
+                }
 
-                if (Schema::hasColumn('workflow_executions', 'error_message')) {
+                $q->orWhere('w.name', 'like', "%{$search}%");
+
+                if ($hasErrorColumn) {
                     $q->orWhere('e.error_message', 'like', "%{$search}%");
                 }
             });
         }
 
         if (!empty($validated['from'])) {
-            $query->whereDate('e.created_at', '>=', $validated['from']);
+            $query->where('e.created_at', '>=', Carbon::parse($validated['from'])->startOfDay());
         }
 
         if (!empty($validated['to'])) {
-            $query->whereDate('e.created_at', '<=', $validated['to']);
+            $query->where('e.created_at', '<=', Carbon::parse($validated['to'])->endOfDay());
         }
 
-        $paginator = $query
-            ->orderByDesc('e.created_at')
-            ->paginate($validated['per_page'] ?? 10)
-            ->withQueryString();
+        $perPage = max(1, (int) ($validated['per_page'] ?? 10));
+        $currentPage = max(1, (int) ($validated['page'] ?? 1));
+        $total = (int) (clone $query)->count('e.id');
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $currentPage = min($currentPage, $lastPage);
+        $offset = ($currentPage - 1) * $perPage;
 
-        $paginator->getCollection()->transform(function ($item) {
+        $rows = $total === 0
+            ? collect()
+            : $query
+                ->orderByDesc('e.created_at')
+                ->orderByDesc('e.id')
+                ->offset($offset)
+                ->limit($perPage)
+                ->get();
+
+        $transformed = $rows->map(function ($item) {
             $row = (array) $item;
 
             $row['workflow'] = [
@@ -140,12 +183,18 @@ class AdminFailedWorkflowController extends Controller
                 ?? null;
 
             return $row;
-        });
+        })->values();
 
         return response()->json([
             'success' => true,
             'message' => 'Failed workflow executions retrieved successfully.',
-            'data' => $paginator,
+            'data' => [
+                'current_page' => $currentPage,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+                'data' => $transformed,
+            ],
         ]);
     }
 

@@ -203,23 +203,23 @@ export default function Profile() {
       });
     } catch (err) {
       if (err.name === "AbortError") {
-        throw new Error("Request cancel ho gayi. Dobara try karein.");
+        throw new Error("The request was cancelled. Please try again.");
       }
 
       throw new Error(
-        "Server se connection nahi ho pa raha. API URL aur backend server check karein."
+        "Unable to connect to the server. Please check the API URL and backend server."
       );
     }
 
     const raw = await response.text();
     let result = {};
 
-    if (raw) {
+if (raw) {
       try {
         result = JSON.parse(raw);
       } catch {
         if (response.ok) {
-          throw new Error("Server se invalid response mila.");
+          throw new Error("Received an invalid response from the server.");
         }
       }
     }
@@ -231,14 +231,14 @@ export default function Profile() {
       }
 
       if (response.status === 401) {
-        throw new Error(
-          "Login session expire ho gaya. Dobara login karein."
-        );
-      }
+          throw new Error(
+            "Your login session has expired. Please log in again."
+          );
+        }
 
-      if (response.status === 403) {
-        throw new Error("Aapko is action ki permission nahi hai.");
-      }
+        if (response.status === 403) {
+          throw new Error("You do not have permission to perform this action.");
+        }
 
       throw new Error(
         result.message || `Request failed (${response.status}).`
@@ -262,9 +262,9 @@ export default function Profile() {
         result.data ??
         result;
 
-      if (!user || typeof user !== "object" || Array.isArray(user)) {
-        throw new Error("Profile data ka format sahi nahi hai.");
-      }
+          if (!user || typeof user !== "object" || Array.isArray(user)) {
+          throw new Error("The profile data format is invalid.");
+        }
 
       setForm({
         name: user.name ?? "",
@@ -272,7 +272,7 @@ export default function Profile() {
         mobile: user.mobile ?? user.phone ?? "",
       });
     } catch (err) {
-      setError(err.message || "Profile load nahi ho saka.");
+       setError(err.message || "Unable to load profile.");
     } finally {
       setLoading(false);
     }
@@ -314,7 +314,7 @@ export default function Profile() {
     }
 
     if (!/^[0-9]{10}$/.test(mobile)) {
-      setError("Mobile number exactly 10 digits ka hona chahiye.");
+     setError("Mobile number must contain exactly 10 digits.");
       return;
     }
 
@@ -349,7 +349,7 @@ export default function Profile() {
 
       setSuccess(result.message || "Profile updated successfully.");
     } catch (err) {
-      setError(err.message || "Profile update nahi ho saka.");
+      setError(err.message || "Unable to update profile.");
     } finally {
       setSaving(false);
     }
@@ -385,24 +385,24 @@ export default function Profile() {
 
     if (password.length < 8) {
       setPasswordError(
-        "New password kam se kam 8 characters ka hona chahiye."
+        "New password must contain at least 8 characters."
       );
       return;
     }
 
     if (password !== password_confirmation) {
       setPasswordError(
-        "New password aur confirm password match nahi karte."
+        "New password and confirm password do not match."
       );
       return;
     }
 
-    if (current_password === password) {
-      setPasswordError(
-        "New password current password se alag hona chahiye."
-      );
-      return;
-    }
+   if (current_password === password) {
+    setPasswordError(
+      "New password must be different from the current password."
+    );
+    return;
+  }
 
     setChangingPassword(true);
     setPasswordError("");
@@ -427,7 +427,7 @@ export default function Profile() {
       setShowPasswords(false);
     } catch (err) {
       setPasswordError(
-        err.message || "Password update nahi ho saka."
+        err.message || "Unable to update password."
       );
     } finally {
       setChangingPassword(false);

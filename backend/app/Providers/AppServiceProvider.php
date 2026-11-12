@@ -8,6 +8,9 @@ use App\Observers\GlobalAuditObserver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\File;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Laravel\Sanctum\Sanctum;
+use App\Models\PersonalAccessToken;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+
+        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
         /*
         |--------------------------------------------------------------------------
         | Password Reset Link - React Frontend

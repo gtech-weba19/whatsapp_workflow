@@ -29,6 +29,8 @@ use App\Http\Controllers\LoginVisitController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\RazorpayPaymentController;
+use App\Http\Controllers\ImpersonationController;
+use App\Http\Controllers\AdminMessageLogController;
 
 
 
@@ -68,6 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AdminAuthController::class, 'logout']);
     Route::get('/me', [AdminAuthController::class, 'me']);
     Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+    Route::post('/admin/users/{user}/impersonate',[ImpersonationController::class, 'start']);
+    Route::post('/admin/impersonation/stop',[ImpersonationController::class, 'stop'] );
 
 
     // Webhook Routes
@@ -158,6 +163,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Usage
     Route::get('/usage', [AdminUsageController::class, 'index'])
         ->middleware('permission:usage.view');
+
+    // Message Logs & Live Preview Reporting
+    Route::middleware('permission:usage.view,bots.view,workflows.view')->group(function () {
+        Route::get('/message-logs/filters', [AdminMessageLogController::class, 'filters']);
+        Route::get('/message-logs/conversations', [AdminMessageLogController::class, 'conversations']);
+        Route::get('/message-logs/conversations/{session}', [AdminMessageLogController::class, 'show'])->whereNumber('session');
+        Route::get('/message-logs/conversations/{session}/export', [AdminMessageLogController::class, 'exportConversation'])->whereNumber('session');
+        Route::get('/message-logs/export', [AdminMessageLogController::class, 'export']);
+    });
 
     // System Logs
     Route::middleware('permission:system_logs.view')->group(function () {

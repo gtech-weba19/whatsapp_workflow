@@ -31,7 +31,11 @@ import {
   Loader2,
   Upload,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  Scissors,
+    PanelRightClose,
+  PanelRightOpen,
+  
 
 } from "lucide-react";
 
@@ -40,11 +44,16 @@ import ReactFlow, {
   Controls,
   Background,
   addEdge,
+   BaseEdge,
+   EdgeLabelRenderer,
+    getBezierPath,
+     useReactFlow,
   reconnectEdge,
   useNodesState,
   useEdgesState,
   Handle,
   Position,
+  Panel
 } from "reactflow";
 
 import "reactflow/dist/style.css";
@@ -167,6 +176,22 @@ function Node({
     Array.isArray(data?.menuOptions)
       ? data.menuOptions
       : [];
+
+
+const buttonOptions = [
+  // DEFAULT BUTTON
+  {
+    title: data?.buttonText || "Button 1",
+    value: data?.buttonValue || "",
+    type: data?.buttonType || "reply",
+    url: data?.buttonUrl || "",
+  },
+
+  // EXTRA BUTTONS
+  ...(Array.isArray(data?.extraButtons)
+    ? data.extraButtons
+    : []),
+];
 
  const preview =
   type === "api"
@@ -401,111 +426,161 @@ function Node({
 ====================================================== */}
 
 {type === "menu" ? (
+  /* MAIN MENU */
   <div className="px-4 pb-4 pt-3">
     <div className="rounded-xl bg-slate-50 p-3">
-
       <p className="text-xs leading-5 text-slate-600">
         {data.message || "Please select an option"}
       </p>
 
-   <div className="mt-3 space-y-2">
-  {menuOptions.length > 0 ? (
-    menuOptions.map((option, index) => {
-      const sourceHandle = `source-option-${index}`;
+      <div className="mt-3 space-y-2">
+        {menuOptions.length > 0 ? (
+          menuOptions.map((option, index) => {
+            const sourceHandle = `source-option-${index}`;
 
-      return (
-        <div
-          key={sourceHandle}
-          className="
-            relative
-            flex
-            min-h-[34px]
-            items-center
-            rounded-lg
-            border
-            border-purple-100
-            bg-white
-            px-3
-            py-2
-            pl-7
-          "
-        >
-          {/* =================================================
-              OPTION SOURCE HANDLE - LEFT
-          ================================================== */}
-          <Handle
-            type="source"
-            position={Position.Left}
-            id={sourceHandle}
-            className="
-              !absolute
-              !left-[-7px]
-              !top-1/2
-              !z-50
-              !h-3
-              !w-3
-              !-translate-y-1/2
-              !cursor-crosshair
-              !border-2
-              !border-white
-              !bg-purple-500
-              hover:!bg-purple-700
-            "
-          />
+            return (
+              <div
+                key={sourceHandle}
+                className="relative flex min-h-[34px] items-center rounded-lg border border-purple-100 bg-white px-3 py-2 pl-7"
+              >
+                <Handle
+                  type="source"
+                  position={Position.Left}
+                  id={sourceHandle}
+                  className="!absolute !left-[-7px] !top-1/2 !z-50 !h-3 !w-3 !-translate-y-1/2 !border-2 !border-white !bg-purple-500"
+                />
 
-          {/* NUMBER */}
-          <span
-            className="
-              mr-2
-              flex
-              h-5
-              w-5
-              shrink-0
-              items-center
-              justify-center
-              rounded-full
-              bg-purple-100
-              text-[9px]
-              font-bold
-              text-purple-600
-            "
-          >
-            {index + 1}
-          </span>
+                <span className="mr-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-[9px] font-bold text-purple-600">
+                  {index + 1}
+                </span>
 
-          {/* OPTION LABEL */}
-          <span
-            className="
-              min-w-0
-              flex-1
-              truncate
-              text-[11px]
-              font-semibold
-              text-slate-700
-            "
-          >
-            {option.label ||
-              option.title ||
-              option.text ||
-              `Option ${index + 1}`}
-          </span>
-        </div>
-      );
-    })
-  ) : (
-    <p className="text-[10px] italic text-slate-400">
-      No menu options
-    </p>
-  )}
-</div>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">
+                  {option.label || option.title || option.text || `Option ${index + 1}`}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-[10px] italic text-slate-400">
+            No menu options
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+) : type === "button" ? (
+  /* BUTTON NODE - MENU STYLE */
+  <div className="px-4 pb-4 pt-3">
+    <div className="rounded-xl bg-slate-50 p-3">
+      <p className="text-xs leading-5 text-slate-600">
+        {data.message || "Please select an option"}
+      </p>
 
+      <div className="mt-3 space-y-2">
+        {buttonOptions.length > 0 ? (
+          buttonOptions.map((button, index) => {
+            const buttonType = String(
+              button.type ||
+              button.buttonType ||
+              button.button_type ||
+              "reply"
+            ).toLowerCase();
+
+            const isUrlButton = buttonType === "url";
+            const sourceHandle = `source-option-${index}`;
+
+            return (
+              <div
+                key={sourceHandle}
+                className="
+                  relative
+                  flex
+                  min-h-[34px]
+                  items-center
+                  rounded-lg
+                  border
+                  border-purple-100
+                  bg-white
+                  px-3
+                  py-2
+                  pl-7
+                "
+              >
+                {!isUrlButton && (
+                  <Handle
+                    type="source"
+                    position={Position.Left}
+                    id={sourceHandle}
+                    className="
+                      !absolute
+                      !left-[-7px]
+                      !top-1/2
+                      !z-50
+                      !h-3
+                      !w-3
+                      !-translate-y-1/2
+                      !cursor-crosshair
+                      !border-2
+                      !border-white
+                      !bg-purple-500
+                      hover:!bg-purple-700
+                    "
+                  />
+                )}
+
+                <span
+                  className="
+                    mr-2
+                    flex
+                    h-5
+                    w-5
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-purple-100
+                    text-[9px]
+                    font-bold
+                    text-purple-600
+                  "
+                >
+                  {index + 1}
+                </span>
+
+                <span
+                  className="
+                    min-w-0
+                    flex-1
+                    truncate
+                    text-[11px]
+                    font-semibold
+                    text-slate-700
+                  "
+                >
+                  {button.title ||
+                    button.label ||
+                    button.text ||
+                    `Button ${index + 1}`}
+                </span>
+
+                {isUrlButton && (
+                  <span className="ml-2 text-[9px] font-semibold text-blue-600">
+                    URL
+                  </span>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-[10px] italic text-slate-400">
+            No buttons configured
+          </p>
+        )}
+      </div>
     </div>
   </div>
 ) : (
-  /* =====================================================
-     NORMAL CONTENT
-  ====================================================== */
-
+  /* NORMAL CONTENT */
   <div className="px-4 pb-4 pt-3">
     {preview ? (
       <div className="rounded-xl bg-slate-50 px-3 py-2.5">
@@ -1899,18 +1974,6 @@ templateVariables:
     }));
   };
 
-//   const validateStartNode = () => {
-//   if (
-//     node?.type === "start" &&
-//     form.triggerType === "keyword" &&
-//     !form.triggerText?.trim()
-//   ) {
-//     alert("Please enter a Trigger Message before saving.");
-//     return false;
-//   }
-
-//   return true;
-// };
 
   // =======================================================
   // MEDIA URL UPDATE
@@ -2737,17 +2800,20 @@ const update = () => {
   // START NODE VALIDATION
   // =====================================================
 
-  if (
-    node.type === "start" &&
-    form.triggerType === "keyword" &&
-    !form.triggerText?.trim()
-  ) {
-    toast.error(
-      "Please Enter a Trigger Message before saving."
-    );
+ if (node.type === "start") {
+  const triggerType = String(
+    form.triggerType || node.data?.triggerType || "keyword"
+  ).trim().toLowerCase();
 
+  const triggerText = String(
+    form.triggerText ?? node.data?.triggerText ?? ""
+  ).trim();
+
+  if (triggerType === "keyword" && !triggerText) {
+    toast.error("Please enter a Trigger Message before saving.");
     return;
   }
+}
 
 
   pushHistory(
@@ -3075,9 +3141,7 @@ const update = () => {
         />
       </div>
 
-      {/* =====================================================
-          START
-      ====================================================== */}
+  
 {/* =====================================================
     START
 ====================================================== */}
@@ -3105,9 +3169,7 @@ const update = () => {
           Keyword / Message
         </option>
 
-        <option value="any">
-          Any Incoming Message
-        </option>
+     
       </select>
     </div>
 
@@ -3138,31 +3200,7 @@ const update = () => {
       </div>
     )}
 
-    {/* WELCOME MESSAGE */}
-
-    {/* <div>
-      <label className={labelClass}>
-        Welcome Message
-      </label>
-
-      <textarea
-        value={form.message}
-        onChange={(e) =>
-          updateField(
-            "message",
-            e.target.value
-          )
-        }
-        rows={5}
-        placeholder="Welcome! How can I help you?"
-        className={textareaClass}
-      />
-
-      <p className="mt-2 text-[11px] text-slate-400">
-        This message will be sent when the
-        workflow starts.
-      </p>
-    </div> */}
+ 
 
     {/* PREVIEW */}
 
@@ -3269,31 +3307,13 @@ const update = () => {
         type="text"
         value={form.buttonText || ""}
         onChange={(e) => updateField("buttonText", e.target.value)}
-        placeholder="Verify Mobile"
+        placeholder="Enter button text"
         maxLength={20}
         className={inputClass}
       />
     </div>
 
-    {/* First Button Reply Value */}
-    {/* {(form.buttonType || "reply") === "reply" && (
-      <div>
-        <label className={labelClass}>Button Value / Handle</label>
 
-        <input
-          type="text"
-          value={form.buttonValue || ""}
-          onChange={(e) => updateField("buttonValue", e.target.value)}
-          placeholder="verify_mobile"
-          maxLength={256}
-          className={inputClass}
-        />
-
-        <p className="mt-1 text-[11px] text-slate-500">
-          Example: button_value
-        </p>
-      </div>
-    )} */}
 
     {/* First Button URL */}
     {form.buttonType === "url" && (
@@ -3403,16 +3423,39 @@ const update = () => {
             <div>
               <label className={labelClass}>Button Type</label>
 
-              <select
-                value={button.type || "reply"}
-                onChange={(e) =>
-                  updateExtraButton("type", e.target.value)
-                }
-                className={inputClass}
-              >
-                <option value="reply">Reply Button</option>
-                <option value="url">URL Button</option>
-              </select>
+          <select
+  value={button.type || "reply"}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    const anotherUrlExists =
+      form.buttonType === "url" ||
+      (form.extraButtons || []).some(
+        (item, i) => i !== index && item.type === "url"
+      );
+
+    if (value === "url" && anotherUrlExists) {
+      return;
+    }
+
+    updateExtraButton("type", value);
+  }}
+  className={inputClass}
+>
+  <option value="reply">Reply Button</option>
+
+  <option
+    value="url"
+    disabled={
+      form.buttonType === "url" ||
+      (form.extraButtons || []).some(
+        (item, i) => i !== index && item.type === "url"
+      )
+    }
+  >
+    URL Button
+  </option>
+</select>
             </div>
 
             {/* Additional Button Text */}
@@ -3431,25 +3474,7 @@ const update = () => {
               />
             </div>
 
-            {/* Additional Reply Value */}
-            {/* {button.type !== "url" && (
-              <div>
-                <label className={labelClass}>
-                  Button Value / Handle
-                </label>
-
-                <input
-                  type="text"
-                  value={button.value || ""}
-                  onChange={(e) =>
-                    updateExtraButton("value", e.target.value)
-                  }
-                  placeholder="check_status"
-                  maxLength={256}
-                  className={inputClass}
-                />
-              </div>
-            )} */}
+      
 
             {/* Additional URL */}
             {button.type === "url" && (
@@ -7193,6 +7218,7 @@ const WorkflowBuilder = () => {
 
 const [showEmptyWorkflowOverlay, setShowEmptyWorkflowOverlay] =
   useState(false);
+  const [showConfigPanel, setShowConfigPanel] = useState(true);
 
 useEffect(() => {
   if (location.state?.showEmptyWorkflowOverlay) {
@@ -7362,6 +7388,119 @@ const [reactFlowInstance, setReactFlowInstance] =
   setWorkflowFormName(workflow.name || "");
   setWorkflowFormDescription(workflow.description || "");
   setWorkflowModalOpen(true);
+};
+
+
+
+const DeletableEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  label,
+  data,
+  labelStyle,
+}) => {
+  const { deleteElements } = useReactFlow();
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  // Get menu option label
+  const edgeLabel = label || data?.label || "";
+
+  return (
+    <>
+      {/* Connector Line */}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={style}
+        markerEnd={markerEnd}
+      />
+
+      <EdgeLabelRenderer>
+
+        {/* Menu Option Label */}
+        {edgeLabel && (
+          <div
+            className="
+              nodrag nopan
+              absolute
+              px-2.5 py-1
+              rounded-md
+              bg-white
+              border border-slate-200
+              text-xs
+              font-semibold
+              text-slate-700
+              shadow-sm
+              whitespace-nowrap
+            "
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 15}px)`,
+              pointerEvents: "none",
+              ...labelStyle,
+            }}
+          >
+            {edgeLabel}
+          </div>
+        )}
+
+        {/* Delete Connection Button */}
+        <button
+          type="button"
+          className="
+            nodrag nopan
+            absolute
+            flex items-center justify-center
+            w-6 h-6
+            rounded-full
+            bg-white
+            border border-red-200
+            text-red-500
+            shadow-sm
+            hover:bg-red-500
+            hover:text-white
+            transition-colors
+            cursor-pointer
+          "
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + 15}px)`,
+            pointerEvents: "all",
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+
+            deleteElements({
+              edges: [{ id }],
+            });
+          }}
+          title="Delete connection"
+        >
+          <Scissors size={13} />
+        </button>
+
+      </EdgeLabelRenderer>
+    </>
+  );
+};
+
+const edgeTypes = {
+  deletable: DeletableEdge,
 };
 
 
@@ -8309,11 +8448,16 @@ useEffect(() => {
 
       setWorkflows(list);
 
-      const hasWorkflows = list.length > 0;
+    
 
    
 
-      const savedWorkflowId = localStorage.getItem("workflow_id");
+  const urlParams = new URLSearchParams(window.location.search);
+
+    const urlWorkflowId = urlParams.get("workflow_id");
+
+    const savedWorkflowId =
+      urlWorkflowId || localStorage.getItem("workflow_id");
 
       const savedWorkflowExists = list.some(
         (workflow) =>
@@ -9043,6 +9187,8 @@ useEffect(() => {
 
 
 const save = async (publish = false) => {
+
+    
   if (!token) {
     toast.warning("Please login first.");
     return;
@@ -9457,7 +9603,7 @@ if (loadingBots) {
       ))}
     </select>
           
-{/* WORKFLOW SELECT + DELETE */}
+
 {/* WORKFLOW SELECT + NEW WORKFLOW */}
 
 <div className="relative flex items-center gap-2">
@@ -10002,7 +10148,7 @@ if (loadingBots) {
             </button>
           </div>
           
-      {/* SAVE */}
+ {/* SAVE */}
         <button
           type="button"
           onClick={() => save(false)}
@@ -10235,7 +10381,7 @@ if (loadingBots) {
           {/* =================================================
               LEFT SIDEBAR
           ================================================= */}
-
+           
           <aside
             className="
               flex
@@ -10371,6 +10517,7 @@ if (loadingBots) {
               </div>
             </div>
           </aside>
+        
 
           {/* =================================================
               CANVAS
@@ -10393,9 +10540,15 @@ if (loadingBots) {
                       selected: selected?.id === node.id,
                       data: {
                           ...node.data,
+                          
                       },
                   }))}
-                  edges={edges}
+                 edges={edges.map((edge) => ({
+                            ...edge,
+                            type: "deletable",
+                            }))}
+                            
+                  edgeTypes={edgeTypes}
                   onInit={setReactFlowInstance}
                   onDrop={onDrop}
                   onDragOver={onDragOver}
@@ -10416,6 +10569,46 @@ if (loadingBots) {
               >
                   <MiniMap nodeStrokeWidth={3} pannable zoomable />
                   <Controls />
+                  {!showConfigPanel && (
+                    <Panel position="top-right">
+                        <button
+                            type="button"
+                            onClick={() => setShowConfigPanel(true)}
+                            title="Show node configuration"
+                            aria-label="Show node configuration"
+                            className="
+                            group
+                            cursor-pointer
+                            relative
+                            flex h-9 w-9
+                            shrink-0
+                            items-center justify-center
+                            rounded-xl
+                            border border-slate-200
+                            bg-white
+                            text-slate-500
+                            shadow-sm
+                            transition-all duration-200 ease-in-out
+                            hover:border-indigo-200
+                            hover:bg-indigo-50
+                            hover:text-indigo-600
+                            hover:shadow-md
+                            active:scale-95
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-indigo-500/20
+                            "
+                        >
+                            <PanelRightOpen
+                            size={20}
+                            strokeWidth={1.8}
+                            className="transition-transform duration-200 group-hover:scale-110"
+                            />
+
+                      
+                        </button>
+                        </Panel>
+                    )}
                   <Background gap={20} size={1} />
               </ReactFlow>
           </section>
@@ -10424,6 +10617,7 @@ if (loadingBots) {
               RIGHT SIDEBAR
           ================================================= */}
 
+          {showConfigPanel && (
           <aside
             className="
               flex
@@ -10461,6 +10655,8 @@ if (loadingBots) {
                 </p>
               </div>
 
+              
+
               {selected && (
                 <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold uppercase text-green-600">
                   <Settings2 className="h-3 w-3" />
@@ -10474,6 +10670,41 @@ if (loadingBots) {
                     : selected.type}
                 </span>
               )}
+
+            {/* Hide Configuration Panel */}
+                <button
+                type="button"
+                onClick={() => setShowConfigPanel(false)}
+                title="Hide configuration panel"
+                aria-label="Hide configuration panel"
+                className="cursor-pointer
+                    group
+                    relative
+                    flex h-9 w-9
+                    shrink-0
+                    items-center justify-center
+                    rounded-xl
+                    border border-slate-200
+                    bg-white
+                    text-slate-500
+                    shadow-sm
+                    transition-all duration-200 ease-in-out
+                    hover:border-indigo-200
+                    hover:bg-indigo-50
+                    hover:text-indigo-600
+                    hover:shadow-md
+                    active:scale-95
+                    focus:outline-none
+                    focus:ring-2
+                    focus:ring-indigo-500/20
+                "
+                >
+                <PanelRightClose
+                    size={20}
+                    strokeWidth={1.8}
+                    className="transition-transform duration-200 group-hover:scale-110"
+                />
+                </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -10537,6 +10768,7 @@ if (loadingBots) {
               )}
             </div>
           </aside>
+          )}
 
 
 {/* =================================================
@@ -10545,6 +10777,18 @@ if (loadingBots) {
 {showEmptyWorkflowOverlay && 
  (
   <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+
+<button
+  type="button"
+  onClick={() => {
+    setShowEmptyWorkflowOverlay(false);
+    navigate(-1);
+  }}
+  className="cursor-pointer absolute left-6 top-6 z-[10002] flex items-center gap-2 rounded-xl border border-white/30 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-lg transition-all duration-300 hover:-translate-x-1 hover:bg-slate-100 hover:shadow-xl active:scale-95"
+>
+  <ArrowLeft className="h-5 w-5 transition-transform duration-300 group-hover:-translate-x-1" />
+  Back
+</button>
 
     {/* Animated arrow and instruction */}
 <div className="absolute right-8 top-24 z-[10001] hidden flex-col items-center gap-3 md:flex">

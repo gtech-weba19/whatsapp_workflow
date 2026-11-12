@@ -15,6 +15,7 @@ import Bots from "./admin/Bots";
 import Users from "./admin/AllUsers";
 import WhatsAppAccounts from "./admin/WhatsAppAccounts";
 import Usage from "./admin/Usage";
+import MessageLogs from "./admin/MessageLogs";
 import SystemLog from "./admin/SystemLog";
 import FailedWorkflows from "./admin/FailedWorkflows";
 import PlatformSettings from "./admin/PlatformSettings";
@@ -23,6 +24,8 @@ import Profile from "./components/admin/Profile";
 import Plans from "./admin/Plans";
 import ForgotPassword from "./admin/ForgotPassword";
 import ResetPassword from "./admin/ResetPassword";
+import NotFound from "./components/NotFound";
+
 
 const App = () => {
   return (
@@ -76,6 +79,17 @@ const App = () => {
               <Route path="/usage" element={<Usage />} />
             </Route>
 
+            {/* MESSAGE LOGS & LIVE PREVIEW */}
+            <Route
+              element={
+                <PermissionRoute
+                  permission={["usage.view", "bots.view", "workflows.view"]}
+                />
+              }
+            >
+              <Route path="/message-logs" element={<MessageLogs />} />
+            </Route>
+
             {/* SYSTEM LOGS */}
             <Route element={<PermissionRoute permission="system_logs.view" />}>
               <Route path="/system-logs" element={<SystemLog />} />
@@ -114,6 +128,8 @@ const App = () => {
             />
           </Route>
         </Route>
+
+         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );

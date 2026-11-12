@@ -16,7 +16,7 @@ import {
 
 import React, { useState, useEffect, useMemo } from "react";
 import { NavLink } from "react-router-dom";
-import { getStoredUser, hasPermission, isSuperAdmin } from "../../utils/permission";
+import { getStoredUser, hasAnyPermission, hasPermission, isSuperAdmin } from "../../utils/permission";
 
 const menuItems = [
   {
@@ -80,6 +80,14 @@ const menuItems = [
     color: "text-green-700",
     bg: "bg-green-100",
     permission: "usage.view",
+  },
+  {
+    title: "Message Logs",
+    icon: MessageCircle,
+    path: "/message-logs",
+    color: "text-blue-700",
+    bg: "bg-blue-100",
+    permission: ["usage.view", "bots.view", "workflows.view"],
   },
   {
     title: "System Logs",
@@ -150,14 +158,16 @@ const visibleMenuItems = useMemo(() => {
 
       return (
         !item.permission ||
-        hasPermission(item.permission, currentUser)
+        (Array.isArray(item.permission)
+          ? hasAnyPermission(item.permission, currentUser)
+          : hasPermission(item.permission, currentUser))
       );
     })
     .map((item) => {
       if (item.path === "/plans" && isSuper) {
         return {
           ...item,
-          title: "Plans & Subscriptions",
+          title: "Plans",
         };
       }
       return item;
@@ -172,6 +182,7 @@ const visibleMenuItems = useMemo(() => {
     bg-gradient-to-b from-emerald-50 via-white to-green-50
   "
 >
+  
       {/* Decorative background */}
       <div
         className="

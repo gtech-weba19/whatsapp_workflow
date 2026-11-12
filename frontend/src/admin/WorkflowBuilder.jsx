@@ -7216,9 +7216,21 @@ const WorkflowBuilder = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-const [showEmptyWorkflowOverlay, setShowEmptyWorkflowOverlay] =
-  useState(false);
+  const initialUrlParams = new URLSearchParams(location.search);
+  const initialUrlUserId = initialUrlParams.get("user_id") || "";
+  const initialUrlBotId = initialUrlParams.get("bot_id") || "";
+  const initialUrlWorkflowId = initialUrlParams.get("workflow_id") || "";
+
+  const [selectedUserId, setSelectedUserId] = useState(
+    initialUrlUserId || localStorage.getItem("workflow_user_id") || ""
+  );
+
+  const [showEmptyWorkflowOverlay, setShowEmptyWorkflowOverlay] =
+    useState(false);
+
   const [showConfigPanel, setShowConfigPanel] = useState(true);
+
+
 
 useEffect(() => {
   if (location.state?.showEmptyWorkflowOverlay) {
@@ -7273,9 +7285,11 @@ useEffect(() => {
     workflowId,
     setWorkflowId,
   ] = useState(
-    localStorage.getItem(
-      "workflow_id"
-    ) || null
+    initialUrlWorkflowId ||
+      localStorage.getItem(
+        "workflow_id"
+      ) ||
+      null
   );
 
   const [name, setName] =
@@ -7318,21 +7332,44 @@ const isSuperAdmin = Boolean(
   storedUser?.role_name === "Super Admin"
 );
 
-const [tenants, setTenants] = useState([]);
+const [users, setUsers] = useState([]);
 const [bots, setBots] = useState([]);
 
-const [selectedTenantId, setSelectedTenantId] = useState(() => {
-  if (isSuperAdmin) {
-    return localStorage.getItem("workflow_tenant_id") || "";
-  }
-  return storedUser?.tenant_id ? String(storedUser.tenant_id) : "";
-});
+
+const filteredBots = isSuperAdmin
+  ? bots.filter(
+      (bot) => String(bot.user_id) === String(selectedUserId)
+    )
+  : bots;
+
+
+
 
 const [selectedBotId, setSelectedBotId] = useState(
-  localStorage.getItem("workflow_bot_id") || ""
+  initialUrlBotId || localStorage.getItem("workflow_bot_id") || ""
 );
 
-const [loadingTenants, setLoadingTenants] = useState(false);
+useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const qUser = params.get("user_id");
+  const qBot = params.get("bot_id");
+  const qWf = params.get("workflow_id");
+
+  if (qUser) {
+    localStorage.setItem("workflow_user_id", qUser);
+    setSelectedUserId(qUser);
+  }
+  if (qBot) {
+    localStorage.setItem("workflow_bot_id", qBot);
+    setSelectedBotId(qBot);
+  }
+  if (qWf) {
+    localStorage.setItem("workflow_id", qWf);
+    setWorkflowId(qWf);
+  }
+}, [location.search]);
+
+const [loadingUsers, setLoadingUsers] = useState(false);
 const [loadingBots, setLoadingBots] = useState(false);
 
 const isPageLoading =
@@ -7402,6 +7439,9 @@ const DeletableEdge = ({
   targetPosition,
   style = {},
   markerEnd,
+  label,
+  data,
+  labelStyle,
 }) => {
   const { deleteElements } = useReactFlow();
 
@@ -7414,8 +7454,12 @@ const DeletableEdge = ({
     targetPosition,
   });
 
+  // Get menu option label
+  const edgeLabel = label || data?.label || "";
+
   return (
     <>
+      {/* Connector Line */}
       <BaseEdge
         id={id}
         path={edgePath}
@@ -7424,6 +7468,35 @@ const DeletableEdge = ({
       />
 
       <EdgeLabelRenderer>
+
+        {/* Menu Option Label */}
+        {edgeLabel && (
+          <div
+            className="
+              nodrag nopan
+              absolute
+              px-2.5 py-1
+              rounded-md
+              bg-white
+              border border-slate-200
+              text-xs
+              font-semibold
+              text-slate-700
+              shadow-sm
+              whitespace-nowrap
+            "
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 15}px)`,
+              pointerEvents: "none",
+              ...labelStyle,
+            }}
+          >
+            {edgeLabel}
+          </div>
+        )}
+
+        {/* Delete Connection Button */}
         <button
           type="button"
           className="
@@ -7437,16 +7510,18 @@ const DeletableEdge = ({
             text-red-500
             shadow-sm
             hover:bg-red-500
-            hover:text-red-500
+            hover:text-white
             transition-colors
             cursor-pointer
           "
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + 15}px)`,
             pointerEvents: "all",
           }}
           onClick={(event) => {
             event.stopPropagation();
+
             deleteElements({
               edges: [{ id }],
             });
@@ -7455,6 +7530,7 @@ const DeletableEdge = ({
         >
           <Scissors size={13} />
         </button>
+
       </EdgeLabelRenderer>
     </>
   );
@@ -8233,8 +8309,8 @@ useEffect(() => {
 
   let cancelled = false;
 
-  const loadTenants = async () => {
-    setLoadingTenants(true);
+  const loadUsers = async () => {
+    setLoadingUsers(true);
 
     try {
       const response = await axios.get(
@@ -8252,23 +8328,23 @@ useEffect(() => {
         : payload?.data ?? [];
 
       if (!cancelled) {
-        setTenants(Array.isArray(list) ? list : []);
+        setUsers(Array.isArray(list) ? list : []);
       }
     } catch (error) {
-      console.error("TENANT LOAD ERROR:", error);
+      console.error("USER LOAD ERROR:", error);
 
       if (!cancelled) {
         toast.error(
           error.response?.data?.message ||
-          "Unable to load clients."
+          "Unable to load users."
         );
       }
     } finally {
-      if (!cancelled) setLoadingTenants(false);
+      if (!cancelled) setLoadingUsers(false);
     }
   };
 
-  loadTenants();
+  loadUsers();
 
   return () => {
     cancelled = true;
@@ -8286,7 +8362,7 @@ useEffect(() => {
   }
 
   // Super admin must select a tenant first
-  if (isSuperAdmin && !selectedTenantId) {
+  if (isSuperAdmin && !selectedUserId) {
     setBots([]);
     return;
   }
@@ -8313,11 +8389,11 @@ useEffect(() => {
 
       let userBots = Array.isArray(list) ? list : [];
 
-      if (isSuperAdmin && selectedTenantId) {
+      if (isSuperAdmin && selectedUserId) {
         userBots = userBots.filter(
           (bot) =>
-            String(bot.tenant_id ?? bot.client?.id) ===
-            String(selectedTenantId)
+            String(bot.user_id ?? bot.client?.id) ===
+            String(selectedUserId)
         );
       }
 
@@ -8360,7 +8436,7 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [token, selectedTenantId, isSuperAdmin]);
+}, [token, selectedUserId, isSuperAdmin]);
 
 
 /* =======================================================
@@ -8370,7 +8446,40 @@ useEffect(() => {
   let isMounted = true;
 
   const loadWorkflows = async () => {
-    if (!token || (isSuperAdmin && !selectedTenantId)) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlWorkflowId = urlParams.get("workflow_id");
+
+    if (!token) {
+      setWorkflows([]);
+      setLoadingWorkflows(false);
+      return;
+    }
+
+    if (isSuperAdmin && !selectedUserId) {
+      if (urlWorkflowId) {
+        try {
+          const singleRes = await axios.get(`${API}/workflows/${urlWorkflowId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          });
+          const wfData = singleRes.data?.data || singleRes.data;
+          if (wfData?.user_id && isMounted) {
+            const ownerId = String(wfData.user_id);
+            localStorage.setItem("workflow_user_id", ownerId);
+            setSelectedUserId(ownerId);
+            if (wfData.bot_id) {
+              localStorage.setItem("workflow_bot_id", String(wfData.bot_id));
+              setSelectedBotId(String(wfData.bot_id));
+            }
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to resolve workflow owner:", err);
+        }
+      }
+
       setWorkflows([]);
       setLoadingWorkflows(false);
       return;
@@ -8385,8 +8494,8 @@ useEffect(() => {
         params.bot_id = selectedBotId;
       }
 
-      if (isSuperAdmin && selectedTenantId) {
-        params.tenant_id = selectedTenantId;
+      if (isSuperAdmin && selectedUserId) {
+        params.user_id = selectedUserId;
       }
 
       const response = await axios.get(`${API}/workflows`, {
@@ -8469,7 +8578,7 @@ useEffect(() => {
   return () => {
     isMounted = false;
   };
-}, [token, selectedTenantId, selectedBotId, isSuperAdmin]);
+}, [token, selectedUserId, selectedBotId, isSuperAdmin]);
 
   /* =======================================================
      SELECT WORKFLOW
@@ -9147,6 +9256,7 @@ useEffect(() => {
 
 
 
+
 const save = async (publish = false) => {
 
     
@@ -9182,7 +9292,7 @@ const save = async (publish = false) => {
         {
           name,
           channel: "whatsapp",
-          tenant_id: selectedTenantId || null,
+          tenant_id: selectedUserId || null,
           bot_id: selectedBotId || null,
         },
         { headers }
@@ -9376,11 +9486,11 @@ useEffect(() => {
     !isLoadingWorkflowPage &&
     !loadingWorkflows &&
     !loadingBots &&
-    !loadingTenants &&
+    !loadingUsers &&
     !workflowModalOpen &&
     workflows.length === 0 &&
     Boolean(token) &&
-    (!isSuperAdmin || Boolean(selectedTenantId)) &&
+    (!isSuperAdmin || Boolean(selectedUserId)) &&
     Boolean(selectedBotId);
 
   setShowFirstWorkflowGuide(canShowGuide);
@@ -9388,12 +9498,12 @@ useEffect(() => {
   isLoadingWorkflowPage,
   loadingWorkflows,
   loadingBots,
-  loadingTenants,
+  loadingUsers,
   workflowModalOpen,
   workflows.length,
   token,
   isSuperAdmin,
-  selectedTenantId,
+  selectedUserId,
   selectedBotId,
 ]);
 
@@ -9481,7 +9591,7 @@ if (loadingBots) {
             {/* =======================================================
             TENANT SELECT (Super Admin only)
         ======================================================= */}
-
+{/* 
         {isSuperAdmin && (
           <select
             value={selectedTenantId}
@@ -9517,52 +9627,100 @@ if (loadingBots) {
               </option>
             ))}
           </select>
-        )}
+        )} */}
 
-    {/* =======================================================
-        BOT SELECT
-    ======================================================= */}
+        {/* =======================================================
+    USER SELECT (Super Admin only)
+======================================================= */}
 
-    <select
-      value={selectedBotId}
-      disabled={(isSuperAdmin && !selectedTenantId) || loadingBots}
-      onChange={(e) => {
-        const id = e.target.value;
+{isSuperAdmin && (
+  <select
+    value={selectedUserId}
+    disabled={loadingUsers}
+    onChange={(e) => {
+      const id = e.target.value;
 
-        setSelectedBotId(id);
+      setSelectedUserId(id);
+      setSelectedBotId("");
 
-        if (id) {
-          localStorage.setItem("workflow_bot_id", id);
-        } else {
-          localStorage.removeItem("workflow_bot_id");
-        }
+      if (id) {
+        localStorage.setItem("workflow_user_id", id);
+      } else {
+        localStorage.removeItem("workflow_user_id");
+      }
 
-    
-        localStorage.removeItem("workflow_id");
-        setWorkflowId(null);
-        setWorkflows([]);
-        setNodes([]);
-        setEdges([]);
-        setSelected(null);
-        setHistory([]);
-        setFuture([]);
-      }}
-      className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
-    >
-      <option value="">
-        {isSuperAdmin && !selectedTenantId
-          ? "Select client first"
-          : loadingBots
-          ? "Loading bots..."
-          : "Select Bot"}
+      // Clear previous bot and workflow
+      localStorage.removeItem("workflow_bot_id");
+      localStorage.removeItem("workflow_id");
+
+      setWorkflowId(null);
+      setWorkflows([]);
+      setBots([]);
+      setNodes([]);
+      setEdges([]);
+      setSelected(null);
+      setHistory([]);
+      setFuture([]);
+    }}
+    className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+  >
+    <option value="">
+      {loadingUsers ? "Loading users..." : "Select User"}
+    </option>
+
+    {users.map((user) => (
+      <option key={user.id} value={String(user.id)}>
+        {user.name}
       </option>
+    ))}
+  </select>
+)}
 
-      {bots.map((bot) => (
-        <option key={bot.id} value={String(bot.id)}>
-          {bot.name}
-        </option>
-      ))}
-    </select>
+   {/* =======================================================
+    BOT SELECT
+======================================================= */}
+
+<select
+  value={selectedBotId}
+  disabled={(isSuperAdmin && !selectedUserId) || loadingBots}
+  onChange={(e) => {
+    const id = e.target.value;
+
+    setSelectedBotId(id);
+
+    if (id) {
+      localStorage.setItem("workflow_bot_id", id);
+    } else {
+      localStorage.removeItem("workflow_bot_id");
+    }
+
+    localStorage.removeItem("workflow_id");
+    setWorkflowId(null);
+    setWorkflows([]);
+    setNodes([]);
+    setEdges([]);
+    setSelected(null);
+    setHistory([]);
+    setFuture([]);
+  }}
+  className="h-10 w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+>
+  <option value="">
+    {loadingBots
+      ? "Loading bots..."
+      : isSuperAdmin && !selectedUserId
+      ? "Select User First"
+      : filteredBots.length === 0
+      ? "No Bots Found"
+      : "Select Bot"}
+  </option>
+
+  {filteredBots.map((bot) => (
+    <option key={bot.id} value={String(bot.id)}>
+      {bot.name}
+    </option>
+  ))}
+</select>
           
 
 {/* WORKFLOW SELECT + NEW WORKFLOW */}
@@ -9685,7 +9843,7 @@ if (loadingBots) {
     return;
   }
 
-  if (isSuperAdmin && !selectedTenantId) {
+  if (isSuperAdmin && !selectedUserId) {
     toast.error("Please select a client first.");
     return;
   }
@@ -9709,7 +9867,7 @@ if (loadingBots) {
       name: workflowName,
       description: workflowFormDescription.trim() || null,
       channel: "whatsapp",
-      ...(selectedTenantId ? { tenant_id: selectedTenantId } : {}),
+      ...(selectedUserId ? { user_id: selectedUserId } : {}),
       bot_id: selectedBotId,
     };
 
@@ -10248,7 +10406,7 @@ if (loadingBots) {
     "
   >
     <option value="">
-      {isSuperAdmin && !selectedTenantId
+      {isSuperAdmin && !selectedUserId
         ? "Select Client First"
         : !selectedBotId
           ? "Select Bot First"
@@ -10501,12 +10659,14 @@ if (loadingBots) {
                       selected: selected?.id === node.id,
                       data: {
                           ...node.data,
+                          
                       },
                   }))}
                  edges={edges.map((edge) => ({
                             ...edge,
                             type: "deletable",
                             }))}
+                            
                   edgeTypes={edgeTypes}
                   onInit={setReactFlowInstance}
                   onDrop={onDrop}

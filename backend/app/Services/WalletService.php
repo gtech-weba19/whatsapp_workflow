@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\PackagePlan;
 use App\Models\User;
+use App\Models\UserMessageRate;
+use App\Models\UserSubscription;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
-use App\Models\UserMessageRate;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -89,6 +91,102 @@ class WalletService
     }
 
     /**
+     * Compute complete wallet & plan usage breakdown for a user.
+     */
+    public function getWalletSummary(User $user): array
+    {
+        $activeSubscription = UserSubscription::activeForUser((int) $user->id);
+        $hasActivePlan = $activeSubscription !== null;
+
+        $wallet = $hasActivePlan
+            ? $this->getWallet($user)
+            : Wallet::where('user_id', $user->id)->first();
+
+        $balance = round((float) ($wallet?->balance ?? 0), 2);
+        $rate = $this->getUserRate($user);
+
+        $totalUsed = round(
+            (float) WalletTransaction::where('user_id', $user->id)
+                ->where('type', 'debit')
+                ->sum('amount'),
+            2
+        );
+
+        $totalCredited = round(
+            (float) WalletTransaction::where('user_id', $user->id)
+                ->where('type', 'credit')
+                ->sum('amount'),
+            2
+        );
+
+        $totalPlanPurchased = round(
+            (float) UserSubscription::where('user_id', $user->id)->sum('amount_paid'),
+            2
+        );
+
+        $totalTaken = round($balance + $totalUsed, 2);
+        $usagePercentage = $totalTaken > 0
+            ? min(100, round(($totalUsed / $totalTaken) * 100, 1))
+            : 0.0;
+
+        $usedMessagesCount = (int) WalletTransaction::where('user_id', $user->id)
+            ->where('type', 'debit')
+            ->where('transaction_type', 'whatsapp_message')
+            ->count();
+
+        if ($usedMessagesCount === 0 && $totalUsed > 0 && $rate > 0) {
+            $usedMessagesCount = (int) round($totalUsed / $rate);
+        }
+
+        $remainingMessages = $rate > 0 ? (int) floor($balance / $rate) : 0;
+        $totalMessages = $usedMessagesCount + $remainingMessages;
+
+        $activePlan = $activeSubscription
+            ? PackagePlan::where('id', $activeSubscription->package_plan_id)->first()
+            : null;
+
+        $fallbackPlanNames = [
+            1 => 'Free Trial Pack',
+            2 => 'Starter Pack',
+            3 => 'Business Growth Pack',
+            4 => 'Enterprise Volume Pack',
+        ];
+
+        $activePlanName = $activePlan?->name
+            ?? ($activeSubscription
+                ? ($fallbackPlanNames[(int) $activeSubscription->package_plan_id]
+                    ?? ('Plan #' . $activeSubscription->package_plan_id))
+                : null);
+
+        return [
+            'wallet_id' => $wallet?->id,
+            'user_id' => $user->id,
+            'balance' => $balance,
+            'remaining_balance' => $balance,
+            'total_taken' => $totalTaken,
+            'total_credited' => $totalCredited,
+            'total_used' => $totalUsed,
+            'total_plan_amount' => $totalPlanPurchased,
+            'active_plan_amount' => $activeSubscription
+                ? round((float) $activeSubscription->amount_paid, 2)
+                : 0.0,
+            'active_plan_credits' => (int) ($activeSubscription?->credits_granted ?? 0),
+            'active_plan_name' => $activePlanName,
+            'active_plan_id' => $activeSubscription?->package_plan_id,
+            'has_active_plan' => $hasActivePlan,
+            'usage_percentage' => $usagePercentage,
+            'currency' => $wallet?->currency ?? 'INR',
+            'rate' => $rate,
+            'message_rate' => $rate,
+            'estimated_messages' => $remainingMessages,
+            'used_messages' => $usedMessagesCount,
+            'total_messages' => $totalMessages,
+            'active_subscription' => $activeSubscription,
+            'active_plan' => $activePlan,
+        ];
+    }
+
+    /**
      * Get user's WhatsApp message rate.
      */
     public function getUserRate(User $user): float
@@ -124,6 +222,28 @@ class WalletService
 
         return $this->getBalance($user) >= $amount;
     }
+
+
+    public function validateMessageBalance(User $user): void
+{
+    $rate = $this->getUserRate($user);
+    $balance = $this->getBalance($user);
+
+    if ($rate <= 0 || $balance < $rate) {
+
+        Log::warning('WHATSAPP MESSAGE BLOCKED - INSUFFICIENT BALANCE', [
+            'user_id' => $user->id,
+            'balance' => $balance,
+            'message_rate' => $rate,
+        ]);
+
+        throw new RuntimeException(
+            'Insufficient wallet balance. Please recharge your wallet.'
+        );
+    }
+}
+
+
 
     /**
      * Add money to wallet.

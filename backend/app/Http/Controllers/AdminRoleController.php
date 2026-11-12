@@ -14,28 +14,53 @@ class AdminRoleController extends Controller
     /**
      * List all roles with permission and user counts
      */
+    // public function index(Request $request): JsonResponse
+    // {
+    //     $user = $request->user();
+
+    //     $query = Role::query()->withCount(['users', 'permissions'])->with('permissions:id,name,slug,module');
+
+    //     // Non-super-admin can only see roles belonging to their tenant or general active roles
+    //     if (!$user->isSuperAdmin() && $user->tenant_id) {
+    //         $query->where(function ($q) use ($user) {
+    //             $q->where('tenant_id', $user->tenant_id)
+    //               ->orWhereNull('tenant_id');
+    //         })->where('slug', '!=', 'super_admin');
+    //     }
+
+    //     $roles = $query->orderBy('is_system', 'desc')->orderBy('name', 'asc')->get();
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Roles fetched successfully.',
+    //         'data' => $roles,
+    //     ]);
+    // }
+
     public function index(Request $request): JsonResponse
-    {
-        $user = $request->user();
+{
+    $user = $request->user();
 
-        $query = Role::query()->withCount(['users', 'permissions'])->with('permissions:id,name,slug,module');
+    $query = Role::query()
+        ->withCount(['users', 'permissions'])
+        ->with('permissions:id,name,slug,module');
 
-        // Non-super-admin can only see roles belonging to their tenant or general active roles
-        if (!$user->isSuperAdmin() && $user->tenant_id) {
-            $query->where(function ($q) use ($user) {
-                $q->where('tenant_id', $user->tenant_id)
-                  ->orWhereNull('tenant_id');
-            })->where('slug', '!=', 'super_admin');
-        }
-
-        $roles = $query->orderBy('is_system', 'desc')->orderBy('name', 'asc')->get();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Roles fetched successfully.',
-            'data' => $roles,
-        ]);
+    // Non-super-admin cannot see super_admin role
+    if (!$user->isSuperAdmin()) {
+        $query->where('slug', '!=', 'super_admin');
     }
+
+    $roles = $query
+        ->orderBy('is_system', 'desc')
+        ->orderBy('name', 'asc')
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Roles fetched successfully.',
+        'data' => $roles,
+    ]);
+}
 
     /**
      * Get all available permissions grouped by module
@@ -192,7 +217,6 @@ class AdminRoleController extends Controller
         }
 
         $role = Role::create([
-            'tenant_id' => $user->isSuperAdmin() ? null : $user->tenant_id,
             'name' => trim($validated['name']),
             'slug' => $slug,
             'description' => $validated['description'] ?? null,

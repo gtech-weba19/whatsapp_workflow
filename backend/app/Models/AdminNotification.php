@@ -10,21 +10,12 @@ class AdminNotification extends Model
 {
     use HasFactory;
 
-    protected $table = 'admin_notifications';
+    protected $table = 'notifications';
 
-    protected $fillable = [
-        'user_id',
-        'type',
-        'title',
-        'message',
-        'data',
-        'is_read',
-        'read_at',
-    ];
+    protected $guarded = [];
 
     protected $casts = [
         'data' => 'array',
-        'is_read' => 'boolean',
         'read_at' => 'datetime',
     ];
 

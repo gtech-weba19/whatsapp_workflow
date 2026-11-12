@@ -1,31 +1,23 @@
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import {
   Activity,
   AlertCircle,
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
+  ArrowRight,
   Bot,
-  CalendarDays,
+  Building2,
   CheckCircle2,
-  ChevronRight,
-  Clock3,
+  Clock,
   MessageCircle,
   MessagesSquare,
   RefreshCw,
   ShieldCheck,
-  Smartphone,
+  Sparkles,
   Users,
   Workflow,
   XCircle,
   Zap,
-  Building2,
-  TrendingUp,
-  Plus,
-  GitBranch
 } from "lucide-react";
 
 import {
@@ -33,9 +25,14 @@ import {
   hasPermission,
   isSuperAdmin,
 } from "../utils/permission";
-
-// Adjust this import path to your actual component location.
 import WhatsAppConnectionStatus from "../components/admin/WhatsAppConnectionStatus";
+import AccountBotsExplorer from "../components/admin/AccountBotsExplorer";
+import {
+  PastelKpiCard,
+  ThirtyDaysHitsChart,
+  WorkflowInteractionDonutCard,
+  WorkflowTriggersSummaryCard,
+} from "../components/admin/DashboardCharts";
 
 const API = (
   import.meta.env.VITE_API_URL || "http://localhost:8000/api"
@@ -44,24 +41,44 @@ const API = (
 const initialData = {
   stats: {
     total_contacts: 0,
+    unique_customers: 0,
+    total_conversations: 0,
     active_conversations: 0,
+    completed_conversations: 0,
     messages_today: 0,
+    total_messages_30d: 0,
     workflow_executions: 0,
     successful_executions: 0,
     failed_executions: 0,
     active_workflows: 0,
+    total_workflows: 0,
+    total_bots: 0,
+    total_accounts: 0,
   },
   monthly_usage: {
     used: 0,
-    limit: 100000,
-    remaining: 100000,
+    limit: 0,
+    remaining: 0,
     percentage: 0,
+    has_quota: false,
+    has_active_plan: false,
+    active_plan_name: null,
+    wallet_balance: 0,
+    message_rate: 0.5,
   },
   execution_summary: {
     success_rate: 0,
     failure_rate: 0,
     total: 0,
   },
+  daily_hits: [],
+  workflow_breakdown: {
+    total: 0,
+    by_workflow: [],
+    by_status: [],
+  },
+  keywords_summary: [],
+  accounts_overview: [],
   whatsapp: {
     status: "not_configured",
     sender_number: null,
@@ -69,6 +86,12 @@ const initialData = {
   },
   recent_executions: [],
 };
+
+const getAuthToken = () =>
+  localStorage.getItem("token") ||
+  localStorage.getItem("auth_token") ||
+  localStorage.getItem("access_token") ||
+  sessionStorage.getItem("token");
 
 const numberFormat = (value) =>
   Number(value || 0).toLocaleString("en-IN");
@@ -78,9 +101,7 @@ const percentage = (value) =>
 
 const formatDate = (value) => {
   if (!value) return "—";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return String(value);
 
   return date.toLocaleString("en-IN", {
@@ -102,201 +123,50 @@ function Panel({ children, className = "" }) {
   );
 }
 
-function SectionHeading({
-  title,
-  description,
-  icon: Icon,
-  eyebrow,
-}) {
-  return (
-    <div className="flex min-w-0 items-start gap-3">
-      {Icon && (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
-          <Icon size={19} />
-        </div>
-      )}
-
-      <div className="min-w-0">
-        {eyebrow && (
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">
-            {eyebrow}
-          </p>
-        )}
-
-        <h2 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">
-          {title}
-        </h2>
-
-        {description && (
-          <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-            {description}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  accent = "emerald",
-  loading = false,
-}) {
-  const themes = {
-    emerald: {
-      icon: "bg-emerald-50 text-emerald-700",
-      bar: "bg-emerald-500",
-      glow: "bg-emerald-100/70",
-    },
-    teal: {
-      icon: "bg-teal-50 text-teal-700",
-      bar: "bg-teal-500",
-      glow: "bg-teal-100/70",
-    },
-    blue: {
-      icon: "bg-blue-50 text-blue-700",
-      bar: "bg-blue-500",
-      glow: "bg-blue-100/70",
-    },
-    amber: {
-      icon: "bg-amber-50 text-amber-700",
-      bar: "bg-amber-500",
-      glow: "bg-amber-100/70",
-    },
-    red: {
-      icon: "bg-red-50 text-red-700",
-      bar: "bg-red-500",
-      glow: "bg-red-100/70",
-    },
-    violet: {
-      icon: "bg-violet-50 text-violet-700",
-      bar: "bg-violet-500",
-      glow: "bg-violet-100/70",
-    },
-  };
-
-  const theme = themes[accent] || themes.emerald;
-
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-900/[0.05] sm:p-6">
-      <div
-        className={`pointer-events-none absolute -right-5 -top-8 h-28 w-28 rounded-full ${theme.glow} opacity-60 blur-2xl transition group-hover:opacity-100`}
-      />
-
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-
-          {loading ? (
-            <div className="mt-3 h-9 w-28 animate-pulse rounded-lg bg-slate-100" />
-          ) : (
-            <p className="mt-2 break-words text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              {numberFormat(value)}
-            </p>
-          )}
-        </div>
-
-        <div
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition duration-300 group-hover:scale-110 ${theme.icon}`}
-        >
-          <Icon size={22} />
-        </div>
-      </div>
-
-      <div className="relative mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-        <p className="truncate text-xs text-slate-500">{description}</p>
-        <span className={`h-1.5 w-7 shrink-0 rounded-full ${theme.bar}`} />
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  const normalized = String(status || "unknown").toLowerCase();
-
-  const success = ["success", "completed"].includes(normalized);
-  const failed = ["failed", "error"].includes(normalized);
-  const running = ["running", "processing", "pending"].includes(normalized);
-
-  const classes = success
-    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-    : failed
-      ? "border-red-200 bg-red-50 text-red-800"
-      : running
-        ? "border-blue-200 bg-blue-50 text-blue-800"
-        : "border-slate-200 bg-slate-50 text-slate-700";
-
-  const label = success
-    ? "Success"
-    : failed
-      ? "Failed"
-      : normalized.charAt(0).toUpperCase() + normalized.slice(1);
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold ${classes}`}
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${
-          success
-            ? "bg-emerald-500"
-            : failed
-              ? "bg-red-500"
-              : running
-                ? "animate-pulse bg-blue-500"
-                : "bg-slate-400"
-        }`}
-      />
-      {label}
-    </span>
-  );
-}
-
-function LoadingRows() {
-  return Array.from({ length: 4 }).map((_, index) => (
-    <tr key={index}>
-      {Array.from({ length: 3 }).map((__, cell) => (
-        <td className="px-5 py-5 sm:px-6" key={cell}>
-          <div className="h-4 animate-pulse rounded-md bg-slate-100" />
-        </td>
-      ))}
-    </tr>
-  ));
-}
-
 function UsageRing({ value }) {
+  const rawId = useId();
+  const ringGradId = `usage-ring-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const safeValue = percentage(value);
-  const radius = 35;
+  const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (safeValue / 100) * circumference;
+  const isHigh = safeValue >= 90;
 
   return (
-    <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
+    <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-emerald-50/50 p-1">
       <svg
         viewBox="0 0 100 100"
         className="h-full w-full -rotate-90"
         role="img"
         aria-label={`${safeValue.toFixed(1)} percent usage`}
       >
+        <defs>
+          <linearGradient id={ringGradId} x1="0" y1="0" x2="1" y2="1">
+            <stop
+              offset="0%"
+              stopColor={isHigh ? "#f59e0b" : "#059669"}
+            />
+            <stop
+              offset="100%"
+              stopColor={isHigh ? "#ef4444" : "#14b8a6"}
+            />
+          </linearGradient>
+        </defs>
         <circle
           cx="50"
           cy="50"
           r={radius}
           fill="none"
           stroke="#d1fae5"
-          strokeWidth="8"
+          strokeWidth="8.5"
         />
-
         <circle
           cx="50"
           cy="50"
           r={radius}
           fill="none"
-          stroke={safeValue >= 90 ? "#f59e0b" : "#059669"}
-          strokeWidth="8"
+          stroke={`url(#${ringGradId})`}
+          strokeWidth="8.5"
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -305,10 +175,10 @@ function UsageRing({ value }) {
       </svg>
 
       <div className="absolute text-center">
-        <p className="text-xl font-extrabold text-slate-900">
+        <p className="text-xl font-black tracking-tight tabular-nums text-slate-900">
           {safeValue.toFixed(0)}%
         </p>
-        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+        <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700">
           Used
         </p>
       </div>
@@ -316,97 +186,34 @@ function UsageRing({ value }) {
   );
 }
 
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  type = "neutral",
-  rate,
-  hasExecutions,
-}) {
-  const themes = {
-    neutral: {
-      wrapper: "border-slate-200 bg-slate-50/70",
-      text: "text-slate-900",
-      icon: "text-slate-600",
-      bar: "bg-slate-500",
-    },
-    success: {
-      wrapper: "border-emerald-100 bg-emerald-50/70",
-      text: "text-emerald-900",
-      icon: "text-emerald-700",
-      bar: "bg-emerald-500",
-    },
-    danger: {
-      wrapper: "border-red-100 bg-red-50/60",
-      text: "text-red-800",
-      icon: "text-red-600",
-      bar: "bg-red-500",
-    },
-  };
+class DashboardErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
 
-  const theme = themes[type] || themes.neutral;
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+      message: error?.message || "Unexpected rendering error.",
+    };
+  }
 
-  return (
-    <div className={`rounded-xl border p-4 ${theme.wrapper}`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-600">{title}</span>
-        <Icon size={17} className={theme.icon} />
-      </div>
-
-      <p className={`mt-3 text-2xl font-extrabold ${theme.text}`}>{value}</p>
-
-      {rate !== undefined && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${theme.bar}`}
-            style={{ width: `${hasExecutions ? percentage(rate) : 0}%` }}
-          />
-        </div>
-      )}
-
-      {description && (
-        <p className="mt-2 text-[11px] leading-5 text-slate-500">
-          {description}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ error, onRetry, refreshing }) {
-  return (
-    <div className="px-6 py-14 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500">
-        <Activity size={25} />
-      </div>
-
-      <p className="mt-4 text-sm font-bold text-slate-800">
-        No recent executions
-      </p>
-
-      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-slate-500">
-        Workflow execution records will appear here when your backend has
-        activity to display.
-      </p>
-
-      {error && (
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={refreshing}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"
         >
-          <RefreshCw
-            size={14}
-            className={refreshing ? "animate-spin" : ""}
-          />
-          Retry loading
-        </button>
-      )}
-    </div>
-  );
+          <p className="font-bold">Section failed to render</p>
+          <p className="mt-1 opacity-85">{this.state.message}</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function Dashboard() {
@@ -414,607 +221,406 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  
+  const [chartWorkflowId, setChartWorkflowId] = useState("all");
 
   const [whatsAppAccount, setWhatsAppAccount] = useState(null);
-const [whatsAppLoading, setWhatsAppLoading] = useState(true);
-const [whatsAppError, setWhatsAppError] = useState("");
+  const [whatsAppLoading, setWhatsAppLoading] = useState(true);
+  const [whatsAppError, setWhatsAppError] = useState("");
 
-const [bots, setBots] = useState([]);
-const [loadingBots, setLoadingBots] = useState(true);
-const [botsError, setBotsError] = useState("");
-
-
-const [workflows, setWorkflows] = useState([]);
-const [loadingWorkflows, setLoadingWorkflows] = useState(true);
-const [workflowsError, setWorkflowsError] = useState("");
-
-
-const fetchWorkflows = useCallback(async () => {
-  setLoadingWorkflows(true);
-  setWorkflowsError("");
-
-  try {
-    const token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("auth_token") ||
-      localStorage.getItem("access_token") ||
-      sessionStorage.getItem("token");
-
-    const response = await axios.get(`${API}/workflows`, {
-      headers: {
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-
-    const payload = response.data?.data;
-
-    const workflowList = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(response.data?.workflows)
-          ? response.data.workflows
-          : [];
-
-    setWorkflows(workflowList);
-  } catch (error) {
-    console.error(
-      "Workflows API error:",
-      error.response?.data || error.message
-    );
-
-    setWorkflowsError(
-      error.response?.data?.message ||
-        "Unable to load workflows. Please try again."
-    );
-  } finally {
-    setLoadingWorkflows(false);
-  }
-}, []);
-
-
-const fetchBots = useCallback(async () => {
-  setLoadingBots(true);
-  setBotsError("");
-
-  try {
-    const token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("auth_token") ||
-      localStorage.getItem("access_token") ||
-      sessionStorage.getItem("token");
-
-    if (!token) {
-      throw new Error("Session expire ho gaya hai. Please login karein.");
-    }
-
-    const response = await axios.get(`${API}/bots`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const payload = response.data?.data;
-
-    // Normal array, Laravel pagination, aur nested data response handle karein.
-    const botList = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(response.data?.bots)
-          ? response.data.bots
-          : [];
-
-    setBots(botList);
-  } catch (err) {
-    console.error(
-      "Bots API error:",
-      err.response?.data || err.message
-    );
-
-    setBotsError(
-      err.response?.data?.message ||
-        err.message ||
-        "Bots load nahi ho paye."
-    );
-  } finally {
-    setLoadingBots(false);
-  }
-}, []);
-
-
+  const [workflows, setWorkflows] = useState([]);
 
   const user = getStoredUser();
   const superAdmin = isSuperAdmin(user);
 
-  const canViewContacts =
-    superAdmin || hasPermission("contacts.view", user);
-  const canViewBots =
-    superAdmin || hasPermission("bots.view", user);
-  const canViewWorkflows =
-    superAdmin || hasPermission("workflows.view", user);
-  const canViewUsage =
-    superAdmin || hasPermission("usage.view", user);
+  const canViewBots = superAdmin || hasPermission("bots.view", user);
+  const canViewWorkflows = superAdmin || hasPermission("workflows.view", user);
+  const canViewUsage = superAdmin || hasPermission("usage.view", user);
   const canViewWhatsApp =
     superAdmin || hasPermission("whatsapp_accounts.view", user);
 
-  const hasAnyOverviewCard =
-    canViewContacts || canViewBots || canViewWorkflows || canViewUsage;
+  const fetchDashboard = useCallback(
+    async ({ silent = false, workflowId = chartWorkflowId } = {}) => {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-  const fetchDashboard = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+      setError("");
 
-    setError("");
+      try {
+        const token = getAuthToken();
+        const response = await axios.get(`${API}/dashboard`, {
+          params:
+            workflowId && workflowId !== "all"
+              ? { workflow_id: workflowId }
+              : undefined,
+          headers: {
+            Accept: "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
 
+        const result = response.data?.data ?? response.data ?? {};
+
+        setDashboard({
+          ...initialData,
+          ...result,
+          stats: {
+            ...initialData.stats,
+            ...(result.stats || {}),
+          },
+          monthly_usage: {
+            ...initialData.monthly_usage,
+            ...(result.monthly_usage || {}),
+          },
+          execution_summary: {
+            ...initialData.execution_summary,
+            ...(result.execution_summary || {}),
+          },
+          daily_hits: Array.isArray(result.daily_hits)
+            ? result.daily_hits
+            : [],
+          workflow_breakdown: {
+            ...initialData.workflow_breakdown,
+            ...(result.workflow_breakdown || {}),
+          },
+          keywords_summary: Array.isArray(result.keywords_summary)
+            ? result.keywords_summary
+            : [],
+          accounts_overview: Array.isArray(result.accounts_overview)
+            ? result.accounts_overview
+            : [],
+          whatsapp: {
+            ...initialData.whatsapp,
+            ...(result.whatsapp || {}),
+          },
+          recent_executions: Array.isArray(result.recent_executions)
+            ? result.recent_executions
+            : [],
+        });
+      } catch (err) {
+        console.error(
+          "Dashboard API error:",
+          err.response?.data || err.message
+        );
+        setError(
+          err.response?.data?.message ||
+            "Dashboard data could not be loaded. Please check your connection."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [chartWorkflowId]
+  );
+
+  const fetchWorkflows = useCallback(async () => {
     try {
-      const token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("auth_token") ||
-        sessionStorage.getItem("token");
-
-      const response = await axios.get(`${API}/dashboard`, {
+      const token = getAuthToken();
+      const response = await axios.get(`${API}/workflows`, {
         headers: {
           Accept: "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
 
-      const result = response.data?.data ?? response.data ?? {};
+      const payload = response.data?.data;
+      const workflowList = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(response.data?.workflows)
+            ? response.data.workflows
+            : [];
 
-      setDashboard({
-        ...initialData,
-        ...result,
-        stats: {
-          ...initialData.stats,
-          ...(result.stats || {}),
-        },
-        monthly_usage: {
-          ...initialData.monthly_usage,
-          ...(result.monthly_usage || {}),
-        },
-        execution_summary: {
-          ...initialData.execution_summary,
-          ...(result.execution_summary || {}),
-        },
-        whatsapp: {
-          ...initialData.whatsapp,
-          ...(result.whatsapp || {}),
-        },
-        recent_executions: Array.isArray(result.recent_executions)
-          ? result.recent_executions
-          : [],
-      });
-    } catch (err) {
-      console.error(
-        "Dashboard API error:",
-        err.response?.data || err.message
-      );
-
-      setError(
-        err.response?.data?.message ||
-          "Dashboard data could not be loaded. Please check your connection."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setWorkflows(workflowList);
+    } catch {
+      setWorkflows([]);
     }
   }, []);
 
-
-
-const fetchWhatsAppStatus = useCallback(async ({ silent = false } = {}) => {
-  const token =
-    localStorage.getItem("token") ||
-    localStorage.getItem("auth_token") ||
-    localStorage.getItem("access_token") ||
-    sessionStorage.getItem("token");
-
-  if (!token) {
-    setWhatsAppAccount(null);
-    setWhatsAppError("Session expire ho gaya hai. Please login karein.");
-    setWhatsAppLoading(false);
-    return;
-  }
-
-  if (!silent) setWhatsAppLoading(true);
-  setWhatsAppError("");
-
-  try {
-    const response = await axios.get(`${API}/whatsapp-accounts`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-        "Cache-Control": "no-cache",
-      },
-      params: { _t: Date.now() },
-    });
-
-    const accounts = response.data?.data;
-
-    if (!Array.isArray(accounts)) {
-      throw new Error("WhatsApp API response format sahi nahi hai.");
-    }
-
-    const sortedAccounts = [...accounts].sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-
-      if (dateA !== dateB) return dateB - dateA;
-      return Number(b.id || 0) - Number(a.id || 0);
-    });
-
-    const account = sortedAccounts[0] || null;
-
-    setWhatsAppAccount(
-      account || {
-        status: "not_configured",
-        waba_id: null,
-        sender_number: null,
-      }
-    );
-
-    if (!account) {
-      localStorage.removeItem("whatsapp_account_status");
-      localStorage.removeItem("whatsapp_account_number");
-    }
-  } catch (err) {
-    console.error(
-      "WhatsApp status API error:",
-      err.response?.data || err.message
-    );
-
-    setWhatsAppError(
-      err.response?.data?.message ||
-        err.message ||
-        "WhatsApp status database se load nahi ho paya."
-    );
-  } finally {
-    if (!silent) setWhatsAppLoading(false);
-  }
-}, []);
-
-const handleConnectWhatsApp = useCallback(
-  async (details) => {
-    const token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("auth_token") ||
-      localStorage.getItem("access_token") ||
-      sessionStorage.getItem("token");
+  const fetchWhatsAppStatus = useCallback(async ({ silent = false } = {}) => {
+    const token = getAuthToken();
 
     if (!token) {
-      throw new Error("Session expire ho gaya hai. Dobara login karein.");
+      setWhatsAppAccount(null);
+      setWhatsAppError("Session expired. Please log in again.");
+      setWhatsAppLoading(false);
+      return;
     }
 
+    if (!silent) setWhatsAppLoading(true);
+    setWhatsAppError("");
+
     try {
-      const response = await axios.post(
-        `${API}/whatsapp-accounts`,
-        details,
-        {
+      const response = await axios.get(`${API}/whatsapp-accounts`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache",
+        },
+        params: { _t: Date.now() },
+      });
+
+      const accounts = response.data?.data;
+      if (!Array.isArray(accounts)) {
+        throw new Error("Unexpected WhatsApp API response.");
+      }
+
+      const sortedAccounts = [...accounts].sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+        const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+        if (dateA !== dateB) return dateB - dateA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+
+      const account = sortedAccounts[0] || null;
+
+      setWhatsAppAccount(
+        account || {
+          status: "not_configured",
+          waba_id: null,
+          sender_number: null,
+        }
+      );
+
+      if (!account) {
+        localStorage.removeItem("whatsapp_account_status");
+        localStorage.removeItem("whatsapp_account_number");
+      }
+    } catch (err) {
+      setWhatsAppError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to load WhatsApp connection status."
+      );
+    } finally {
+      if (!silent) setWhatsAppLoading(false);
+    }
+  }, []);
+
+  const handleConnectWhatsApp = useCallback(
+    async (details) => {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Session expired. Please log in again.");
+      }
+
+      try {
+        const response = await axios.post(`${API}/whatsapp-accounts`, details, {
           headers: {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }
-      );
+        });
 
-      await fetchWhatsAppStatus();
-      await fetchDashboard(true);
+        await fetchWhatsAppStatus();
+        await fetchDashboard({ silent: true });
 
-      return response.data;
-    } catch (err) {
-      const validationErrors = err.response?.data?.errors;
-      const firstValidationError = validationErrors
-        ? Object.values(validationErrors).flat()[0]
-        : null;
+        return response.data;
+      } catch (err) {
+        const validationErrors = err.response?.data?.errors;
+        const firstValidationError = validationErrors
+          ? Object.values(validationErrors).flat()[0]
+          : null;
 
-      throw new Error(
-        firstValidationError ||
-          err.response?.data?.message ||
-          err.message ||
-          "WhatsApp account save nahi ho paya."
-      );
+        throw new Error(
+          firstValidationError ||
+            err.response?.data?.message ||
+            err.message ||
+            "Unable to save WhatsApp account."
+        );
+      }
+    },
+    [fetchWhatsAppStatus, fetchDashboard]
+  );
+
+  // Initial load
+  useEffect(() => {
+    fetchDashboard();
+    if (!superAdmin && canViewWhatsApp) {
+      fetchWhatsAppStatus();
+    } else {
+      setWhatsAppLoading(false);
     }
-  },
-  [fetchWhatsAppStatus, fetchDashboard]
-);
+    if (canViewWorkflows || canViewBots) {
+      fetchWorkflows();
+    }
+  }, [
+    fetchDashboard,
+    fetchWhatsAppStatus,
+    fetchWorkflows,
+    superAdmin,
+    canViewWhatsApp,
+    canViewBots,
+    canViewWorkflows,
+  ]);
 
-// Initial loading.
-useEffect(() => {
-  fetchDashboard();
-  fetchWhatsAppStatus();
-  fetchBots();
-  fetchWorkflows();
-}, [
-  fetchDashboard,
-  fetchWhatsAppStatus,
-  fetchBots,
-  fetchWorkflows,
-]);
+  // Poll pending WhatsApp approval every 10s
+  useEffect(() => {
+    const status = String(whatsAppAccount?.status || "")
+      .trim()
+      .toLowerCase();
+    const pendingStatuses = [
+      "pending",
+      "pending_approval",
+      "connecting",
+      "verifying",
+    ];
+    if (!pendingStatuses.includes(status)) return;
 
-// Approval status check: pending hone par har 10 second mein refresh.
-useEffect(() => {
-  const status = String(whatsAppAccount?.status || "")
-    .trim()
-    .toLowerCase();
+    const timer = window.setInterval(() => {
+      fetchWhatsAppStatus({ silent: true });
+    }, 10000);
 
-  const pendingStatuses = [
-    "pending",
-    "pending_approval",
-    "connecting",
-    "verifying",
-  ];
+    return () => window.clearInterval(timer);
+  }, [whatsAppAccount?.status, fetchWhatsAppStatus]);
 
-  if (!pendingStatuses.includes(status)) return;
+  const handleChartWorkflowChange = (nextWorkflowId) => {
+    setChartWorkflowId(nextWorkflowId);
+    fetchDashboard({ silent: true, workflowId: nextWorkflowId });
+  };
 
-  const timer = window.setInterval(() => {
-    fetchWhatsAppStatus({ silent: true });
-  }, 10000);
-
-  return () => window.clearInterval(timer);
-}, [whatsAppAccount?.status, fetchWhatsAppStatus]);
-
-
-useEffect(() => {
-  fetchDashboard();
-}, [fetchDashboard]);
-
-// Page open hote hi database se WhatsApp status load karein.
-useEffect(() => {
-  fetchWhatsAppStatus();
-}, [fetchWhatsAppStatus]);
-
-// Pending approval ke dauran har 10 seconds mein status refresh karein.
-useEffect(() => {
-  const status = String(whatsAppAccount?.status || "").toLowerCase();
-
-  if (!["pending", "pending_approval", "connecting", "verifying"].includes(status)) {
-    return;
-  }
-
-  const timer = window.setInterval(() => {
-    fetchWhatsAppStatus();
-  }, 10000);
-
-  return () => window.clearInterval(timer);
-}, [whatsAppAccount?.status, fetchWhatsAppStatus]);
-
+  const handleRefreshAll = () => {
+    fetchDashboard({ silent: true });
+    if (canViewWorkflows || canViewBots) fetchWorkflows();
+    if (!superAdmin && canViewWhatsApp) fetchWhatsAppStatus({ silent: true });
+  };
 
   const stats = dashboard.stats;
   const usage = dashboard.monthly_usage;
   const summary = dashboard.execution_summary;
-  const whatsapp = dashboard.whatsapp;
+  const recentExecutions = (dashboard.recent_executions || []).slice(0, 5);
 
-  const successRate = percentage(summary.success_rate);
-  const failureRate = percentage(summary.failure_rate);
-  const usagePercentage = percentage(usage.percentage);
+  const messageSparkline = useMemo(() => {
+    const recent = (dashboard.daily_hits || []).slice(-7);
+    return recent.length >= 2
+      ? recent.map((d) => Number(d.messages || 0))
+      : [4, 7, 5, 9, 8, 12, 10];
+  }, [dashboard.daily_hits]);
 
-  const executionCount = Number(summary.total || 0);
-  const hasExecutions = executionCount > 0;
+  const sessionSparkline = useMemo(() => {
+    const recent = (dashboard.daily_hits || []).slice(-7);
+    return recent.length >= 2
+      ? recent.map((d) => Number(d.sessions || 0))
+      : [2, 4, 3, 6, 5, 7, 6];
+  }, [dashboard.daily_hits]);
 
-  const statCards = useMemo(
-    () => [
-      ...(canViewBots
-        ? [
-            {
-              title: "Active Conversations",
-              value: stats.active_conversations,
-              description: "Active and waiting sessions",
-              icon: MessageCircle,
-              accent: "teal",
-            },
-          ]
-        : []),
-      ...(canViewBots || canViewUsage
-        ? [
-            {
-              title: "Messages Today",
-              value: stats.messages_today,
-              description: "Messages recorded today",
-              icon: MessagesSquare,
-              accent: "blue",
-            },
-          ]
-        : []),
-      ...(canViewWorkflows
-        ? [
-            {
-              title: "Active Workflows",
-              value: stats.active_workflows,
-              description: "Published or active workflows",
-              icon: Workflow,
-              accent: "violet",
-            },
-          ]
-        : []),
-      ...(canViewWorkflows
-        ? [
-            {
-              title: "Total Executions",
-              value: stats.workflow_executions,
-              description: "Executions this month",
-              icon: Activity,
-              accent: "emerald",
-            },
-            {
-              title: "Successful",
-              value: stats.successful_executions,
-              description: "Successful executions this month",
-              icon: CheckCircle2,
-              accent: "teal",
-            },
-            {
-              title: "Failed",
-              value: stats.failed_executions,
-              description: "Failed executions this month",
-              icon: XCircle,
-              accent: "red",
-            },
-          ]
-        : []),
-      // ...(canViewContacts
-      //   ? [
-      //       {
-      //         title: "Total Contacts",
-      //         value: stats.total_contacts,
-      //         description: "Contacts in your workspace",
-      //         icon: Users,
-      //         accent: "amber",
-      //       },
-      //     ]
-      //   : []),
-    ],
-    [stats, canViewBots, canViewUsage, canViewWorkflows, canViewContacts]
-  );
+  const displayName =
+    user?.name || user?.company_name || (superAdmin ? "Super Admin" : "Admin");
 
-  const whatsappStatus = String(whatsapp.status || "")
-    .trim()
-    .toLowerCase();
+  const accountCount =
+    Number(stats.total_accounts || 0) || dashboard.accounts_overview.length;
 
-  const whatsappConnected = whatsappStatus === "connected";
+  const showWhatsAppWidget = !superAdmin && canViewWhatsApp;
+  const showQuotaWidget = canViewUsage || canViewWorkflows;
 
   return (
-    <div className="min-h-screen bg-[#f6faf8] text-slate-900">
-      <div className="mx-auto max-w-[1700px] space-y-6 p-4 sm:p-6 lg:space-y-7 lg:p-8">
-       
-   
+    <div className="mx-auto w-full max-w-[1640px] space-y-5 text-slate-900">
+      <DashboardErrorBoundary>
+        {/* EXECUTIVE EMERALD HERO COMMAND BANNER */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 px-5 py-5 text-white shadow-xl shadow-emerald-950/15 ring-1 ring-emerald-400/20 sm:px-7 sm:py-6">
+          {/* Decorative ambient mesh & dot pattern */}
+          <span className="pointer-events-none absolute -right-14 -top-16 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
+          <span className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-teal-300/15 blur-3xl" />
 
-{/* PRODUCTION DASHBOARD HEADER */}
-<header className="group relative isolate min-h-[320px] w-full overflow-hidden rounded-3xl border border-emerald-100/80 bg-gradient-to-br from-white via-white to-emerald-50/80 shadow-[0_8px_35px_-18px_rgba(5,150,105,0.22)] transition-shadow duration-300 hover:shadow-[0_15px_45px_-20px_rgba(5,150,105,0.3)] sm:min-h-[350px] lg:min-h-[380px]">
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 space-y-2.5">
+              {/* Live status & badge row */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-200 backdrop-blur-xs">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  {superAdmin ? "Super Admin Console" : "Live Workspace"}
+                </span>
 
-  {/* Background decoration */}
-  <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-    <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl transition-transform duration-700 group-hover:scale-110" />
-    <div className="absolute right-1/4 top-16 h-40 w-40 rounded-full bg-teal-100/40 blur-3xl" />
-    <div className="absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-cyan-100/30 blur-3xl" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold italic text-emerald-100">
+                  <Sparkles size={11} className="text-emerald-300" />
+                  Automate &amp; Grow
+                </span>
+              </div>
 
-    {/* Decorative dots */}
-    <div className="absolute right-7 top-7 grid grid-cols-4 gap-2 opacity-50 sm:right-10 sm:top-9">
-      {Array.from({ length: 16 }, (_, i) => (
-        <span
-          key={i}
-          className="h-1.5 w-1.5 rounded-full bg-emerald-400"
-        />
-      ))}
-    </div>
-  </div>
+              <div>
+                <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl lg:text-[26px]">
+                  Welcome back, {displayName}
+                  <span className="text-emerald-400">!</span>
+                </h1>
+                <p className="mt-0.5 text-xs text-emerald-100/80 sm:text-sm">
+                  Real-time overview across all WhatsApp accounts, active bots,
+                  workflows, and customer conversations.
+                </p>
+              </div>
 
-  {/* Left accent */}
-  <div className="absolute bottom-5 left-0 top-5 w-1 rounded-r-full bg-gradient-to-b from-emerald-400 via-emerald-600 to-teal-400 sm:bottom-7 sm:top-7 sm:w-1.5" />
+              {/* Compact inline snapshot pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
+                  <Building2 size={12} className="text-emerald-300" />
+                  {numberFormat(accountCount)} Account
+                  {accountCount === 1 ? "" : "s"}
+                </span>
 
-  {/* MAIN CONTENT: fixed minimum height */}
-  <div className="relative grid min-h-[318px] grid-cols-1 content-center gap-7 p-5 pl-7 sm:min-h-[348px] sm:p-7 sm:pl-9 lg:min-h-[378px] lg:grid-cols-[minmax(0,1fr)_290px] lg:items-center lg:gap-8 lg:p-8 lg:pl-10">
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
+                  <Bot size={12} className="text-teal-300" />
+                  {numberFormat(stats.total_bots)} Bot
+                  {stats.total_bots === 1 ? "" : "s"}
+                </span>
 
-    {/* Welcome content */}
-    <div className="min-w-0">
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
+                  <Workflow size={12} className="text-emerald-300" />
+                  {numberFormat(stats.total_workflows || workflows.length)}{" "}
+                  Workflows
+                </span>
 
-      {/* Eyebrow */}
-      <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50/90 px-3.5 py-2 shadow-sm">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-          <Activity size={14} strokeWidth={2.5} />
-        </span>
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/25 bg-emerald-500/20 px-3 py-1 text-[11px] font-bold text-emerald-100">
+                  <CheckCircle2 size={12} className="text-emerald-300" />
+                  {Number(summary.success_rate || 0).toFixed(1)}% Healthy
+                </span>
+              </div>
+            </div>
 
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-800 sm:text-xs">
-          Dashboard Overview
-        </span>
+            {/* Right Action Dock */}
+            <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
+              <button
+                type="button"
+                onClick={handleRefreshAll}
+                disabled={refreshing || loading}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-white/20 disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={14}
+                  className={refreshing ? "animate-spin text-emerald-300" : ""}
+                />
+                Refresh
+              </button>
 
-        <span className="ml-1 h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" />
-      </div>
+              {canViewWorkflows && (
+                <Link
+                  to="/workflow-builder"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/30 bg-emerald-500/25 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-emerald-500/40"
+                >
+                  <Workflow size={14} />
+                  Workflow Builder
+                </Link>
+              )}
 
-      {/* Greeting */}
-      <h1 className="text-3xl font-black leading-tight tracking-tight text-slate-900 sm:text-4xl xl:text-[42px]">
-        {user?.name ? (
-          <>
-            Welcome,{" "}
-            <span className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-500 bg-clip-text text-transparent">
-              {user.name}
-            </span>
-            <span className="ml-2 inline-block origin-bottom-right text-2xl transition-transform duration-300 group-hover:rotate-12 sm:text-3xl">
-              👋
-            </span>
-          </>
-        ) : (
-          "Dashboard"
-        )}
-      </h1>
+              <Link
+                to="/message-logs"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-extrabold text-emerald-900 shadow-lg shadow-emerald-950/25 transition hover:bg-emerald-50"
+              >
+                <MessageCircle size={14} />
+                Message Logs
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          </div>
+        </section>
 
-      {/* Description */}
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base sm:leading-7">
-        {superAdmin
-          ? "Monitor platform activity, workflows and system performance from one central workspace."
-          : `Here is the latest activity and performance overview for ${
-              user?.tenant?.name ||
-              user?.company_name ||
-              "your account"
-            }.`}
-      </p>
-
-    
-    </div>
-
-    {/* Right side */}
-    <div className="flex flex-col gap-5 sm:flex-row sm:items-center lg:w-[290px] lg:flex-col lg:items-stretch lg:gap-4">
-
- {/* CSS analytics illustration */}
-<div className="group relative hidden h-48 overflow-hidden rounded-2xl border border-emerald-100/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 p-6 shadow-sm transition-all duration-300 sm:flex sm:flex-1 sm:items-center sm:justify-center lg:h-56 lg:flex-none lg:w-[360px]">
-
-  <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-teal-100/60 blur-2xl" />
-  <div className="absolute -bottom-10 -left-6 h-32 w-32 rounded-full bg-emerald-200/50 blur-2xl" />
-
-  <div className="relative flex h-full w-full items-end justify-center gap-5">
-
-    {/* Chart bars */}
-    <div className="flex h-full items-end gap-3 rounded-2xl border border-white bg-white/80 px-8 pb-5 pt-6 shadow-md">
-      {[30, 48, 39, 68, 88].map((height, index) => (
-        <div
-          key={index}
-          className="relative w-7 overflow-hidden rounded-t-lg bg-gradient-to-t from-emerald-600 to-teal-300 transition-all duration-500 group-hover:brightness-110"
-          style={{ height: `${height}%` }}
-        />
-      ))}
-    </div>
-
-    {/* Growth badge */}
-    <div className="absolute right-2 top-2 flex items-center gap-3 rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-lg transition-transform duration-300 group-hover:-translate-y-1">
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-        <TrendingUp size={23} />
-      </span>
-
-      <span>
-        <span className="block text-xs font-medium text-slate-400">
-          Performance
-        </span>
-        <span className="block text-sm font-extrabold text-emerald-700">
-          Keep growing
-        </span>
-      </span>
-    </div>
-
-    {/* Message badge */}
-    <div className="absolute bottom-3 left-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-100 bg-white text-emerald-700 shadow-lg transition-transform duration-300 group-hover:rotate-[-6deg]">
-      <MessageCircle size={27} />
-    </div>
-  </div>
-</div>
-
-   
-    </div>
-  </div>
-
-  {/* Bottom accent */}
-  <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-100" />
-</header>
-        {/* API ERROR */}
+        {/* ERROR ALERT */}
         {error && (
           <div
             role="alert"
-            className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 shrink-0 text-red-600" size={19} />
@@ -1022,17 +628,15 @@ useEffect(() => {
                 <p className="text-sm font-bold text-red-900">
                   Unable to refresh dashboard
                 </p>
-                <p className="mt-1 break-words text-xs leading-5 text-red-800">
-                  {error}
-                </p>
+                <p className="mt-0.5 text-xs text-red-800">{error}</p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => fetchDashboard(true)}
+              onClick={() => fetchDashboard({ silent: true })}
               disabled={refreshing}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-800 hover:bg-red-100"
             >
               <RefreshCw
                 size={13}
@@ -1043,17 +647,107 @@ useEffect(() => {
           </div>
         )}
 
+        {/* ROW 1: 5 EMERALD-SPECTRUM KPI CARDS WITH AREA SPARKLINES */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <PastelKpiCard
+            title="Active Workflows"
+            value={stats.active_workflows}
+            subtitle={`Out of ${numberFormat(stats.total_workflows || workflows.length)} total workflows`}
+            pill="Live"
+            icon={Workflow}
+            theme="emerald"
+            sparkline={[
+              2,
+              4,
+              4,
+              6,
+              7,
+              8,
+              Math.max(1, Number(stats.active_workflows || 1)),
+            ]}
+            to={canViewWorkflows ? "/workflow-builder" : undefined}
+            loading={loading}
+          />
 
-       {/* TOP WHATSAPP STATUS — DATABASE SOURCE OF TRUTH */}
+          <PastelKpiCard
+            title="Total Conversations"
+            value={stats.total_conversations}
+            subtitle={`${numberFormat(stats.active_conversations)} active · ${numberFormat(stats.completed_conversations)} done`}
+            pill="All Sessions"
+            icon={MessageCircle}
+            theme="teal"
+            sparkline={sessionSparkline}
+            to="/message-logs"
+            loading={loading}
+          />
 
-      {!superAdmin && canViewWhatsApp && (
-        <div className="space-y-3">
+          <PastelKpiCard
+            title="Messages Today"
+            value={stats.messages_today}
+            subtitle={`${numberFormat(stats.total_messages_30d)} in last 30 days`}
+            pill="Today"
+            icon={MessagesSquare}
+            theme="green"
+            sparkline={messageSparkline}
+            to="/message-logs"
+            loading={loading}
+          />
+
+          <PastelKpiCard
+            title="Unique Customers"
+            value={stats.unique_customers || stats.total_contacts}
+            subtitle="WhatsApp users reached"
+            pill="Engaged"
+            icon={Users}
+            theme="cyan"
+            sparkline={sessionSparkline}
+            loading={loading}
+          />
+
+          <PastelKpiCard
+            title="Workflow Executions"
+            value={stats.workflow_executions}
+            subtitle={`${Number(summary.success_rate || 0).toFixed(1)}% success rate`}
+            pill="This Month"
+            icon={Zap}
+            theme="lime"
+            sparkline={messageSparkline}
+            loading={loading}
+          />
+        </section>
+
+        {/* ROW 2: FULL-WIDTH 30 DAYS / 14 DAYS ACTIVITY PULSE CHART */}
+        <ThirtyDaysHitsChart
+          data={dashboard.daily_hits}
+          workflows={workflows}
+          selectedWorkflowId={chartWorkflowId}
+          onWorkflowChange={handleChartWorkflowChange}
+          loading={loading}
+        />
+
+        {/* ROW 3: 2-COLUMN SPLIT ANALYTICS (INTERACTIVE DONUT + RANKED LEADERBOARD) */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <WorkflowInteractionDonutCard
+            breakdown={dashboard.workflow_breakdown}
+          />
+
+          <WorkflowTriggersSummaryCard items={dashboard.keywords_summary} />
+        </div>
+
+        {/* ROW 4: INTERACTIVE ACCOUNT → NUMBERED BOTS & WORKFLOWS EXPLORER */}
+        {(canViewWhatsApp || canViewBots || canViewWorkflows) && (
+          <AccountBotsExplorer
+            accounts={dashboard.accounts_overview}
+            loading={loading}
+            superAdmin={superAdmin}
+            canViewWorkflows={canViewWorkflows}
+          />
+        )}
+
+        {/* CLIENT WHATSAPP CONNECTION BANNER */}
+        {showWhatsAppWidget && (
           <WhatsAppConnectionStatus
-            status={
-              whatsAppError
-                ? ""
-                : whatsAppAccount?.status || ""
-            }
+            status={whatsAppError ? "" : whatsAppAccount?.status || ""}
             senderNumber={
               whatsAppAccount?.sender_number ||
               whatsAppAccount?.waba_id ||
@@ -1063,425 +757,236 @@ useEffect(() => {
             onRefresh={fetchWhatsAppStatus}
             onConnectWhatsApp={handleConnectWhatsApp}
           />
+        )}
 
-          {whatsAppError && (
-            <div
-              role="alert"
-              className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <p className="text-xs leading-5 text-amber-900">
-                {whatsAppError}
-              </p>
-
-              <button
-                type="button"
-                onClick={() => fetchWhatsAppStatus()}
-                disabled={whatsAppLoading}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+        {/* ROW 5: MONTHLY QUOTA HEALTH + RECENT EXECUTIONS */}
+        {(showQuotaWidget || canViewWorkflows) && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            {showQuotaWidget && (
+              <Panel
+                className={`relative flex flex-col justify-between overflow-hidden p-5 sm:p-6 ${
+                  canViewWorkflows ? "xl:col-span-6" : "xl:col-span-12"
+                }`}
               >
-                <RefreshCw
-                  size={13}
-                  className={whatsAppLoading ? "animate-spin" : ""}
-                />
-                Retry
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-500 to-teal-400 opacity-80" />
 
-
-{/* MY BOTS */}
-{canViewBots && (
-  <section>
-    <Panel className="overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <SectionHeading
-          title="My Bot"
-          icon={Bot}
-          eyebrow="Bot Management"
-        />
-
-        <button
-          type="button"
-          onClick={fetchBots}
-          disabled={loadingBots}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 sm:self-auto"
-        >
-          <RefreshCw
-            size={16}
-            className={loadingBots ? "animate-spin" : ""}
-          />
-          Refresh
-        </button>
-      </div>
-
-      <div className="p-5 sm:p-6">
-        {loadingBots ? (
-          <div className="space-y-3">
-            <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
-            <div className="h-4 w-40 animate-pulse rounded bg-slate-100" />
-          </div>
-        ) : botsError ? (
-          <div
-            role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 p-4"
-          >
-            <p className="text-sm font-semibold text-red-800">
-              {botsError}
-            </p>
-
-            <button
-              type="button"
-              onClick={fetchBots}
-              className="mt-3 text-sm font-bold text-red-700 underline"
-            >
-              Try again
-            </button>
-          </div>
-        ) : bots.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {bots.map((bot) => (
-              <div
-                key={bot.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-emerald-200 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                      <Bot size={24} />
-                    </div>
-
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <UsageRing
+                      value={
+                        usage.has_quota || Number(usage.limit || 0) > 0
+                          ? usage.percentage
+                          : 0
+                      }
+                    />
                     <div className="min-w-0">
-                      <h3 className="truncate font-bold text-slate-900">
-                        {bot.name || `Bot #${bot.id}`}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">
+                          Monthly Quota &amp; Health
+                        </p>
+                        {!usage.has_quota && Number(usage.limit || 0) <= 0 ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-800">
+                            No Wallet Recharge
+                          </span>
+                        ) : (
+                          usage.active_plan_name && (
+                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                              {usage.active_plan_name}
+                            </span>
+                          )
+                        )}
+                      </div>
 
-                      <p className="mt-1 text-xs text-slate-500">
-                        Bot ID: {bot.id}
-                      </p>
+                      {!usage.has_quota && Number(usage.limit || 0) <= 0 ? (
+                        <>
+                          <h3 className="mt-0.5 text-base font-extrabold text-slate-900 tabular-nums">
+                            {numberFormat(usage.used)} Msgs Sent · 0 Quota Left
+                          </h3>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Wallet balance is ₹
+                            {Number(usage.wallet_balance || 0).toLocaleString(
+                              "en-IN",
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }
+                            )}{" "}
+                            — 0 messages remaining.
+                            {!superAdmin && (
+                              <>
+                                {" "}
+                                <Link
+                                  to="/plans"
+                                  className="inline-flex items-center gap-0.5 font-bold text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-800"
+                                >
+                                  Recharge Wallet
+                                  <ArrowRight size={11} />
+                                </Link>
+                              </>
+                            )}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="mt-0.5 text-base font-extrabold text-slate-900 tabular-nums">
+                            {numberFormat(usage.used)} /{" "}
+                            {numberFormat(usage.limit)} Msgs
+                          </h3>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                            {numberFormat(usage.remaining)} messages remaining
+                            from{" "}
+                            {superAdmin ? "client wallets" : "wallet balance"}{" "}
+                            (₹
+                            {Number(usage.wallet_balance || 0).toLocaleString(
+                              "en-IN",
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }
+                            )}
+                            )
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
-
-                  <StatusBadge status={bot.status || "active"} />
                 </div>
 
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-5 py-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-              <Bot size={28} />
-            </div>
-
-              <h3 className="mt-4 text-base font-bold text-slate-900">
-                  No Bots Available
-                </h3>
-
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                  You haven’t created a bot yet. Create your first bot to start
-                  automating WhatsApp conversations and managing workflows from
-                  your dashboard.
-                </p>
-
-                <p className="mt-3 text-xs text-slate-400">
-                  Once your bot is created, it will appear here automatically after
-                  you refresh the list.
-                </p>
-          </div>
-        )}
-      </div>
-    </Panel>
-  </section>
-)}
-
-
-{canViewBots && (
-  <Panel>
-   <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-  {/* Heading and workflow count */}
-  <div className="flex items-center gap-3">
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600">
-      <GitBranch size={24} strokeWidth={2} />
-    </div>
-
-    <div>
-      <SectionHeading title="My Workflows" />
-
-      <p className="mt-1 text-sm text-slate-500">
-        Manage and monitor your WhatsApp workflows.
-      </p>
-
-      <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-        <GitBranch size={14} />
-
-        <span>
-          Total Workflows:{" "}
-          {loadingWorkflows ? "Loading..." : workflows.length}
-        </span>
-      </div>
-    </div>
-  </div>
-
-  {/* Refresh button */}
-  <button
-    type="button"
-    onClick={fetchWorkflows}
-    disabled={loadingWorkflows}
-    className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 sm:self-center"
-  >
-    <RefreshCw
-      size={16}
-      className={loadingWorkflows ? "animate-spin" : ""}
-    />
-    Refresh
-  </button>
-</div>
-    {workflowsError ? (
-      <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
-        <p className="text-sm text-red-700">{workflowsError}</p>
-
-        <button
-          type="button"
-          onClick={fetchWorkflows}
-          className="mt-3 text-sm font-semibold text-red-700 underline"
-        >
-          Try again
-        </button>
-      </div>
-    ) : loadingWorkflows ? (
-      <div className="py-10 text-center text-sm text-slate-500">
-        Loading workflows...
-      </div>
-    ) : workflows.length === 0 ? (
-      <div className="mt-5 rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center">
-        <Workflow className="mx-auto text-slate-400" size={32} />
-
-        <h3 className="mt-3 text-base font-semibold text-slate-900">
-          No Workflows Available
-        </h3>
-
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-          You haven’t created any workflows yet. Create your first
-          workflow to automate customer conversations and bot journeys.
-        </p>
-
-   
-      </div>
-    ) : (
-      <>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {workflows.map((workflow) => (
-            <div
-              key={workflow.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                    <Workflow size={20} />
+                <div className="mt-5 grid grid-cols-1 gap-2.5 border-t border-slate-100 pt-4 sm:grid-cols-3">
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700">
+                      <CheckCircle2 size={12} className="shrink-0" />
+                      <span>Success Rate</span>
+                    </p>
+                    <p className="mt-1 text-base font-black tabular-nums text-emerald-900">
+                      {Number(summary.success_rate || 0).toFixed(1)}%
+                    </p>
                   </div>
 
-                  <div className="min-w-0">
-                    <h3 className="truncate font-semibold text-slate-900">
-                      {workflow.name || workflow.title || `Workflow #${workflow.id}`}
-                    </h3>
+                  <div className="rounded-xl border border-teal-100 bg-teal-50/70 px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold text-teal-700">
+                      <Zap size={12} className="shrink-0" />
+                      <span>Succeeded</span>
+                    </p>
+                    <p className="mt-1 text-base font-black tabular-nums text-teal-900">
+                      {numberFormat(stats.successful_executions)}
+                    </p>
+                  </div>
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      ID: {workflow.id}
+                  <div className="rounded-xl border border-rose-100 bg-rose-50/70 px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold text-rose-700">
+                      <XCircle size={12} className="shrink-0" />
+                      <span>Failed</span>
+                    </p>
+                    <p className="mt-1 text-base font-black tabular-nums text-rose-900">
+                      {numberFormat(stats.failed_executions)}
                     </p>
                   </div>
                 </div>
+              </Panel>
+            )}
 
-                <StatusBadge status={workflow.status || "draft"} />
-              </div>
+            {/* RECENT WORKFLOW EXECUTIONS FEED */}
+            {canViewWorkflows && (
+              <Panel
+                className={`relative overflow-hidden p-5 sm:p-6 ${
+                  showQuotaWidget ? "xl:col-span-6" : "xl:col-span-12"
+                }`}
+              >
+              <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-teal-500 to-emerald-400 opacity-80" />
 
-              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                <span className="text-xs text-slate-500">
-                  {workflow.channel || "WhatsApp"}
-                </span>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-200/80 bg-emerald-50 text-emerald-700">
+                    <Activity size={17} />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Recent Workflow Activity
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Latest execution stream across bots
+                    </p>
+                  </div>
+                </div>
 
                 <Link
-                to={`/workflow-builder?workflow_id=${workflow.id}`}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
-              >
-                View Workflow
-                <ChevronRight size={16} />
-              </Link>
+                  to="/message-logs"
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-600 hover:text-white"
+                >
+                  All Logs
+                  <ArrowRight size={12} />
+                </Link>
               </div>
-            </div>
-          ))}
-        </div>
 
-       
-      </>
-    )}
-  </Panel>
-)}
+              {recentExecutions.length === 0 ? (
+                <div className="flex h-36 flex-col items-center justify-center gap-1.5 text-center text-xs text-slate-400">
+                  <Activity size={22} className="text-slate-300" />
+                  <span>No workflow executions logged yet.</span>
+                </div>
+              ) : (
+                <div className="mt-3 divide-y divide-slate-100">
+                  {recentExecutions.map((item, idx) => {
+                    const isFailed =
+                      String(item.status || "").toLowerCase() === "failed";
+                    return (
+                      <div
+                        key={item.id ?? idx}
+                        className="flex items-center justify-between gap-3 py-2.5 first:pt-1 last:pb-0"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className={`h-2 w-2 shrink-0 rounded-full ${
+                              isFailed ? "bg-rose-500" : "bg-emerald-500"
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-slate-800">
+                              {item.workflow || "Workflow"}
+                            </p>
+                            <p className="truncate text-[10px] text-slate-400">
+                              {item.contact ? `${item.contact} · ` : ""}
+                              {item.time || "Just now"}
+                            </p>
+                          </div>
+                        </div>
 
-  
-        {/* OVERVIEW STATISTICS */}
-        {/* {hasAnyOverviewCard && (
-          <section>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <SectionHeading
-                title="Platform overview"
-                description="Your workspace at a glance"
-                icon={Activity}
-              />
-
-              <span className="hidden items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 sm:inline-flex">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Live data
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {statCards.map((card) => (
-                <StatCard
-                  key={card.title}
-                  {...card}
-                  loading={loading}
-                />
-              ))}
-            </div>
-          </section>
-        )} */}
-
-        {/* USAGE AND WHATSAPP DETAILS */}
-        {/* {(canViewUsage || (canViewWhatsApp && superAdmin)) && (
-          <section
-            className={
-              canViewUsage && canViewWhatsApp && superAdmin
-                ? "grid grid-cols-1 gap-5 xl:grid-cols-5"
-                : "grid grid-cols-1 gap-5"
-            }
-          >
-          
-
-            {canViewWhatsApp && superAdmin && (
-              <div
-                className={
-                  canViewUsage ? "xl:col-span-2" : "w-full"
-                }
-              >
-                <Panel className="h-full overflow-hidden p-5 sm:p-6">
-                  <SectionHeading
-                    title="WhatsApp account"
-                    description="Provider connection overview"
-                    icon={Smartphone}
-                  />
-
-                  <div className="mt-5">
-                    <WhatsAppConnectionStatus
-                      status={whatsapp.status}
-                      senderNumber={whatsapp.sender_number}
-                      loading={loading}
-                      onRefresh={() => fetchDashboard(true)}
-                      compact
-                    />
-                  </div>
-
-                  <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <p className="text-xs font-medium text-slate-500">
-                      Active numbers
-                    </p>
-                    <p className="mt-2 text-2xl font-extrabold text-slate-900">
-                      {numberFormat(whatsapp.active_numbers)}
-                    </p>
-                  </div>
-                </Panel>
-              </div>
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            isFailed
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          <Clock size={9} />
+                          {item.status || "Done"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              </Panel>
             )}
-          </section>
-        )} */}
-
-        {/* EXECUTION HEALTH */}
-        {/* {canViewWorkflows && (
-          <section>
-            <Panel className="p-5 sm:p-6">
-              <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <SectionHeading
-                  title="Execution health"
-                  description="Workflow results for the reported period"
-                  icon={Activity}
-                />
-
-                <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-                  <Clock3 size={14} />
-                  Monthly summary
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <MetricCard
-                  title="Total executions"
-                  value={numberFormat(summary.total)}
-                  description="All executions in the reported period"
-                  icon={Activity}
-                />
-
-                <MetricCard
-                  title="Success rate"
-                  value={`${Number(summary.success_rate || 0).toFixed(1)}%`}
-                  description="Successful workflow executions"
-                  icon={CheckCircle2}
-                  type="success"
-                  rate={successRate}
-                  hasExecutions={hasExecutions}
-                />
-
-                <MetricCard
-                  title="Failure rate"
-                  value={`${Number(summary.failure_rate || 0).toFixed(1)}%`}
-                  description="Failed workflow executions"
-                  icon={XCircle}
-                  type="danger"
-                  rate={failureRate}
-                  hasExecutions={hasExecutions}
-                />
-              </div>
-            </Panel>
-          </section>
-        )} */}
-
-   
-        {/* NO PERMISSIONS FALLBACK */}
-        {/* {!hasAnyOverviewCard &&
-          !canViewWorkflows &&
-          !canViewUsage &&
-          !canViewWhatsApp && (
-            <Panel className="p-8 text-center sm:p-12">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                <ShieldCheck size={32} />
-              </div>
-
-              <h2 className="mt-4 text-xl font-bold text-slate-900">
-                Welcome to your workspace, {user?.name || "User"}
-              </h2>
-
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                Your account is active. Use the sidebar to access your
-                assigned tools and features.
-              </p>
-            </Panel>
-          )} */}
+          </div>
+        )}
 
         {/* FOOTER */}
-        <footer className="flex flex-col items-start justify-between gap-2 border-t border-slate-200 pt-4 text-xs text-slate-400 sm:flex-row sm:items-center">
+        <footer className="flex flex-col items-start justify-between gap-2 border-t border-emerald-100 pt-4 text-xs text-slate-400 sm:flex-row sm:items-center">
           <p className="inline-flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
               <ShieldCheck size={14} />
             </span>
-            Dashboard · Admin Console
+            <span>WABA Automation · Admin Console</span>
           </p>
 
           {dashboard.generated_at && (
-            <p>Last updated: {formatDate(dashboard.generated_at)}</p>
+            <p className="font-medium text-slate-500">
+              Last synced: {formatDate(dashboard.generated_at)}
+            </p>
           )}
         </footer>
-      </div>
+      </DashboardErrorBoundary>
     </div>
   );
 }

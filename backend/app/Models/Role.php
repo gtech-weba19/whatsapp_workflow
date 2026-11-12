@@ -11,10 +11,6 @@ class Role extends Model
 {
     protected $guarded = [];
 
-    public function tenant(): BelongsTo
-    {
-        return $this->belongsTo(Tenant::class);
-    }
 
     public function permissions(): BelongsToMany
     {

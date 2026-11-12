@@ -41,4 +41,19 @@ class UserSubscription extends Model
     {
         return $this->belongsTo(PackagePlan::class, 'package_plan_id');
     }
+
+    /**
+     * Fetch the latest active, non-expired subscription for a user.
+     */
+    public static function activeForUser(int $userId): ?self
+    {
+        return static::where('user_id', $userId)
+            ->where('status', 'active')
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
 }

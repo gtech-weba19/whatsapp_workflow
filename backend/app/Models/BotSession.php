@@ -10,6 +10,7 @@ class BotSession extends Model
 {
     protected $fillable = [
         'user_id',
+        'bot_id',
         'workflow_id',
         'whatsapp_account_id',
         'channel',
@@ -22,6 +23,7 @@ class BotSession extends Model
 
     protected $casts = [
         'user_id' => 'integer',
+        'bot_id' => 'integer',
         'workflow_id' => 'integer',
         'whatsapp_account_id' => 'integer',
         'variables' => 'array',
@@ -34,6 +36,14 @@ class BotSession extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Bot associated with this session.
+     */
+    public function bot(): BelongsTo
+    {
+        return $this->belongsTo(Bot::class, 'bot_id');
     }
 
     /**

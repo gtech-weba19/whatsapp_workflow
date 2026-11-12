@@ -62,12 +62,6 @@ public function login(Request $request)
         ], 403);
     }
 
-    // 3. Create Sanctum token
-    // $token = $user->createToken(
-    //     'react',
-    //     ['*'],
-    //     now()->addHours(5)
-    // )->plainTextToken;
         $token = $user->createToken(
         'react',
         ['*'],

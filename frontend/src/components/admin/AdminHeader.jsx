@@ -133,6 +133,11 @@ const getPageInfo = (pathname, user = {}) => {
       subtitle: "Monthly message limits, sessions, and credits",
       Icon: BarChart3,
     },
+    "/message-logs": {
+      title: "Message Logs & Live Preview",
+      subtitle: "Workflow-wise WhatsApp conversations & mobile preview",
+      Icon: MessageCircle,
+    },
     "/system-logs": {
       title: "System Logs",
       subtitle: "Audit trails, errors, and application activity logs",
@@ -153,6 +158,13 @@ const getPageInfo = (pathname, user = {}) => {
       subtitle: "Recharge wallet, choose plans, and view transaction passbook",
       Icon: Wallet,
     },
+
+    "/users": {
+      title: "All Users",
+      subtitle: "Manage all users and their permissions",
+      Icon: Users,
+    },
+
   };
 
   return (
@@ -170,8 +182,10 @@ const AdminHeader = ({ onOpenMobileMenu }) => {
 
   const dropdownRef = useRef(null);
   const triggerRef = useRef(null);
+  const walletDropdownRef = useRef(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [user, setUser] = useState({
     name: "User",
@@ -287,41 +301,80 @@ const AdminHeader = ({ onOpenMobileMenu }) => {
     );
   }, []);
 
-  // Real-time wallet balance state
- const [walletBalance, setWalletBalance] = useState(null);
-const [walletLoading, setWalletLoading] = useState(true);
-  
+  // Real-time wallet & plan breakdown state
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [walletSummary, setWalletSummary] = useState({
+    totalTaken: 0,
+    totalUsed: 0,
+    remainingBalance: 0,
+    usagePercentage: 0,
+    activePlanName: null,
+    activePlanAmount: 0,
+    hasActivePlan: false,
+    rate: 0.5,
+    usedMessages: 0,
+    estimatedMessages: 0,
+  });
+  const [walletLoading, setWalletLoading] = useState(true);
+
   const fetchWallet = useCallback(async () => {
-  const token = getToken();
+    const token = getToken();
 
-  if (!token) {
-    setWalletBalance(null);
-    setWalletLoading(false);
-    return;
-  }
-
-  try {
-    const res = await axios.get(`${API}/wallet`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-
-    if (res.data?.success) {
-      setWalletBalance(
-        Number(res.data?.data?.balance ?? 0)
-      );
+    if (!token || isSuperAdmin()) {
+      setWalletBalance(null);
+      setWalletSummary({
+        totalTaken: 0,
+        totalUsed: 0,
+        remainingBalance: 0,
+        usagePercentage: 0,
+        activePlanName: null,
+        activePlanAmount: 0,
+        hasActivePlan: false,
+        rate: 0.5,
+        usedMessages: 0,
+        estimatedMessages: 0,
+      });
+      setWalletLoading(false);
+      return;
     }
-  } catch (error) {
-    console.error(
-      "Wallet fetch failed:",
-      error.response?.data || error.message
-    );
-  } finally {
-    setWalletLoading(false);
-  }
-}, [getToken]);
+
+    try {
+      const res = await axios.get(`${API}/wallet`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (res.data?.success) {
+        const walletData = res.data?.data || {};
+        const nextBalance = Number(walletData.balance ?? 0);
+
+        setWalletBalance(nextBalance);
+        setWalletSummary({
+          totalTaken: Number(walletData.total_taken ?? nextBalance),
+          totalUsed: Number(walletData.total_used ?? 0),
+          remainingBalance: Number(walletData.remaining_balance ?? nextBalance),
+          usagePercentage: Number(walletData.usage_percentage ?? 0),
+          activePlanName: walletData.active_plan_name || null,
+          activePlanAmount: Number(walletData.active_plan_amount ?? 0),
+          hasActivePlan: Boolean(
+            walletData.has_active_plan || walletData.active_plan_id
+          ),
+          rate: Number(walletData.message_rate ?? 0.5),
+          usedMessages: Number(walletData.used_messages ?? 0),
+          estimatedMessages: Number(walletData.estimated_messages ?? 0),
+        });
+      }
+    } catch (error) {
+      console.error(
+        "Wallet fetch failed:",
+        error.response?.data || error.message
+      );
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [getToken]);
 
 useEffect(() => {
   fetchWallet();
@@ -332,6 +385,7 @@ useEffect(() => {
   };
 
   window.addEventListener("wallet-updated", handleWalletUpdated);
+  window.addEventListener("user-updated", handleWalletUpdated);
 
   // Automatic refresh every 30 seconds.
   const interval = setInterval(fetchWallet, 30000);
@@ -339,6 +393,10 @@ useEffect(() => {
   return () => {
     window.removeEventListener(
       "wallet-updated",
+      handleWalletUpdated
+    );
+    window.removeEventListener(
+      "user-updated",
       handleWalletUpdated
     );
 
@@ -551,6 +609,37 @@ const handleNotificationClick = async (notification) => {
     };
   }, [profileOpen]);
 
+  useEffect(() => {
+    if (!walletOpen) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setWalletOpen(false);
+      }
+    };
+
+    const handlePointerDown = (event) => {
+      if (
+        walletDropdownRef.current &&
+        !walletDropdownRef.current.contains(event.target)
+      ) {
+        setWalletOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [walletOpen]);
+
+  useEffect(() => {
+    setWalletOpen(false);
+  }, [location.pathname]);
+
   // ------------------------------------------
   // NAVIGATION
   // ------------------------------------------
@@ -612,10 +701,16 @@ const handleNotificationClick = async (notification) => {
   const pageInfo = getPageInfo(location.pathname, user);
   const PageIcon = pageInfo.Icon || ShieldCheck;
 
+  const formatRupees = (value) =>
+    Number(value || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   return (
-    <header className="sticky top-0 z-40 flex h-16 w-full min-w-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 shadow-sm shadow-slate-900/[0.02] backdrop-blur-xl sm:px-5 lg:h-[76px] lg:px-7">
+    <header className="sticky top-0 z-40 flex h-16 w-full min-w-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-3 shadow-sm shadow-slate-900/[0.02] backdrop-blur-xl sm:px-5 lg:h-[76px] lg:px-7">
       {/* LEFT: HEADER CONTEXT */}
-      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
         {onOpenMobileMenu && (
           <button
             type="button"
@@ -636,33 +731,247 @@ const handleNotificationClick = async (notification) => {
             {pageInfo.title}
           </h1>
 
-          <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+          <p className="mt-0.5 hidden truncate text-xs text-slate-500 sm:block">
             {pageInfo.subtitle}
           </p>
         </div>
       </div>
 
       {/* RIGHT: WALLET BADGE & USER MENU */}
-      <div className="ml-auto flex items-center gap-2.5 sm:gap-3.5">
-       <Link
-      to="/plans"
-      title="Click to view Plans & Recharge Wallet"
-      className="group flex items-center gap-1.5 rounded-xl border border-emerald-200/90 bg-emerald-50/80 px-2.5 py-1.5 text-xs font-bold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 hover:shadow-xs"
-    >
-      <Wallet size={16} />
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+      {!user?.isSuperAdmin && (
+        <div className="relative shrink-0" ref={walletDropdownRef}>
+          <div
+            className={`flex h-10 items-center rounded-xl border p-1 transition ${
+              walletOpen
+                ? "border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-sm shadow-emerald-600/10"
+                : "border-emerald-200/90 bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/80 text-emerald-950 hover:border-emerald-300 hover:shadow-xs"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setProfileOpen(false);
+                setNotifOpen(false);
+                setWalletOpen((open) => !open);
+              }}
+              aria-expanded={walletOpen}
+              aria-haspopup="dialog"
+              title="Click to view Plan Taken, Used & Remaining Balance"
+              className="flex h-8 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-2 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-2xs">
+                <Wallet size={13} />
+              </span>
 
-      <span>
-        {walletLoading
-          ? "Loading..."
-          : walletBalance !== null
-            ? `₹${walletBalance.toFixed(2)}`
-            : "₹--"}
-      </span>
+              {walletLoading ? (
+                <span className="text-xs font-semibold text-emerald-700">...</span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <span className="hidden text-left leading-none sm:block">
+                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          walletSummary.hasActivePlan
+                            ? "bg-emerald-500"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                      Wallet
+                    </span>
+                    <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-slate-900">
+                      ₹
+                      {formatRupees(
+                        walletBalance ?? walletSummary.remainingBalance
+                      )}
+                    </span>
+                  </span>
 
-      <span className="hidden rounded-md bg-emerald-200/60 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 sm:inline">
-        Recharge
-      </span>
-    </Link>
+                  <span className="text-xs font-extrabold tabular-nums text-slate-900 sm:hidden">
+                    ₹
+                    {formatRupees(
+                      walletBalance ?? walletSummary.remainingBalance
+                    )}
+                  </span>
+                </span>
+              )}
+
+              <ChevronDown
+                size={13}
+                className={`shrink-0 text-emerald-700 transition-transform duration-150 ${
+                  walletOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            <Link
+              to="/plans"
+              onClick={() => setWalletOpen(false)}
+              className="hidden h-7 shrink-0 items-center whitespace-nowrap rounded-lg bg-emerald-600 px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-2xs transition hover:bg-emerald-700 sm:inline-flex"
+            >
+              Recharge
+            </Link>
+          </div>
+
+          {walletOpen && (
+            <div
+              role="dialog"
+              aria-label="Wallet summary"
+              className="absolute right-0 top-[calc(100%+10px)] z-50 w-[336px] max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 sm:w-[372px]"
+            >
+              {/* Popover Hero Header */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-800 px-4 py-4 text-white">
+                <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/20 blur-xl" />
+
+                <div className="relative flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">
+                      Active Plan &amp; Wallet
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-extrabold text-white">
+                      {walletSummary.hasActivePlan
+                        ? walletSummary.activePlanName || "Active Plan"
+                        : "No Active Plan"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
+                      walletSummary.hasActivePlan
+                        ? "border-emerald-300/40 bg-emerald-500/25 text-emerald-100"
+                        : "border-amber-300/40 bg-amber-500/25 text-amber-100"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        walletSummary.hasActivePlan
+                          ? "bg-emerald-300"
+                          : "bg-amber-300"
+                      }`}
+                    />
+                    {walletSummary.hasActivePlan ? "Active" : "No Plan"}
+                  </span>
+                </div>
+
+                <div className="relative mt-3 flex items-baseline justify-between border-t border-white/15 pt-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                      Remaining Balance
+                    </p>
+                    <p className="mt-0.5 text-xl font-black tracking-tight tabular-nums text-white">
+                      ₹
+                      {formatRupees(
+                        walletBalance ?? walletSummary.remainingBalance
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-[10px] font-semibold text-emerald-200/90">
+                      Est. Messages Left
+                    </p>
+                    <p className="mt-0.5 text-sm font-extrabold tabular-nums text-emerald-100">
+                      {Number(
+                        walletSummary.estimatedMessages || 0
+                      ).toLocaleString("en-IN")}{" "}
+                      msgs
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3.5 p-4">
+                {/* Utilization bar */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold">
+                    <span className="text-slate-500">Plan Usage</span>
+                    <span className="font-bold tabular-nums text-slate-800">
+                      {walletSummary.usagePercentage.toFixed(1)}% Used
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, walletSummary.usagePercentage))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 3-Box Breakdown: Plan Taken / Used / Remaining */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-slate-200/90 bg-slate-50 p-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Plan Taken
+                    </p>
+                    <p className="mt-1 truncate text-xs font-extrabold tabular-nums text-slate-900 sm:text-sm">
+                      ₹{formatRupees(walletSummary.totalTaken)}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-slate-400">
+                      Total Credits
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-rose-100 bg-rose-50/75 p-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                      Used
+                    </p>
+                    <p className="mt-1 truncate text-xs font-extrabold tabular-nums text-rose-800 sm:text-sm">
+                      ₹{formatRupees(walletSummary.totalUsed)}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-rose-600/80">
+                      {Number(walletSummary.usedMessages || 0).toLocaleString(
+                        "en-IN"
+                      )}{" "}
+                      msgs
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                      Remaining
+                    </p>
+                    <p className="mt-1 truncate text-xs font-extrabold tabular-nums text-emerald-900 sm:text-sm">
+                      ₹
+                      {formatRupees(
+                        walletBalance ?? walletSummary.remainingBalance
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-emerald-700/85">
+                      {Number(
+                        walletSummary.estimatedMessages || 0
+                      ).toLocaleString("en-IN")}{" "}
+                      msgs
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                  <span>Configured Message Rate</span>
+                  <span className="font-bold tabular-nums text-slate-900">
+                    ₹{Number(walletSummary.rate || 0.5).toFixed(2)} / msg
+                  </span>
+                </div>
+
+                <Link
+                  to="/plans"
+                  onClick={() => setWalletOpen(false)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition hover:from-emerald-700 hover:to-teal-700"
+                >
+                  <Wallet size={14} />
+                  <span>
+                    {walletSummary.hasActivePlan
+                      ? "Recharge / Manage Plan"
+                      : "Activate Plan & Recharge"}
+                  </span>
+                  <ArrowUpRight size={14} />
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
 
 
@@ -671,6 +980,8 @@ const handleNotificationClick = async (notification) => {
   <button
     type="button"
     onClick={() => {
+      setWalletOpen(false);
+      setProfileOpen(false);
       setNotifOpen((open) => !open);
       fetchNotifications();
     }}
@@ -831,7 +1142,11 @@ const handleNotificationClick = async (notification) => {
           aria-label="Open account menu"
           aria-expanded={profileOpen}
           aria-haspopup="menu"
-          onClick={() => setProfileOpen((current) => !current)}
+          onClick={() => {
+            setWalletOpen(false);
+            setNotifOpen(false);
+            setProfileOpen((current) => !current);
+          }}
           className={`group flex items-center gap-2 rounded-xl border px-2 py-1.5 transition duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/15 sm:gap-3 sm:px-3 ${
             profileOpen
               ? "border-emerald-200 bg-emerald-50/70"

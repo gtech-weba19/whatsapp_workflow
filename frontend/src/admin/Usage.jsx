@@ -59,10 +59,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/**
- * Read the logged-in user from localStorage.
- * Supports common storage keys used by React authentication.
- */
+
 function getStoredUser() {
   for (const key of USER_KEYS) {
     try {
@@ -76,7 +73,6 @@ function getStoredUser() {
         return parsed.user || parsed.data?.user || parsed;
       }
     } catch {
-      // Continue to the next key if the value is not valid JSON.
     }
   }
 
@@ -322,6 +318,7 @@ export default function Usage() {
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [clientId, setClientId] = useState("");
   const [period, setPeriod] = useState("month");
   const [from, setFrom] = useState(getMonthStart);
@@ -329,6 +326,13 @@ export default function Usage() {
 
   const requestRef = useRef(null);
   const firstLoadRef = useRef(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchUsage = useCallback(
     async ({ showLoader = true } = {}) => {
@@ -355,8 +359,8 @@ export default function Usage() {
 
         // Only Super Admin can use global client search and client filters.
         if (isSuperAdmin) {
-          if (search.trim()) {
-            params.search = search.trim();
+          if (debouncedSearch) {
+            params.search = debouncedSearch;
           }
 
           if (clientId) {
@@ -411,7 +415,7 @@ export default function Usage() {
         }
       }
     },
-    [from, to, isSuperAdmin, search, clientId]
+    [from, to, isSuperAdmin, debouncedSearch, clientId]
   );
 
   useEffect(() => {
@@ -830,7 +834,7 @@ export default function Usage() {
                   htmlFor="usage-client-id"
                   className="mb-1.5 block text-sm font-medium text-gray-700"
                 >
-                  Client ID
+                Client Name
                 </label>
 
                 <input
@@ -998,9 +1002,9 @@ export default function Usage() {
                       {isSuperAdmin ? "Client" : "Business"}
                     </th>
 
-                    {isSuperAdmin && (
+                    {/* {isSuperAdmin && (
                       <th className="px-5 py-3.5 font-semibold">Client ID</th>
-                    )}
+                    )} */}
 
                     <th className="px-5 py-3.5 font-semibold">Sent</th>
                     <th className="px-5 py-3.5 font-semibold">Delivered</th>
@@ -1042,7 +1046,8 @@ export default function Usage() {
                     const apiRequests =
                       row.api_requests ?? row.total_api_requests ?? 0;
 
-                    const clientIdValue = row.tenant_id ?? row.client_id ?? "—";
+                    // const clientIdValue = row.tenant_id ?? row.client_id ?? "—";
+                    const clientName = getClientName(row);
      
                     const lastActivity =
                       row.last_activity ??
@@ -1084,13 +1089,13 @@ export default function Usage() {
                           </div>
                         </td>
 
-                        {isSuperAdmin && (
+                        {/* {isSuperAdmin && (
                           <td className="px-5 py-4">
                             <span className="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-600">
-                              {clientIdValue}
+                             {clientName}
                             </span>
                           </td>
-                        )}
+                        )} */}
 
                         <td className="px-5 py-4 font-medium text-gray-900">
                           {formatNumber(sent)}

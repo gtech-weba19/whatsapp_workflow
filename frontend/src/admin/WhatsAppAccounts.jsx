@@ -41,8 +41,11 @@ import {
   ChevronDown,
 
   AlertCircle,
+  Download 
 
 } from "lucide-react";
+
+import AdminWhatsAppEditModal from "../components/admin/AdminWhatsAppEditModal";
 
 
 
@@ -110,36 +113,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-
-
-
-/* =========================================================
-
-   DEFAULT VALUES
-
-========================================================= */
-
-
-
-const EMPTY_ACCOUNT = {
-
-  name: "",
-
-  provider: "meta",
-
-  business_name: "",
-
-  waba_id: "",
-
-  access_token: "",
-
-  sender_name: "Whatsappdemo",
-
-  webhook_dn_id: "1001",
-
-  status: "pending",
-
-};
 
 
 
@@ -665,765 +638,761 @@ function ModalFooter({ onCancel, saving, submitLabel }) {
 
 
 
-function AccountModal({
+// function AccountModal({
 
-  open,
+//   open,
 
-  close,
+//   close,
 
-  save,
+//   save,
 
-  clients = [],
+//   clients = [],
 
-  editing,
+//   editing,
 
-  saving,
+//   saving,
 
-  isAdmin = true,
+//   isAdmin = true,
 
-  currentUser = null,
+//   currentUser = null,
 
-}) {
+// }) {
 
-  const [form, setForm] = useState({ ...EMPTY_ACCOUNT });
+//   const [form, setForm] = useState({ ...EMPTY_ACCOUNT });
 
-  const [error, setError] = useState("");
+//   const [error, setError] = useState("");
 
-  const [showToken, setShowToken] = useState(false);
+//   const [showToken, setShowToken] = useState(false);
 
 
 
-  useEffect(() => {
+//   useEffect(() => {
 
-    if (!open) return;
+//     if (!open) return;
 
 
 
-    setError("");
+//     setError("");
 
-    setShowToken(false);
+//     setShowToken(false);
 
 
 
-const defaultUserId =
+// const defaultUserId =
 
-  editing?.user_id ??
+//   editing?.user_id ??
 
-  editing?.user?.id ??
+//   editing?.user?.id ??
 
-  currentUser?.id ??
+//   currentUser?.id ??
 
-  "";
+//   "";
 
 
 
-const selectedUser = clients.find(
+// const selectedUser = clients.find(
 
-  (client) => String(client.id) === String(defaultUserId)
+//   (client) => String(client.id) === String(defaultUserId)
 
-);
+// );
 
 
 
-const businessName =
+// const businessName =
 
-  selectedUser?.business_name ||
+//   selectedUser?.business_name ||
 
-  selectedUser?.business_profile?.business_name ||
+//   selectedUser?.business_profile?.business_name ||
 
-  selectedUser?.businessProfile?.business_name ||
+//   selectedUser?.businessProfile?.business_name ||
 
-  editing?.business_name ||
+//   editing?.business_name ||
 
-  "";
+//   "";
 
 
 
-    setForm({
+//     setForm({
 
-      ...EMPTY_ACCOUNT,
+//       ...EMPTY_ACCOUNT,
 
-      ...(editing || {}),
+//       ...(editing || {}),
 
-      user_id: String(defaultUserId),
+//       user_id: String(defaultUserId),
 
-      name: editing?.name ?? "",
+//       name: editing?.name ?? "",
 
-      provider: editing?.provider ?? "meta",
+//       provider: editing?.provider ?? "meta",
 
-      business_name: businessName,
+//       business_name: businessName,
 
-      waba_id: editing?.waba_id ?? "",
+//       waba_id: editing?.waba_id ?? "",
 
-      access_token: "",
+//       access_token: "",
 
-      sender_name: editing?.sender_name ?? "Whatsappdemo",
+//       sender_name: editing?.sender_name ?? "Whatsappdemo",
 
-      webhook_dn_id: String(editing?.webhook_dn_id ?? "1001"),
+//       webhook_dn_id: String(editing?.webhook_dn_id ?? "1001"),
 
-      status: editing?.status ?? "pending",
+//       status: editing?.status ?? "pending",
 
-    });
+//     });
 
-  }, [open, editing, currentUser, clients]);
+//   }, [open, editing, currentUser, clients]);
 
 
 
-  if (!open) return null;
+//   if (!open) return null;
 
 
 
-  const update = (key, value) => {
+//   const update = (key, value) => {
 
-    setForm((previous) => ({
+//     setForm((previous) => ({
 
-      ...previous,
+//       ...previous,
 
-      [key]: value,
+//       [key]: value,
 
-    }));
+//     }));
 
-  };
+//   };
 
 
 
-const handleUserChange = (userId) => {
+// const handleUserChange = (userId) => {
 
-  const selectedUser = clients.find(
+//   const selectedUser = clients.find(
 
-    (client) => String(client.id ?? client.user_id) === String(userId)
+//     (client) => String(client.id ?? client.user_id) === String(userId)
 
-  );
+//   );
 
 
 
-  console.log("Selected user:", selectedUser);
+//   console.log("Selected user:", selectedUser);
 
 
 
-  const businessName =
+//   const businessName =
 
-    selectedUser?.business_name ||
+//     selectedUser?.business_name ||
 
-    selectedUser?.business_profile?.business_name ||
+//     selectedUser?.business_profile?.business_name ||
 
-    selectedUser?.businessProfile?.business_name ||
+//     selectedUser?.businessProfile?.business_name ||
 
-    selectedUser?.profile_business_name ||
+//     selectedUser?.profile_business_name ||
 
-    "";
+//     "";
 
 
 
-  console.log("Selected business name:", businessName);
+//   console.log("Selected business name:", businessName);
 
 
 
-  setForm((previous) => ({
+//   setForm((previous) => ({
 
-    ...previous,
+//     ...previous,
 
-    user_id: userId,
+//     user_id: userId,
 
-    business_name: businessName,
+//     business_name: businessName,
 
-  }));
+//   }));
 
-};
+// };
 
 
 
-  const handleSubmit = async (event) => {
+//   const handleSubmit = async (event) => {
 
-    event.preventDefault();
+//     event.preventDefault();
 
-    setError("");
+//     setError("");
 
 
 
-    if (!form.name.trim()) {
+//     if (!form.name.trim()) {
 
-      setError("Account name is required.");
+//       setError("Account name is required.");
 
-      return;
+//       return;
 
-    }
+//     }
 
 
 
-    const effectiveUserId = isAdmin
+//     const effectiveUserId = isAdmin
 
-      ? form.user_id
+//       ? form.user_id
 
-      : currentUser?.id;
+//       : currentUser?.id;
 
 
 
-    if (!effectiveUserId) {
+//     if (!effectiveUserId) {
 
-      setError("Please select a user.");
+//       setError("Please select a user.");
 
-      return;
+//       return;
 
-    }
+//     }
 
 
 
-const mobileNumber = form.waba_id.replace(/\D/g, "");
+// const mobileNumber = form.waba_id.replace(/\D/g, "");
 
 
 
-if (mobileNumber.length < 10 || mobileNumber.length > 15) {
+// if (mobileNumber.length < 10 || mobileNumber.length > 15) {
 
-  setError("Please enter a valid WhatsApp mobile number with country code.");
+//   setError("Please enter a valid WhatsApp mobile number with country code.");
 
-  return;
+//   return;
 
-}
+// }
 
 
 
-const payload = {
+// const payload = {
 
-  user_id: effectiveUserId,
+//   user_id: effectiveUserId,
 
-  name: form.name.trim(),
+//   name: form.name.trim(),
 
-  provider: form.provider,
+//   provider: form.provider,
 
-  business_name: form.business_name.trim(),
+//   business_name: form.business_name.trim(),
 
-  waba_id: mobileNumber,
+//   waba_id: mobileNumber,
 
-  sender_name: form.sender_name.trim(),
+//   sender_name: form.sender_name.trim(),
 
-  webhook_dn_id: String(form.webhook_dn_id ?? "").trim(),
+//   webhook_dn_id: String(form.webhook_dn_id ?? "").trim(),
 
-  status: form.status,
+//   status: form.status,
 
-};
+// };
 
 
 
 
 
-if (form.access_token.trim()) {
+// if (form.access_token.trim()) {
 
-  payload.access_token = form.access_token.trim();
+//   payload.access_token = form.access_token.trim();
 
-}
+// }
 
 
 
-if (editing && !form.access_token.trim()) {
+// if (editing && !form.access_token.trim()) {
 
-  delete payload.access_token;
+//   delete payload.access_token;
 
-}
+// }
 
 
 
-    try {
+//     try {
 
-      await save(payload);
+//       await save(payload);
 
-    } catch (submitError) {
+//     } catch (submitError) {
 
-      setError(
+//       setError(
 
-        getErrorMessage(submitError, "Unable to save account.")
+//         getErrorMessage(submitError, "Unable to save account.")
 
-      );
+//       );
 
-    }
+//     }
 
-  };
+//   };
 
 
 
-  return (
+//   return (
 
-    <div
+//     <div
 
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-[2px] sm:p-5"
+//       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-[2px] sm:p-5"
 
-      onMouseDown={(event) => {
+//       onMouseDown={(event) => {
 
-        if (event.target === event.currentTarget && !saving) {
+//         if (event.target === event.currentTarget && !saving) {
 
-          close();
+//           close();
 
-        }
+//         }
 
-      }}
+//       }}
 
-    >
+//     >
 
-      <section className="relative flex max-h-[92dvh] min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+//       <section className="relative flex max-h-[92dvh] min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-        <ModalHeader
+//         <ModalHeader
 
-          title={
+//           title={
 
-            editing
+//             editing
 
-              ? "Edit WhatsApp Account"
+//               ? "Edit WhatsApp Account"
 
-              : "Add WhatsApp Account"
+//               : "Add WhatsApp Account"
 
-          }
+//           }
 
-          subtitle={
+//           subtitle={
 
-            editing
+//             editing
 
-              ? "Update account configuration and provider connection details."
+//               ? "Update account configuration and provider connection details."
 
-              : "Connect a WhatsApp provider account to your platform."
+//               : "Connect a WhatsApp provider account to your platform."
 
-          }
+//           }
 
-          onClose={close}
+//           onClose={close}
 
-          icon={Building2}
+//           icon={Building2}
 
-        />
+//         />
 
 
 
-        <form
+//         <form
 
-          id="whatsapp-modal-form"
+//           id="whatsapp-modal-form"
 
-          onSubmit={handleSubmit}
+//           onSubmit={handleSubmit}
 
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+//           className="flex min-h-0 flex-1 flex-col overflow-hidden"
 
-        >
+//         >
 
-          <div className="min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+//           <div className="min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
 
-            {error && <AlertMessage message={error} />}
+//             {error && <AlertMessage message={error} />}
 
 
 
-            <div>
+//             <div>
 
-              <h3 className="text-sm font-bold text-slate-900">
+//               <h3 className="text-sm font-bold text-slate-900">
 
-                Account Details
+//                 Account Details
 
-              </h3>
+//               </h3>
 
-              <p className="mt-1 text-xs text-slate-500">
+//               <p className="mt-1 text-xs text-slate-500">
 
-                Select a user and configure the WhatsApp account.
+//                 Select a user and configure the WhatsApp account.
 
-              </p>
+//               </p>
 
-            </div>
+//             </div>
 
 
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+//             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
-              {isAdmin ? (
+//               {isAdmin ? (
 
-                <Field label="User" required>
+//                 <Field label="User" required>
 
-                  <select
+//                   <select
 
-                    className={selectClass}
+//                     className={selectClass}
 
-                    value={form.user_id}
+//                     value={form.user_id}
 
-                    onChange={(event) =>
+//                     onChange={(event) =>
 
-                      handleUserChange(event.target.value)
+//                       handleUserChange(event.target.value)
 
-                    }
+//                     }
 
-                    required
+//                     required
 
-                  >
+//                   >
 
-                    <option value="">Select user</option>
+//                     <option value="">Select user</option>
 
 
 
-                    {clients.map((client) => (
+//                     {clients.map((client) => (
 
-                      <option
+//                       <option
 
-                        key={client.id}
+//                         key={client.id}
 
-                        value={client.id}
+//                         value={client.id}
 
-                      >
+//                       >
 
-                        {client.name || `User #${client.id}`}
+//                         {client.name || `User #${client.id}`}
 
-                        {client.email ? ` — ${client.email}` : ""}
+//                         {client.email ? ` — ${client.email}` : ""}
 
-                        {client.mobile ? ` — ${client.mobile}` : ""}
+//                         {client.mobile ? ` — ${client.mobile}` : ""}
 
-                      </option>
+//                       </option>
 
-                    ))}
+//                     ))}
 
-                  </select>
+//                   </select>
 
 
 
-                  {clients.length === 0 && (
+//                   {clients.length === 0 && (
 
-                    <p className="text-xs text-amber-600">
+//                     <p className="text-xs text-amber-600">
 
-                      No users loaded. Check the /clients API response and permissions.
+//                       No users loaded. Check the /clients API response and permissions.
 
-                    </p>
+//                     </p>
 
-                  )}
+//                   )}
 
-                </Field>
+//                 </Field>
 
-              ) : (
+//               ) : (
 
-                <Field label="Name">
+//                 <Field label="Name">
 
-                  <input
+//                   <input
 
-                    className={cx(
+//                     className={cx(
 
-                      inputClass,
+//                       inputClass,
 
-                      "cursor-not-allowed bg-slate-50 text-slate-600"
+//                       "cursor-not-allowed bg-slate-50 text-slate-600"
 
-                    )}
+//                     )}
 
-                    value={currentUser?.name || "My Account"}
+//                     value={currentUser?.name || "My Account"}
 
-                    disabled
+//                     disabled
 
-                  />
+//                   />
 
-                </Field>
+//                 </Field>
 
-              )}
+//               )}
 
 
 
-              <Field label="Account Name" required>
+//               <Field label="Account Name" required>
 
-                <input
+//                 <input
 
-                  className={inputClass}
+//                   className={inputClass}
 
-                  value={form.name}
+//                   value={form.name}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("name", event.target.value)
+//                     update("name", event.target.value)
 
-                  }
+//                   }
 
-                  placeholder="Main WhatsApp Account"
+//                   placeholder="Main WhatsApp Account"
 
-                  required
+//                   required
 
-                />
+//                 />
 
-              </Field>
+//               </Field>
 
 
 
-              <Field label="Provider" required>
+//               <Field label="Provider" required>
 
-                <select
+//                 <select
 
-                  className={selectClass}
+//                   className={selectClass}
 
-                  value={form.provider}
+//                   value={form.provider}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("provider", event.target.value)
+//                     update("provider", event.target.value)
 
-                  }
+//                   }
 
-                  required
+//                   required
 
-                >
+//                 >
 
-                  <option value="meta">
+//                   <option value="meta">
 
-                    Meta WhatsApp Cloud API
+//                     Meta WhatsApp Cloud API
 
-                  </option>
+//                   </option>
 
-                  <option value="wati">WATI</option>
+//                   <option value="wati">WATI</option>
 
-                  <option value="twilio">Twilio</option>
+//                   <option value="twilio">Twilio</option>
 
-                  <option value="gupshup">Gupshup</option>
+//                   <option value="gupshup">Gupshup</option>
 
-                  <option value="custom">Custom Provider</option>
+//                   <option value="custom">Custom Provider</option>
 
-                </select>
+//                 </select>
 
-              </Field>
+//               </Field>
 
 
 
-           <Field
+//            <Field
 
-              label="Business Name"
+//               label="Business Name"
 
-              hint="Automatically fetched from the selected user's business profile."
+//               hint="Automatically fetched from the selected user's business profile."
 
-            >
+//             >
 
-              <input
+//               <input
 
-                className={cx(
+//                 className={cx(
 
-                  inputClass,
+//                   inputClass,
 
-                  "cursor-not-allowed bg-slate-50 text-slate-600"
+//                   "cursor-not-allowed bg-slate-50 text-slate-600"
 
-                )}
+//                 )}
 
-                value={form.business_name || ""}
+//                 value={form.business_name || ""}
 
-                placeholder="Business name not available"
+//                 placeholder="Business name not available"
 
-                readOnly
+//                 readOnly
 
-              />
+//               />
 
-            </Field>
+//             </Field>
 
 
 
-              <Field label="WhatsApp Business Number">
+//               <Field label="WhatsApp Business Number">
 
-                <input
+//                 <input
 
-                  className={inputClass}
+//                   className={inputClass}
 
-                  value={form.waba_id}
+//                   value={form.waba_id}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("waba_id", event.target.value)
+//                     update("waba_id", event.target.value)
 
-                  }
+//                   }
 
-                  placeholder="Enter WhatsApp Business Number"
+//                   placeholder="Enter WhatsApp Business Number"
 
-                />
+//                 />
 
-              </Field>
+//               </Field>
 
 
 
-              <Field label="Sender Name">
+//               <Field label="Sender Name">
 
-                <input
+//                 <input
 
-                  className={inputClass}
+//                   className={inputClass}
 
-                  value={form.sender_name}
+//                   value={form.sender_name}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("sender_name", event.target.value)
+//                     update("sender_name", event.target.value)
 
-                  }
+//                   }
 
-                  placeholder="Whatsappdemo"
+//                   placeholder="Whatsappdemo"
 
-                />
+//                 />
 
-              </Field>
+//               </Field>
 
 
 
-              <Field label="Webhook DN ID">
+//               <Field label="Webhook DN ID">
 
-                <input
+//                 <input
 
-                  className={inputClass}
+//                   className={inputClass}
 
-                  value={form.webhook_dn_id}
+//                   value={form.webhook_dn_id}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("webhook_dn_id", event.target.value)
+//                     update("webhook_dn_id", event.target.value)
 
-                  }
+//                   }
 
-                  placeholder="1001"
+//                   placeholder="1001"
 
-                />
+//                 />
 
-              </Field>
+//               </Field>
 
 
 
-              <Field
+//               <Field
 
-                label="Access Token"
+//                 label="Access Token"
 
-                hint={
+//                 hint={
 
-                  editing
+//                   editing
 
-                    ? "Leave blank to retain the existing token."
+//                     ? "Leave blank to retain the existing token."
 
-                    : "Paste your provider access token."
+//                     : "Paste your provider access token."
 
-                }
+//                 }
 
-              >
+//               >
 
-                <div className="relative">
+//                 <div className="relative">
 
-                  <input
+//                   <input
 
-                    className={cx(inputClass, "pr-11")}
+//                     className={cx(inputClass, "pr-11")}
 
-                    type={showToken ? "text" : "password"}
+//                     type={showToken ? "text" : "password"}
 
-                    autoComplete="new-password"
+//                     autoComplete="new-password"
 
-                    value={form.access_token}
+//                     value={form.access_token}
 
-                    onChange={(event) =>
+//                     onChange={(event) =>
 
-                      update("access_token", event.target.value)
+//                       update("access_token", event.target.value)
 
-                    }
+//                     }
 
-                    placeholder={
+//                     placeholder={
 
-                      editing
+//                       editing
 
-                        ? "Token already saved"
+//                         ? "Token already saved"
 
-                        : "Enter access token"
+//                         : "Enter access token"
 
-                    }
+//                     }
 
-                  />
+//                   />
 
 
 
-                  <button
+//                   <button
 
-                    type="button"
+//                     type="button"
 
-                    onClick={() =>
+//                     onClick={() =>
 
-                      setShowToken((value) => !value)
+//                       setShowToken((value) => !value)
 
-                    }
+//                     }
 
-                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-slate-700"
+//                     className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-slate-700"
 
-                    aria-label={
+//                     aria-label={
 
-                      showToken ? "Hide token" : "Show token"
+//                       showToken ? "Hide token" : "Show token"
 
-                    }
+//                     }
 
-                  >
+//                   >
 
-                    {showToken ? (
+//                     {showToken ? (
 
-                      <EyeOff size={17} />
+//                       <EyeOff size={17} />
 
-                    ) : (
+//                     ) : (
 
-                      <Eye size={17} />
+//                       <Eye size={17} />
 
-                    )}
+//                     )}
 
-                  </button>
+//                   </button>
 
-                </div>
+//                 </div>
 
-              </Field>
+//               </Field>
 
 
 
-               {isAdmin && (
+//                {isAdmin && (
 
-              <Field label="Account Status">
+//               <Field label="Account Status">
 
-                <select
+//                 <select
 
-                  className={selectClass}
+//                   className={selectClass}
 
-                  value={form.status}
+//                   value={form.status}
 
-                  onChange={(event) =>
+//                   onChange={(event) =>
 
-                    update("status", event.target.value)
+//                     update("status", event.target.value)
 
-                  }
+//                   }
 
-                >
+//                 >
 
-                  <option value="pending">Pending</option>
+//                   <option value="pending">Pending</option>
 
-                  <option value="connected">Connected</option>
+//                   <option value="connected">Connected</option>
 
-                  <option value="disconnected">Disconnected</option>
+//                   <option value="disconnected">Disconnected</option>
 
-                  <option value="inactive">Inactive</option>
+//                   <option value="inactive">Inactive</option>
 
-                </select>
+//                 </select>
 
-              </Field>
+//               </Field>
 
 
 
-                )}
+//                 )}
 
-            </div>
+//             </div>
 
-          </div>
+//           </div>
 
 
 
-          <ModalFooter
+//           <ModalFooter
 
-            onCancel={close}
+//             onCancel={close}
 
-            saving={saving}
+//             saving={saving}
 
-            submitLabel={
+//             submitLabel={
 
-              editing ? "Update Account" : "Create Account"
+//               editing ? "Update Account" : "Create Account"
 
-            }
+//             }
 
-          />
+//           />
 
-        </form>
+//         </form>
 
-      </section>
+//       </section>
 
-    </div>
+//     </div>
 
-  );
+//   );
 
-}
-
-
-
-
+// }
 
 
 
@@ -1554,7 +1523,6 @@ export default function WhatsAppAccounts() {
   const isAdmin = useMemo(() => isSuperAdmin(currentUser), [currentUser]);
 
 
-
   const [accounts, setAccounts] = useState([]);
 
   const [clients, setClients] = useState([]);
@@ -1581,7 +1549,13 @@ export default function WhatsAppAccounts() {
 
   const [accountModalOpen, setAccountModalOpen] = useState(false);
 
+  // const [editingAccount, setEditingAccount] = useState(null);
+
   const [editingAccount, setEditingAccount] = useState(null);
+
+const openEdit = (account) => {
+  setEditingAccount(account);
+};
 
   const [numbersAccount, setNumbersAccount] = useState(null);
 
@@ -1591,6 +1565,8 @@ export default function WhatsAppAccounts() {
 
 
 
+  
+
   /* FETCH ACCOUNTS AND USERS */
 
 const fetchData = useCallback(async () => {
@@ -1599,15 +1575,9 @@ const fetchData = useCallback(async () => {
 
   setPageError("");
 
-
-
   try {
 
     const superAdmin = isSuperAdmin(currentUser);
-
-
-
-    // Accounts ko user_id ke basis par filter karein.
 
     const accountParams = {
 
@@ -1824,9 +1794,6 @@ useEffect(() => {
   );
 
 
-
-  // Super Admin can create multiple accounts; each normal client can create only one.
-  // The backend must enforce this rule as well.
   const canCreateAccount = isAdmin || accounts.length === 0;
 
   /* SAVE ACCOUNT */
@@ -1894,15 +1861,15 @@ useEffect(() => {
 
 
 
-  const openEdit = (account) => {
+  // const openEdit = (account) => {
 
-    setEditingAccount(account);
+  //   setEditingAccount(account);
 
-    setAccountModalOpen(true);
+  //   setAccountModalOpen(true);
 
-    setPageError("");
+  //   setPageError("");
 
-  };
+  // };
 
 
 
@@ -2013,8 +1980,47 @@ useEffect(() => {
   };
 
 
+const handleExport = () => {
+  if (!accounts?.length) {
+    alert("No WhatsApp accounts available to export.");
+    return;
+  }
 
-  /* RENDER */
+  const headers = Object.keys(accounts[0]);
+
+  const csvRows = [
+    headers.join(","),
+    ...accounts.map((account) =>
+      headers
+        .map((header) => {
+          const value = account[header] ?? "";
+          return `"${String(value).replace(/"/g, '""')}"`;
+        })
+        .join(",")
+    ),
+  ];
+
+  const csvContent = csvRows.join("\n");
+
+  const blob = new Blob(
+    ["\uFEFF" + csvContent],
+    { type: "text/csv;charset=utf-8;" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "whatsapp-accounts.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+};
+
+
 
 
 
@@ -2059,7 +2065,7 @@ useEffect(() => {
 
 
 
-            <div className="flex flex-wrap items-center gap-2">
+            {/* <div className="flex flex-wrap items-center gap-2">
 
               <button
 
@@ -2092,7 +2098,21 @@ useEffect(() => {
                 </button>
               )}
 
+            </div> */}
+
+
+           <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={loading || !accounts?.length}
+                className="cursor-pointer inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all duration-200 hover:from-emerald-700 hover:to-green-800 hover:shadow-lg hover:shadow-emerald-600/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download size={16} />
+                Export
+              </button>
             </div>
+                        
 
           </div>
 
@@ -2168,28 +2188,14 @@ useEffect(() => {
 
         {/* TABLE CARD */}
 
-
-
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
           <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:p-5 xl:flex-row xl:items-center xl:justify-between">
 
-            <div>
-
-              <h2 className="font-bold text-slate-900">{isAdmin ? "All Client Accounts" : "Your WhatsApp Account"}</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {isAdmin
-                  ? "View and manage WhatsApp accounts across your client workspaces."
-                  : "View your account details, update settings, or manage linked WhatsApp numbers."}
-              </p>
-
-            </div>
-
-
-
+        
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:flex">
 
-              <div className="relative min-w-0 sm:min-w-[220px]">
+              <div className="relative min-w-0 sm:min-w-[600px]">
 
                 <Search
 
@@ -2366,37 +2372,26 @@ useEffect(() => {
                   <tr>
 
                     <td colSpan={7} className="px-5 py-16 text-center">
+                    <div className="mx-auto flex max-w-md flex-col items-center">
 
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-
-                        <Smartphone size={26} />
-
+                      {/* Icon */}
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-green-100 text-emerald-700 shadow-sm">
+                        <Smartphone size={30} strokeWidth={1.8} />
                       </div>
 
-                      <h3 className="mt-4 font-bold text-slate-900">
+                     
+                    
 
-                        No WhatsApp accounts found
+                      {/* Status indicator */}
+                      <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                        <span className="h-2 w-2 rounded-full bg-slate-400" />
+                        <span className="text-xs font-semibold text-slate-600">
+                          No records available
+                        </span>
+                      </div>
 
-                      </h3>
-
-                      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-
-                        Add a WhatsApp account or change your search and filters.
-
-                      </p>
-
-                      {canCreateAccount && (
-                        <button
-                          type="button"
-                          onClick={openCreate}
-                          className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800"
-                        >
-                          <Plus size={16} />
-                          Add WhatsApp Account
-                        </button>
-                      )}
-
-                    </td>
+                    </div>
+                  </td>
 
                   </tr>
 
@@ -2416,21 +2411,20 @@ useEffect(() => {
 
                           </div>
 
-                          <div className="min-w-0">
+                      <div className="min-w-0">
+                          <p className="max-w-[220px] truncate font-semibold text-slate-900">
+                            {account.business_name || "No business name"}
+                          </p>
 
-                            <p className="max-w-[220px] truncate font-semibold text-slate-900">
+                          <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
+                            {account.name || "Unnamed account"}
+                          </p>
 
-                              {account.name || "Unnamed account"}
-
-                            </p>
-
-                            <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
-
-                              {account.business_name || "No business name"}
-
-                            </p>
-
-                          </div>
+                          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
+                            <Smartphone size={13} />
+                            {account.sender_number || account.waba_id || "No WhatsApp number"}
+                          </p>
+                        </div>
 
                         </div>
 
@@ -2465,12 +2459,6 @@ useEffect(() => {
                         </span>
 
                       </td>
-
-
-
-
-
-
 
                       <td className="px-5 py-4">
 
@@ -2554,10 +2542,6 @@ useEffect(() => {
 
                         <div className="flex items-center justify-end gap-1.5">
 
-
-
-
-
                           <button
 
                             type="button"
@@ -2576,7 +2560,7 @@ useEffect(() => {
 
 
 
-                          <button
+                          {/* <button
 
                             type="button"
 
@@ -2600,7 +2584,7 @@ useEffect(() => {
 
                             )}
 
-                          </button>
+                          </button> */}
 
                         </div>
 
@@ -2643,12 +2627,21 @@ useEffect(() => {
       </div>
 
 
+      {/* SUPER ADMIN WHATSAPP EDIT MODAL */}
 
-      {/* ACCOUNT MODAL */}
+    {isAdmin && editingAccount && (
+      <AdminWhatsAppEditModal
+        account={editingAccount}
+        onClose={() => setEditingAccount(null)}
+        onSave={saveAccount}
+      />
+    )}
 
 
 
-      {isAdmin ? (
+  {/* ACCOUNT MODAL */}
+
+      {/* {isAdmin ? (
         <AccountModal
           open={accountModalOpen}
           close={closeAccountModal}
@@ -2668,12 +2661,12 @@ useEffect(() => {
           saving={saving}
           currentUser={currentUser}
         />
-      )}
+      )} */}
 
       {/* NUMBERS MODAL */}
 
 
-
+{/* 
       {numbersAccount && (
 
         <WhatsAppNumbersModal
@@ -2692,7 +2685,7 @@ useEffect(() => {
 
         />
 
-      )}
+      )} */}
 
     </div>
 

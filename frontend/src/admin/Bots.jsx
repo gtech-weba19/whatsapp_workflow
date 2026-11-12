@@ -23,6 +23,8 @@ import {
   CircleHelp,
   Check,
   Filter,
+  Download,
+  Smartphone
 } from "lucide-react";
 
 const API_BASE_URL = (
@@ -39,7 +41,7 @@ const EMPTY_FORM = {
 };
 
 const STATUS_OPTIONS = [
-  { value: "draft", label: "Draft" },
+//   { value: "draft", label: "Draft" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
@@ -221,35 +223,7 @@ function FieldLabel({ children, required = false, hint }) {
   );
 }
 
-function ModalHeader({ editing, onClose, disabled }) {
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-7">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-          {editing ? <Pencil size={20} /> : <Bot size={22} />}
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold tracking-tight text-slate-900">
-            {editing ? "Edit bot" : "Create New Bot"}
-          </h2>
-          <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
-            Configure your bot and connect existing workflows.
-          </p>
-        </div>
-      </div>
 
-      <button
-        type="button"
-        onClick={onClose}
-        disabled={disabled}
-        aria-label="Close modal"
-        className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-      >
-        <X size={20} />
-      </button>
-    </div>
-  );
-}
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
@@ -607,100 +581,54 @@ function Bots() {
   /*
    * Create/update bot.
    */
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    if (!form.name.trim()) {
-      setError("Please enter a bot name.");
-      return;
-    }
+  setError("");
+  setSuccess("");
 
-    if (isSuperAdmin && !editingBot && !form.user_id) {
-      setError("Please select a user to assign this bot.");
-      return;
-    }
+  const botName = form.name.trim();
 
-    if (!isSuperAdmin && !form.user_id && !currentUser?.id) {
-      setError("Unable to identify your logged-in user. Please log in again.");
-      return;
-    }
+  if (!botName) {
+    setError("Please enter bot name.");
+    return;
+  }
 
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim() || null,
-      status: form.status,
-      whatsapp_account_id: form.whatsapp_account_id
-        ? Number(form.whatsapp_account_id)
-        : null,
-      workflow_ids: form.workflow_ids.map(Number),
-    };
+  if (!editingBot) {
+    setError("Please select a bot to edit.");
+    return;
+  }
 
-    // Only Super Admin can select an owner on create.
-    if (isSuperAdmin && !editingBot) {
-      payload.user_id = Number(form.user_id);
-    }
-
+  try {
     setSaving(true);
 
-    try {
-      if (editingBot) {
-        await request("put", `/bots/${editingBot.id}`, { data: payload });
-      } else {
-        await request("post", "/bots", { data: payload });
-      }
+    await request("put", `/bots/${editingBot.id}`, {
+      data: {
+        name: botName,
+      },
+    });
 
-      setSuccess(
-        editingBot
-          ? "Bot updated successfully."
-          : "Bot assigned to user successfully."
-      );
+    setSuccess("Bot name updated successfully.");
 
+    await fetchBots({ quiet: true });
+
+    setTimeout(() => {
       setModalOpen(false);
       setEditingBot(null);
-      setForm({ ...EMPTY_FORM });
-      setWorkflows([]);
-      setWhatsappAccounts([]);
+      setSuccess("");
+    }, 800);
 
-      await fetchBots({ quiet: true });
-    } catch (err) {
-      setError(
-        getErrorMessage(
-          err,
-          editingBot ? "Failed to update bot." : "Failed to create bot."
-        )
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+  } catch (err) {
+    console.error("BOT NAME UPDATE ERROR:", err);
 
-  /*
-   * Delete bot.
-   */
-  const deleteBot = async (bot) => {
-    const confirmed = window.confirm(
-      `Delete "${bot.name}"?\n\nThis action cannot be undone. Existing workflows will not be deleted.`
+    setError(
+      err.response?.data?.message ||
+      "Unable to update bot name."
     );
-
-    if (!confirmed) return;
-
-    setError("");
-    setSuccess("");
-    setOpenMenu(null);
-    setDeletingId(bot.id);
-
-    try {
-      await request("delete", `/bots/${bot.id}`);
-      setSuccess("Bot deleted successfully.");
-      await fetchBots({ quiet: true });
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to delete bot."));
-    } finally {
-      setDeletingId(null);
-    }
-  };
+  } finally {
+    setSaving(false);
+  }
+};
 
   /*
    * Update bot status.
@@ -782,12 +710,56 @@ function Bots() {
   const draftCount = bots.filter((bot) => bot.status === "draft").length;
   const inactiveCount = bots.filter((bot) => bot.status === "inactive").length;
 
-  const refreshAll = async () => {
-    setRefreshing(true);
-    setError("");
-    await fetchBots({ quiet: true });
-    setRefreshing(false);
-  };
+
+    const handleExport = () => {
+  if (!bots || bots.length === 0) {
+    alert("No bots available to export.");
+    return;
+  }
+
+  const headers = [
+    "Bot Name",
+    "Status",
+    "WhatsApp Account",
+    "Created At",
+  ];
+
+  const rows = bots.map((bot) => [
+    bot.name || "",
+    bot.status || "",
+    bot.whatsapp_account?.name || "",
+    bot.created_at
+      ? new Date(bot.created_at).toLocaleDateString()
+      : "",
+  ]);
+
+  const csvContent = [
+    headers,
+    ...rows,
+  ]
+    .map((row) =>
+      row
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `bots-export-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+};
 
   return (
     <div className="min-h-screen bg-slate-50/80 px-4 py-6 sm:px-6 lg:px-8">
@@ -814,26 +786,17 @@ function Bots() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={refreshAll}
-              disabled={refreshing || loading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-              Refresh
-            </button>
-
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
-            >
-              <Plus size={18} />
-              Create bot
-            </button>
-          </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+            type="button"
+            onClick={handleExport}
+            disabled={loading}
+            className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+            <Download size={17} />
+            Export
+        </button>
+        </div>
         </header>
 
         {/* Notifications */}
@@ -884,62 +847,69 @@ function Bots() {
 
         {/* Bots table */}
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">All Bots</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Search, filter and manage your bot configurations.
-              </p>
-            </div>
+            <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
 
-            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-              <div className="relative min-w-0 flex-1 sm:min-w-[260px] lg:w-80 lg:flex-none">
-                <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search bots or users..."
-                  aria-label="Search bots or users"
-                  className={`${inputClass} pl-10`}
+            <div className="flex w-full items-center justify-between gap-4">
+
+                {/* Search */}
+                <div className="relative min-w-0 flex-1 sm:min-w-[300px] lg:w-80 lg:flex-none">
+                <Search
+                    size={18}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
+
+                <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search Bot..."
+                    aria-label="Search bots or users"
+                    className={`${inputClass} pl-10`}
+                />
+
                 {search && (
-                  <button
+                    <button
                     type="button"
                     onClick={() => setSearch("")}
                     aria-label="Clear search"
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
+                    >
                     <X size={14} />
-                  </button>
+                    </button>
                 )}
-              </div>
+                </div>
 
-              <div className="relative sm:min-w-[170px]">
-                <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                {/* Status Filter */}
+                <div className="relative  sm:w-[170px] sm:flex-none">
+                <Filter
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <select
-                  value={selectedStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value)}
-                  aria-label="Filter bots by status"
-                  className={`${inputClass} appearance-none pl-9 pr-9`}
+                    value={selectedStatus}
+                    onChange={(event) => setSelectedStatus(event.target.value)}
+                    aria-label="Filter bots by status"
+                    className={`${inputClass} appearance-none pl-9 pr-9`}
                 >
-                  <option value="all">All statuses</option>
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              </div>
-            </div>
-          </div>
+                    {/* <option value="all">All</option> */}
 
+                    {STATUS_OPTIONS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                        {status.label}
+                    </option>
+                    ))}
+                </select>
+
+                <ChevronDown
+                    size={15}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                </div>
+
+            </div>
+            </div>
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 px-5 py-3 sm:px-6">
-            <p className="text-sm text-slate-600">
-              Showing <span className="font-semibold text-slate-900">{filteredBots.length}</span> of{" "}
-              <span className="font-semibold text-slate-900">{bots.length}</span> bots
-            </p>
 
             {(search || selectedStatus !== "all") && (
               <button
@@ -999,9 +969,10 @@ function Bots() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-white text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <tr className="border-b border-slate-200 bg-white text-[11px] font-bold uppercase tracking-wider text-slate-500 ">
                     <th scope="col" className="px-6 py-4">Bot details</th>
                     <th scope="col" className="px-5 py-4">User</th>
+                    <th scope="col" className="px-5 py-4">WhatsApp ID</th>
                     <th scope="col" className="px-5 py-4">Workflows</th>
                     <th scope="col" className="px-5 py-4">Status</th>
                     <th scope="col" className="px-5 py-4 text-right">Actions</th>
@@ -1030,10 +1001,9 @@ function Bots() {
                               <p className="max-w-[260px] truncate text-sm font-bold text-slate-900">
                                 {bot.name || "Untitled bot"}
                               </p>
-                              <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">
+                              {/* <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">
                                 {bot.description || "No description added"}
-                              </p>
-                              <p className="mt-1 text-[11px] text-slate-400">ID: {bot.id}</p>
+                              </p> */}
                             </div>
                           </div>
                         </td>
@@ -1043,15 +1013,22 @@ function Bots() {
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                               <Building2 size={17} />
                             </div>
-                            <div className="min-w-0">
+                              <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-slate-700">{ownerName}</p>
-                              {bot.user_id && (
-                                <p className="mt-0.5 text-[11px] text-slate-400">
-                                  User ID: {bot.user_id}
-                                </p>
-                              )}
+                             
                             </div>
+                          
                           </div>
+                        </td>
+
+                        {/* WhatsApp Account ID */}
+                        <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                            <Smartphone size={16} className="shrink-0 text-emerald-600" />
+                            <span className="text-sm font-medium text-slate-700">
+                            {bot.whatsapp_account?.waba_id || "—"}
+                            </span>
+                        </div>
                         </td>
 
                         <td className="px-5 py-4">
@@ -1154,7 +1131,7 @@ function Bots() {
                                     </button>
                                   ))}
                                   <div className="my-1.5 border-t border-slate-100" />
-                                  <button
+                                  {/* <button
                                     type="button"
                                     role="menuitem"
                                     onClick={() => deleteBot(bot)}
@@ -1162,7 +1139,7 @@ function Bots() {
                                   >
                                     <Trash2 size={15} />
                                     Delete bot
-                                  </button>
+                                  </button> */}
                                 </div>
                               </>,
                               document.body
@@ -1188,327 +1165,110 @@ function Bots() {
           )}
         </section>
 
-        {/* Create / edit modal */}
-        {modalOpen && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-[3px] sm:p-5"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) closeModal();
-            }}
-          >
-            <section
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="bot-modal-title"
-              className="my-auto flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/60 bg-white shadow-2xl shadow-slate-950/20 sm:rounded-3xl"
-            >
-              <div id="bot-modal-title">
-                <ModalHeader
-                  editing={Boolean(editingBot)}
-                  onClose={closeModal}
-                  disabled={saving}
-                />
-              </div>
+       {modalOpen &&
+            createPortal(
+                <div
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"
+                onClick={() => {
+                    if (!saving) {
+                    setModalOpen(false);
+                    }
+                }}
+                >
+                <div
+                    className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                        Edit Bot Name
+                        </h2>
 
-              <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
-                  <AlertMessage type="error" message={error} onClose={() => setError("")} />
-
-                  {/* Basic information */}
-                  <section>
-                    <div className="mb-4 flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                        <FileText size={18} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">Basic information</h3>
-                        <p className="mt-0.5 text-xs text-slate-500">Set the bot name and description.</p>
-                      </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                        Update your bot name.
+                        </p>
                     </div>
 
-                    {/* Super Admin owner selection */}
-                    {isSuperAdmin && !editingBot && (
-                      <div className="mb-4">
-                        <FieldLabel required>Assign Bot To User</FieldLabel>
-                        <select
-                          value={form.user_id}
-                          onChange={(event) => handleOwnerChange(event.target.value)}
-                          disabled={saving || loadingUsers}
-                          required
-                          className={inputClass}
-                        >
-                          <option value="">
-                            {loadingUsers ? "Loading registered users..." : "Select registered user"}
-                          </option>
-                          {users.map((user) => (
-                            <option key={user.id} value={String(user.id)}>
-                              {user.name || `User ${user.id}`}
-                              {user.email ? ` (${user.email})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="mt-1.5 text-xs text-slate-500">
-                          The bot and its assignments will belong to the selected user.
-                        </p>
-                        {!loadingUsers && users.length === 0 && (
-                          <p className="mt-2 text-xs text-rose-600">
-                            No registered users were returned by the API.
-                          </p>
-                        )}
-                      </div>
+                    <button
+                        type="button"
+                        onClick={() => setModalOpen(false)}
+                        disabled={saving}
+                        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    >
+                        <X size={20} />
+                    </button>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="p-6">
+                    {error && (
+                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                        <AlertCircle size={17} />
+                        {error}
+                        </div>
                     )}
 
-                    {isSuperAdmin && editingBot && (
-                      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <FieldLabel>Assigned User</FieldLabel>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {editingBot.user?.name || `User ${editingBot.user_id}`}
-                        </p>
-                        {editingBot.user?.email && (
-                          <p className="mt-1 text-xs text-slate-500">{editingBot.user.email}</p>
-                        )}
-                        <p className="mt-1 text-xs text-slate-500">
-                          Bot ownership cannot be changed from the edit form.
-                        </p>
-                      </div>
+                    {success && (
+                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                        <CheckCircle2 size={17} />
+                        {success}
+                        </div>
                     )}
 
-                    <div className="md:col-span-2">
-                      <div className="mb-4">
-                        <FieldLabel required>Bot name</FieldLabel>
+                    <div>
+                        <FieldLabel required>Bot Name</FieldLabel>
+
                         <input
-                          type="text"
-                          value={form.name}
-                          onChange={(event) => updateForm("name", event.target.value)}
-                          placeholder="e.g. Customer Support Bot"
-                          required
-                          maxLength={255}
-                          disabled={saving}
-                          className={inputClass}
+                        type="text"
+                        value={form.name}
+                        onChange={(event) =>
+                            updateForm("name", event.target.value)
+                        }
+                        placeholder="Enter bot name"
+                        required
+                        maxLength={255}
+                        disabled={saving}
+                        autoFocus
+                        className={inputClass}
                         />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <FieldLabel hint="Optional">Description</FieldLabel>
-                        <textarea
-                          value={form.description}
-                          onChange={(event) => updateForm("description", event.target.value)}
-                          placeholder="Describe this bot's purpose and responsibilities..."
-                          rows={3}
-                          maxLength={5000}
-                          disabled={saving}
-                          className={`${inputClass} min-h-20 resize-y`}
-                        />
-                        <p className="mt-1 text-right text-[11px] text-slate-400">
-                          {form.description.length}/5000
-                        </p>
-                      </div>
-                    </div>
-                  </section>
-
-                  <div className="border-t border-slate-100" />
-
-                  {/* Bot configuration */}
-                  <section>
-                    <div className="mb-4 flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                        <MessageCircle size={18} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">Bot configuration</h3>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          Choose its status and WhatsApp account.
-                        </p>
-                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div>
-                        <FieldLabel>Status</FieldLabel>
-                        <select
-                          value={form.status}
-                          onChange={(event) => updateForm("status", event.target.value)}
-                          disabled={saving}
-                          className={inputClass}
+                    {/* Footer Buttons */}
+                    <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
+                        <button
+                        type="button"
+                        onClick={() => setModalOpen(false)}
+                        disabled={saving}
+                        className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                         >
-                          {STATUS_OPTIONS.map((status) => (
-                            <option key={status.value} value={status.value}>{status.label}</option>
-                          ))}
-                        </select>
-                        <p className="mt-1.5 text-xs text-slate-400">
-                          Set whether this bot is active, inactive or in draft.
-                        </p>
-                      </div>
+                        Cancel
+                        </button>
 
-                      <div>
-                        <FieldLabel hint="Optional">WhatsApp account</FieldLabel>
-                        <select
-                          value={form.whatsapp_account_id}
-                          onChange={(event) => updateForm("whatsapp_account_id", event.target.value)}
-                          disabled={saving || loadingAccounts || (!form.user_id && isSuperAdmin)}
-                          className={inputClass}
+                       <button
+                        type="submit"
+                        disabled={saving || !form.name.trim()}
+                        className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-500/20 transition-all duration-200 hover:from-emerald-600 hover:to-green-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <option value="">
-                            {loadingAccounts
-                              ? "Loading accounts..."
-                              : whatsappAccounts.length === 0
-                                ? "No connected accounts available"
-                                : "No WhatsApp account"}
-                          </option>
-                          {whatsappAccounts.map((account) => (
-                            <option key={account.id} value={String(account.id)}>
-                              {account.name || `Account ${account.id}`}
-                              {account.phone_number ? ` — ${account.phone_number}` : ""}
-                              {String(account.status).toLowerCase() !== "connected"
-                                ? ` (${account.status || "unknown"})`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="mt-1.5 text-xs text-slate-400">
-                          WhatsApp accounts for the selected owner are listed here.
-                        </p>
-                      </div>
+                        {saving ? (
+                            <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Updating...
+                            </>
+                        ) : (
+                            <>
+                            <Check size={16} />
+                            Update Bot
+                            </>
+                        )}
+                        </button>
                     </div>
-                  </section>
-
-                  <div className="border-t border-slate-100" />
-
-                  {/* Workflow assignments */}
-                  <section>
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                          <Workflow size={19} />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">Workflow assignments</h3>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            Assign existing workflows to this bot.
-                          </p>
-                        </div>
-                      </div>
-
-                      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
-                        <Check size={13} />
-                        {form.workflow_ids.length} selected
-                      </span>
-                    </div>
-
-                    {loadingWorkflows ? (
-                      <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70">
-                        <Loader2 size={23} className="animate-spin text-emerald-600" />
-                        <p className="text-sm text-slate-500">Loading workflows...</p>
-                      </div>
-                    ) : workflows.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-9 text-center">
-                        <Workflow size={26} className="mx-auto mb-2 text-slate-400" />
-                        <p className="text-sm font-semibold text-slate-700">No existing workflows found</p>
-                        <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                          Select a user with workflows, or create a workflow for this user first.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5 sm:p-3">
-                        {workflows.map((workflow) => {
-                          const unavailable = isWorkflowUnavailable(workflow);
-                          const checked = form.workflow_ids.map(Number).includes(Number(workflow.id));
-
-                          return (
-                            <label
-                              key={workflow.id}
-                              className={`flex items-start gap-3 rounded-xl border p-3.5 transition ${
-                                unavailable
-                                  ? "cursor-not-allowed border-slate-100 bg-slate-100/70 opacity-60"
-                                  : checked
-                                    ? "cursor-pointer border-emerald-200 bg-emerald-50/70"
-                                    : "cursor-pointer border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/30"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={saving || unavailable}
-                                onChange={() => toggleWorkflow(workflow.id)}
-                                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="break-words text-sm font-semibold text-slate-900">
-                                    {workflow.name || `Workflow ${workflow.id}`}
-                                  </span>
-                                  <StatusBadge status={workflow.status || "draft"} />
-                                  {unavailable && (
-                                    <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
-                                      Assigned to another bot
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="mt-1.5 break-words text-xs leading-5 text-slate-500">
-                                  {workflow.description || "No description provided."}
-                                </p>
-                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                                  <span>ID: {workflow.id}</span>
-                                  {workflow.channel && <span className="capitalize">Channel: {workflow.channel}</span>}
-                                </div>
-                              </div>
-                              {checked && !unavailable && (
-                                <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-600" />
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <p className="mt-2.5 text-xs leading-5 text-slate-400">
-                      Workflows assigned to another bot cannot be selected.
-                    </p>
-                  </section>
+                    </form>
                 </div>
-
-                {/* Modal footer */}
-                <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50/90 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                  <p className="hidden text-xs text-slate-400 sm:block">
-                    <span className="text-rose-500">*</span> Required fields
-                  </p>
-                  <div className="flex items-center justify-end gap-2.5">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      disabled={saving}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={
-                        saving ||
-                        loadingWorkflows ||
-                        loadingUsers ||
-                        (isSuperAdmin && !editingBot && !form.user_id)
-                      }
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 size={17} className="animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          {editingBot ? <Pencil size={16} /> : <Plus size={17} />}
-                          {editingBot ? "Save changes" : "Create bot"}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </footer>
-              </form>
-            </section>
-          </div>
-        )}
+                </div>,
+                document.body
+            )}
       </div>
     </div>
   );

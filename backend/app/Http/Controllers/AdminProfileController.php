@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use App\Models\PersonalAccessToken;
+
 
 class AdminProfileController extends Controller
 {
@@ -123,77 +125,165 @@ class AdminProfileController extends Controller
     /**
      * Change the authenticated user's password.
      */
-    public function changePassword(Request $request)
-    {
-        $user = $request->user();
+    // public function changePassword(Request $request)
+    // {
+    //     $user = $request->user();
 
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthenticated.',
-            ], 401);
-        }
+    //     if (!$user) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthenticated.',
+    //         ], 401);
+    //     }
 
-        $validator = Validator::make(
-            $request->all(),
-            [
+    //     $validator = Validator::make(
+    //         $request->all(),
+    //         [
+    //             'current_password' => [
+    //                 'required',
+    //                 'string',
+    //             ],
+    //             'password' => [
+    //                 'required',
+    //                 'string',
+    //                 'min:8',
+    //                 'confirmed',
+    //                 'different:current_password',
+    //             ],
+    //         ],
+    //         [
+    //             'current_password.required' =>
+    //                 'Current password is required.',
+    //             'password.required' =>
+    //                 'New password is required.',
+    //             'password.min' =>
+    //                 'New password must be at least 8 characters.',
+    //             'password.confirmed' =>
+    //                 'New password and confirm password do not match.',
+    //             'password.different' =>
+    //                 'New password must be different from current password.',
+    //         ]
+    //     );
+
+    //     if ($validator->fails()) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Please check the submitted password details.',
+    //             'errors' => $validator->errors(),
+    //         ], 422);
+    //     }
+
+    //     // Verify the current password.
+    //     if (!Hash::check(
+    //         $request->input('current_password'),
+    //         $user->password
+    //     )) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Your current password is incorrect.',
+    //             'errors' => [
+    //                 'current_password' => [
+    //                     'Your current password is incorrect.',
+    //                 ],
+    //             ],
+    //         ], 422);
+    //     }
+
+    //     // Hash and save the new password.
+    //     $user->password = Hash::make($request->input('password'));
+    //     $user->save();
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Password updated successfully.',
+    //     ]);
+    // }
+
+
+    /**
+ * Change the authenticated user's password.
+ */
+public function changePassword(Request $request)
+{
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthenticated.',
+        ], 401);
+    }
+
+    $token = $user->currentAccessToken();
+
+    if (
+        $token instanceof PersonalAccessToken &&
+        $token->is_impersonation
+    ) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Password change is not allowed while an administrator is accessing your account.',
+        ], 403);
+    }
+
+    $validator = Validator::make(
+        $request->all(),
+        [
+            'current_password' => [
+                'required',
+                'string',
+            ],
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+                'different:current_password',
+            ],
+        ],
+        [
+            'current_password.required' =>
+                'Current password is required.',
+            'password.required' =>
+                'New password is required.',
+            'password.min' =>
+                'New password must be at least 8 characters.',
+            'password.confirmed' =>
+                'New password and confirm password do not match.',
+            'password.different' =>
+                'New password must be different from current password.',
+        ]
+    );
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Please check the submitted password details.',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    if (!Hash::check(
+        $request->input('current_password'),
+        $user->password
+    )) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Your current password is incorrect.',
+            'errors' => [
                 'current_password' => [
-                    'required',
-                    'string',
-                ],
-                'password' => [
-                    'required',
-                    'string',
-                    'min:8',
-                    'confirmed',
-                    'different:current_password',
+                    'Your current password is incorrect.',
                 ],
             ],
-            [
-                'current_password.required' =>
-                    'Current password is required.',
-                'password.required' =>
-                    'New password is required.',
-                'password.min' =>
-                    'New password must be at least 8 characters.',
-                'password.confirmed' =>
-                    'New password and confirm password do not match.',
-                'password.different' =>
-                    'New password must be different from current password.',
-            ]
-        );
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please check the submitted password details.',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        // Verify the current password.
-        if (!Hash::check(
-            $request->input('current_password'),
-            $user->password
-        )) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your current password is incorrect.',
-                'errors' => [
-                    'current_password' => [
-                        'Your current password is incorrect.',
-                    ],
-                ],
-            ], 422);
-        }
-
-        // Hash and save the new password.
-        $user->password = Hash::make($request->input('password'));
-        $user->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Password updated successfully.',
-        ]);
+        ], 422);
     }
+
+    $user->password = Hash::make($request->input('password'));
+    $user->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Password updated successfully.',
+    ]);
+}
 }

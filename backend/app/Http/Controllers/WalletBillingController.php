@@ -31,38 +31,18 @@ class WalletBillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
         }
 
-        $wallet = $this->walletService->getWallet($user);
-        $balance = (float) $wallet->balance;
-        $rate = $this->walletService->getUserRate($user);
+        $summary = $this->walletService->getWalletSummary($user);
+        $activeSubscription = $summary['active_subscription'];
+        $activePlan = $summary['active_plan'];
 
-        // Fetch active subscription
-        // $activeSubscription = UserSubscription::where('user_id', $user->id)
-        //     ->where('status', 'active')
-        //     ->orderByDesc('id')
-        //     ->first();
-        $activeSubscription = UserSubscription::where('user_id', $user->id)
-                ->where('status', 'active')
-                ->orderByDesc('id')
-                ->first();
+        $activeSubscriptionData = null;
 
-            $activePlan = null;
-
-            if ($activeSubscription) {
-                $activePlan = PackagePlan::where(
-                    'id',
-                    $activeSubscription->package_plan_id
-                )->first();
-            }
-
-            $activeSubscriptionData = null;
-
-            if ($activeSubscription) {
-                $activeSubscriptionData = $activeSubscription->toArray();
-
-                $activeSubscriptionData['plan'] = $activePlan
-                    ? $activePlan->toArray()
-                    : null;
-            }
+        if ($activeSubscription) {
+            $activeSubscriptionData = $activeSubscription->toArray();
+            $activeSubscriptionData['plan'] = $activePlan
+                ? $activePlan->toArray()
+                : null;
+        }
 
         // Check if user has claimed/used trial
         $hasUsedTrial = UserSubscription::where('user_id', $user->id)
@@ -71,17 +51,29 @@ class WalletBillingController extends Controller
             ->where('transaction_type', 'signup_bonus')
             ->exists();
 
-                return response()->json([
-                'success' => true,
-                'balance' => $balance,
-                'rate' => $rate,
-                'currency' => $wallet->currency ?? 'INR',
-                'user_id' => $user->id,
-                'estimated_messages' => $rate > 0 ? (int) floor($balance / $rate) : 0,
-                'active_subscription' => $activeSubscriptionData,
-                'active_plan_id' => $activeSubscription?->package_plan_id,
-                'has_used_trial' => $hasUsedTrial,
-            ]);
+        return response()->json([
+            'success' => true,
+            'balance' => $summary['balance'],
+            'remaining_balance' => $summary['remaining_balance'],
+            'total_taken' => $summary['total_taken'],
+            'total_used' => $summary['total_used'],
+            'total_credited' => $summary['total_credited'],
+            'total_plan_amount' => $summary['total_plan_amount'],
+            'active_plan_amount' => $summary['active_plan_amount'],
+            'active_plan_credits' => $summary['active_plan_credits'],
+            'usage_percentage' => $summary['usage_percentage'],
+            'rate' => $summary['rate'],
+            'currency' => $summary['currency'],
+            'user_id' => $user->id,
+            'estimated_messages' => $summary['estimated_messages'],
+            'used_messages' => $summary['used_messages'],
+            'total_messages' => $summary['total_messages'],
+            'has_active_plan' => $summary['has_active_plan'],
+            'active_subscription' => $activeSubscriptionData,
+            'active_plan_id' => $summary['active_plan_id'],
+            'active_plan_name' => $summary['active_plan_name'],
+            'has_used_trial' => $hasUsedTrial,
+        ]);
     }
 
     /**
@@ -437,7 +429,7 @@ class WalletBillingController extends Controller
             ->take(30)
             ->get();
 
-        $unreadCount = AdminNotification::where('is_read', false)->count();
+        $unreadCount = AdminNotification::where('read_at', false)->count();
 
         return response()->json([
             'success' => true,
@@ -457,7 +449,7 @@ class WalletBillingController extends Controller
         }
 
         AdminNotification::where('id', $id)->update([
-            'is_read' => true,
+            'read_at' => true,
         ]);
 
         return response()->json([
@@ -476,8 +468,8 @@ class WalletBillingController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        AdminNotification::where('is_read', false)->update([
-            'is_read' => true,
+        AdminNotification::where('read_at', false)->update([
+            'read_at' => true,
         ]);
 
         return response()->json([

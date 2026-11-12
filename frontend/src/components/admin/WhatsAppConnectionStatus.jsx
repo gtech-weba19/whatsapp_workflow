@@ -608,22 +608,22 @@ useEffect(() => {
       <section
         aria-label="WhatsApp connection status"
         aria-live="polite"
-        className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${theme.background} ${theme.border} shadow-md`}
+        className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${theme.background} ${theme.border} shadow-sm`}
       >
-        <div className={`absolute inset-y-0 left-0 w-1 ${theme.accent}`} />
+        <div className={`absolute inset-y-0 left-0 w-1.5 ${theme.accent}`} />
 
         <div
-          className={`flex flex-col gap-5 pl-7 ${
+          className={`flex flex-col gap-5 pl-6 ${
             compact
-              ? "p-4 sm:flex-row sm:items-center sm:justify-between"
-              : "p-5 sm:p-6 sm:pl-8 lg:flex-row lg:items-center lg:justify-between"
+              ? "p-4 sm:flex-row sm:items-center sm:justify-between sm:pl-7"
+              : "p-5 sm:p-6 sm:pl-7 md:flex-row md:items-center md:justify-between"
           }`}
         >
-          <div className="flex min-w-0 items-start gap-4 sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4 sm:items-center">
             <div
-              className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${theme.iconBg} ${theme.iconText}`}
+              className={`relative flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl shadow-xs sm:h-14 sm:w-14 ${theme.iconBg} ${theme.iconText}`}
             >
-              <WhatsAppIcon size={30} />
+              <WhatsAppIcon size={28} />
 
               <span
                 className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white ${theme.dot}`}
@@ -645,14 +645,30 @@ useEffect(() => {
                 </h3>
 
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${theme.badge}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${theme.badge}`}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
                   {badgeLabel}
                 </span>
+
+                {connected && numberToShow && (
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-2.5 py-0.5 shadow-2xs">
+                    <Smartphone
+                      size={12}
+                      className="shrink-0 text-emerald-700"
+                    />
+                    <span className="truncate text-xs font-bold tabular-nums text-slate-800">
+                      +{String(numberToShow).replace(/^\+/, "")}
+                    </span>
+                    <ShieldCheck
+                      size={13}
+                      className="shrink-0 text-emerald-600"
+                    />
+                  </span>
+                )}
               </div>
 
-      <p className="mt-1.5 max-w-2xl break-words text-xs leading-5 text-slate-600 sm:text-sm">
+              <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-slate-600 sm:text-sm">
                 {connected
                   ? "Your WhatsApp Business account is approved and ready for chatbot automation and messaging."
                   : pending
@@ -664,123 +680,111 @@ useEffect(() => {
                         : "Connect your WhatsApp Business account to enable automated messaging and create your first chatbot."}
               </p>
 
-              {connected && numberToShow && (
-                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2">
-                  <Smartphone
-                    size={14}
-                    className="shrink-0 text-emerald-700"
-                  />
-
-                  <span className="truncate text-xs font-bold text-slate-800">
-                    +{String(numberToShow).replace(/^\+/, "")}
-                  </span>
-
-                  <ShieldCheck
-                    size={15}
-                    className="shrink-0 text-emerald-600"
-                  />
-                </div>
-              )}
-
               {pending && (
-                <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white/80 px-3 py-2 text-xs font-semibold text-amber-800">
-                  <Clock3 size={15} />
+                <div className="mt-2.5 inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                  <Clock3 size={14} className="shrink-0" />
                   Admin approval is required
                 </div>
               )}
             </div>
           </div>
 
-<div className="flex shrink-0 flex-wrap items-center gap-2">
-  {statusLoading ? (
-    <span
-      className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-bold text-slate-600"
-      role="status"
-      aria-live="polite"
-    >
-      <Loader2 size={17} className="animate-spin" />
-      Checking Status...
-    </span>
-  ) : pending ? (
-    <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm font-bold text-amber-800">
-      <Clock3 size={17} />
-      Pending Approval
-    </span>
-  ) : verifying ? (
-    <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm font-bold text-amber-800">
-      <Loader2 size={17} className="animate-spin" />
-      Verifying...
-    </span>
-  ) : connected ? (
-    <button
-      type="button"
-      disabled={checkingBot}
-    onClick={() => {
-      if (existingBot?.id) {
-        navigate("/workflow-builder", {
-          state: {
-            showEmptyWorkflowOverlay: true,
-          },
-        });
-      } else {
-        setShowCreateBotPopup(true);
-      }
-    }}
-className="cursor-pointer inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-gradient-to-b from-neutral-700 via-neutral-900 to-black px-4 py-3 text-sm font-extrabold text-white shadow-[0_6px_0_#000,0_10px_18px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.35)] transition-all duration-200 hover:-translate-y-1 hover:border-white/50 hover:from-neutral-600 hover:via-neutral-800 hover:to-black hover:shadow-[0_9px_0_#000,0_14px_22px_rgba(0,0,0,0.45),inset_0_1px_2px_rgba(255,255,255,0.45)] active:translate-y-1 active:shadow-[0_2px_0_#000,inset_0_2px_4px_rgba(0,0,0,0.6)] focus:outline-none focus:ring-4 focus:ring-neutral-400/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0">      {checkingBot ? (
-        <>
-          <Loader2 size={18} className="animate-spin" />
-          Checking Bot...
-        </>
-      ) : existingBot?.id ? (
-        <>
-          <Bot size={18} />
-          Create Workflow
-          <ArrowRight size={16} />
-        </>
-      ) : (
-        <>
-          <Bot size={18} />
-          Create Your First Bot
-          <ArrowRight size={16} />
-        </>
-      )}
-    </button>
-  ) : (
-    <button
-      type="button"
-      onClick={() => setShowPopup(true)}
-      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-gradient-to-b from-neutral-700 via-neutral-900 to-black px-4 py-3 text-sm font-extrabold text-white shadow-[0_6px_0_#000,0_10px_18px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.35)] transition-all duration-200 hover:-translate-y-1 hover:border-white/50 hover:from-neutral-600 hover:via-neutral-800 hover:to-black hover:shadow-[0_9px_0_#000,0_14px_22px_rgba(0,0,0,0.45),inset_0_1px_2px_rgba(255,255,255,0.45)] active:translate-y-1 active:shadow-[0_2px_0_#000,inset_0_2px_4px_rgba(0,0,0,0.6)] focus:outline-none focus:ring-4 focus:ring-neutral-400/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 cursor-pointer"
-    >
-      <WhatsAppIcon size={18} />
-      {rejected ? "Submit Again" : "Connect WhatsApp"}
-      <ArrowUpRight size={16} />
-    </button>
-  )}
-</div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5 md:justify-end">
+            {statusLoading ? (
+              <span
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600 sm:text-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 size={16} className="animate-spin" />
+                Checking Status...
+              </span>
+            ) : pending ? (
+              <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-4 py-2.5 text-xs font-bold text-amber-800 sm:text-sm">
+                <Clock3 size={16} />
+                Pending Approval
+              </span>
+            ) : verifying ? (
+              <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-4 py-2.5 text-xs font-bold text-amber-800 sm:text-sm">
+                <Loader2 size={16} className="animate-spin" />
+                Verifying...
+              </span>
+            ) : connected ? (
+              <button
+                type="button"
+                disabled={checkingBot}
+                onClick={() => {
+                  if (existingBot?.id) {
+                    navigate("/workflow-builder", {
+                      state: {
+                        showEmptyWorkflowOverlay: true,
+                      },
+                    });
+                  } else {
+                    setShowCreateBotPopup(true);
+                  }
+                }}
+                className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md shadow-emerald-600/20 transition-all duration-200 hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 sm:text-sm"
+              >
+                {checkingBot ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    Checking Bot...
+                  </>
+                ) : existingBot?.id ? (
+                  <>
+                    <Bot size={17} />
+                    Create Workflow
+                    <ArrowRight size={15} />
+                  </>
+                ) : (
+                  <>
+                    <Bot size={17} />
+                    Create Your First Bot
+                    <ArrowRight size={15} />
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowPopup(true)}
+                className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 sm:text-sm ${
+                  rejected
+                    ? "bg-slate-900 shadow-slate-900/20 hover:bg-slate-800 focus:ring-slate-300"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-600/20 hover:from-emerald-700 hover:to-teal-700 focus:ring-emerald-200"
+                }`}
+              >
+                <WhatsAppIcon size={17} />
+                {rejected ? "Submit Again" : "Connect WhatsApp"}
+                <ArrowUpRight size={15} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div
-          className={`flex items-center gap-2 border-t px-5 py-3 sm:px-7 ${theme.footer}`}
+          className={`flex items-center gap-2 border-t px-5 py-2.5 sm:px-7 ${theme.footer}`}
         >
           {connected ? (
-            <CheckCircle2 size={14} className="text-emerald-600" />
+            <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />
           ) : pending || verifying ? (
-            <Clock3 size={14} className="text-amber-700" />
+            <Clock3 size={14} className="shrink-0 text-amber-700" />
           ) : (
-            <AlertCircle size={14} className="text-slate-500" />
+            <AlertCircle size={14} className="shrink-0 text-slate-500" />
           )}
 
-     <p className="text-xs font-semibold text-slate-600">
-          {connected
-            ? "Your WhatsApp account is connected and ready to use."
-            : pending
-              ? "Your request is under review. Your WhatsApp connection will be activated after admin approval."
-              : verifying
-                ? "Your WhatsApp connection is being verified. Please wait."
-                : rejected
-                  ? "Your connection request was not approved. Please contact your administrator or submit a new request."
-                  : "Connect your WhatsApp Business account to enable messaging and chatbot automation."}
-        </p>
+          <p className="text-xs font-semibold text-slate-600">
+            {connected
+              ? "Your WhatsApp account is connected and ready to use."
+              : pending
+                ? "Your request is under review. Your WhatsApp connection will be activated after admin approval."
+                : verifying
+                  ? "Your WhatsApp connection is being verified. Please wait."
+                  : rejected
+                    ? "Your connection request was not approved. Please contact your administrator or submit a new request."
+                    : "Connect your WhatsApp Business account to enable messaging and chatbot automation."}
+          </p>
         </div>
       </section>
 

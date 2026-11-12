@@ -16,6 +16,7 @@ use App\Models\Bot;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\WalletService;
+use App\Services\EmailApiService;
 
 
 class WorkflowEngine
@@ -1696,9 +1697,7 @@ public function findWorkflowByTrigger(
 }
 
 
-/**
- * Find active WhatsApp session with strict user and account isolation.
- */
+
 private function findActiveSession(
     string $user,
     ?int $whatsappAccountId = null,
@@ -1872,6 +1871,165 @@ public function handleIncoming(
         return $session->refresh();
     }
 
+
+    /*
+|--------------------------------------------------------------------------
+| WALLET BALANCE CHECK BEFORE JOURNEY EXECUTION
+|--------------------------------------------------------------------------
+*/
+
+try {
+
+    $walletUser = User::find($userId);
+
+    if (!$walletUser) {
+
+        Log::error('WHATSAPP WALLET USER NOT FOUND', [
+            'user_id' => $userId,
+            'whatsapp_account_id' => $whatsappAccountId,
+        ]);
+
+        return null;
+    }
+
+    app(WalletService::class)->validateMessageBalance($walletUser);
+
+} catch (\RuntimeException $e) {
+
+    Log::warning('WHATSAPP INCOMING BLOCKED - INSUFFICIENT WALLET', [
+        'user_id' => $userId,
+        'whatsapp_account_id' => $whatsappAccountId,
+        'mobile' => $user,
+        'message' => $e->getMessage(),
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | SELECT WHATSAPP ACCOUNT
+    |--------------------------------------------------------------------------
+    */
+
+    $this->whatsapp->useAccountById(
+        $whatsappAccountId,
+        $userId
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | SEND WARNING ONLY ONCE IN 10 MINUTES
+    |--------------------------------------------------------------------------
+    */
+
+    // $warningKey = 'whatsapp_wallet_warning:'
+    //     . $whatsappAccountId . ':'
+    //     . $user;
+
+    // if (!\Illuminate\Support\Facades\Cache::has($warningKey)) {
+
+    //     $warningMessage = 'Insufficient wallet balance. Please recharge your wallet.';
+
+    //     $output = $this->whatsapp->sendText(
+    //         $user,
+    //         $warningMessage,
+    //         null,
+    //         true
+    //     );
+
+    //     Log::info('WHATSAPP WALLET WARNING RESULT', [
+    //         'user_id' => $userId,
+    //         'whatsapp_account_id' => $whatsappAccountId,
+    //         'mobile' => $user,
+    //         'output' => $output,
+    //     ]);
+
+    //     if (!empty($output['success'])) {
+
+    //         \Illuminate\Support\Facades\Cache::put(
+    //             $warningKey,
+    //             true,
+    //             now()->addMinutes(10)
+    //         );
+    //     }
+    // }
+    /*
+    |--------------------------------------------------------------------------
+    | SEND INSUFFICIENT WALLET EMAIL
+    |--------------------------------------------------------------------------
+    */
+
+try {
+
+    Log::info('WALLET EMAIL ATTEMPT STARTED', [
+        'user_id' => $walletUser->id,
+        'email' => $walletUser->email,
+        'account_id' => $whatsappAccountId,
+    ]);
+
+    if (empty($walletUser->email)) {
+
+        Log::error('WALLET EMAIL FAILED - EMAIL EMPTY', [
+            'user_id' => $walletUser->id,
+        ]);
+
+    } else {
+
+        $emailResult = app(EmailApiService::class)->sendTemplate(
+            $walletUser->email,
+            'Insufficient WhatsApp Wallet Balance – Recharge Required | WABA.TODAY',
+            'emails.whatsapp-wallet-insufficient',
+            [
+                'owner' => $walletUser,
+                'userName' => $walletUser->name,
+                'balance' => app(WalletService::class)
+                    ->getBalance($walletUser),
+                'messageRate' => app(WalletService::class)
+                    ->getUserRate($walletUser),
+                'accountId' => $whatsappAccountId,
+                'wabaId' => WhatsAppAccount::find($whatsappAccountId)?->waba_id,
+                'rechargeUrl' => rtrim(
+                    config('app.frontend_url', url('/')),
+                    '/'
+                ) . '/wallet',
+            ],
+            $walletUser->name
+        );
+
+        if (!empty($emailResult['success'])) {
+
+            Log::info('WHATSAPP INSUFFICIENT WALLET EMAIL SENT', [
+                'account_id' => $whatsappAccountId,
+                'user_id' => $walletUser->id,
+                'email' => $walletUser->email,
+                'response' => $emailResult,
+            ]);
+
+        } else {
+
+            Log::error('WHATSAPP INSUFFICIENT WALLET EMAIL FAILED', [
+                'account_id' => $whatsappAccountId,
+                'user_id' => $walletUser->id,
+                'email' => $walletUser->email,
+                'error' => $emailResult['error']
+                    ?? $emailResult['message']
+                    ?? 'Unknown email API error',
+                'status_code' => $emailResult['status_code'] ?? null,
+            ]);
+        }
+    }
+
+} catch (\Throwable $mailException) {
+
+    Log::error('WHATSAPP INSUFFICIENT WALLET EMAIL EXCEPTION', [
+        'account_id' => $whatsappAccountId,
+        'user_id' => $walletUser->id ?? null,
+        'error' => $mailException->getMessage(),
+        'file' => $mailException->getFile(),
+        'line' => $mailException->getLine(),
+    ]);
+}
+
+    return null;
+}
     /*
     |--------------------------------------------------------------------------
     | DETECT MENU OPTION HANDLE
@@ -1903,66 +2061,64 @@ public function handleIncoming(
 
     $triggerWorkflow = null;
 
-if (!$existingSession && !$isMenuOptionHandle) {
+    if (!$existingSession && !$isMenuOptionHandle) {
 
-    $triggerWorkflow = $this->findWorkflowByTrigger(
-        $message,
-        $whatsappAccountId,
-        $userId
-    );
-}
-
-
-
-    if ($triggerWorkflow) {
-
-    /*
-    |--------------------------------------------------------------------------
-    | VERIFY TRIGGER WORKFLOW OWNERSHIP
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-        (int) $triggerWorkflow->user_id !== $userId
-        || (int) $triggerWorkflow->whatsapp_account_id !== $whatsappAccountId
-    ) {
-
-        Log::error('WHATSAPP TRIGGER WORKFLOW OWNERSHIP MISMATCH', [
-            'workflow_id' => $triggerWorkflow->id,
-            'workflow_user_id' => $triggerWorkflow->user_id,
-            'incoming_user_id' => $userId,
-            'workflow_account_id' => $triggerWorkflow->whatsapp_account_id,
-            'incoming_account_id' => $whatsappAccountId,
-        ]);
-
-        return null;
+        $triggerWorkflow = $this->findWorkflowByTrigger(
+            $message,
+            $whatsappAccountId,
+            $userId
+        );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | START NEW JOURNEY
-    |--------------------------------------------------------------------------
-    */
-
-    $incoming['user_id'] = $userId;
-    $incoming['whatsapp_account_id'] = $whatsappAccountId;
-
-    Log::info('WHATSAPP NEW JOURNEY STARTING', [
-        'workflow_id' => $triggerWorkflow->id,
-        'bot_id' => $triggerWorkflow->bot_id,
-        'user_id' => $userId,
-        'whatsapp_account_id' => $whatsappAccountId,
-        'mobile' => $user,
-    ]);
-
-    return $this->start(
-        $triggerWorkflow,
-        $user,
-        $incoming
-    );
-}
 
 
+        if ($triggerWorkflow) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | VERIFY TRIGGER WORKFLOW OWNERSHIP
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            (int) $triggerWorkflow->user_id !== $userId
+            || (int) $triggerWorkflow->whatsapp_account_id !== $whatsappAccountId
+        ) {
+
+            Log::error('WHATSAPP TRIGGER WORKFLOW OWNERSHIP MISMATCH', [
+                'workflow_id' => $triggerWorkflow->id,
+                'workflow_user_id' => $triggerWorkflow->user_id,
+                'incoming_user_id' => $userId,
+                'workflow_account_id' => $triggerWorkflow->whatsapp_account_id,
+                'incoming_account_id' => $whatsappAccountId,
+            ]);
+
+            return null;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | START NEW JOURNEY
+        |--------------------------------------------------------------------------
+        */
+
+        $incoming['user_id'] = $userId;
+        $incoming['whatsapp_account_id'] = $whatsappAccountId;
+
+        Log::info('WHATSAPP NEW JOURNEY STARTING', [
+            'workflow_id' => $triggerWorkflow->id,
+            'bot_id' => $triggerWorkflow->bot_id,
+            'user_id' => $userId,
+            'whatsapp_account_id' => $whatsappAccountId,
+            'mobile' => $user,
+        ]);
+
+        return $this->start(
+            $triggerWorkflow,
+            $user,
+            $incoming
+        );
+    }
 
     if (!$existingSession) {
 
@@ -4919,6 +5075,133 @@ elseif ($type === 'video') {
     return;
 }
 
+// elseif ($type === 'button') {
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | BUTTON CLICK RECEIVED
+//     |--------------------------------------------------------------------------
+//     */
+
+//     $sourceHandle = trim(
+//         (string) ($input['source_handle'] ?? '')
+//     );
+
+//     if ($sourceHandle !== '') {
+
+//         $next = $this->nextNode(
+//             $workflow,
+//             $nodeId,
+//             $sourceHandle
+//         );
+
+//         if ($next) {
+
+//            $this->goToNode(
+//                 $workflow,
+//                 $session,
+//                 $next,
+//                 []
+//             );
+
+//             return;
+//         }
+
+//         // Invalid button selection
+//         $validationMessage = $this->resolve(
+//             (string) (
+//                 $cfg['validation_message']
+//                 ?? $cfg['validationMessage']
+//                 ?? '⚠️ This button is not available right now. Please select a valid option.'
+//             ),
+//             $session->variables ?? []
+//         );
+
+//         $output = $this->whatsapp->sendText(
+//             $session->user_identifier,
+//             $validationMessage
+//         );
+
+//         $this->saveOutbound(
+//             $session,
+//             'text',
+//             $validationMessage,
+//             $output
+//         );
+
+//         $session->update([
+//             'current_node_id' => $nodeId,
+//             'status' => 'waiting',
+//             'last_message_at' => now(),
+//         ]);
+
+//         return;
+//     }
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | TEXT RECEIVED INSTEAD OF BUTTON CLICK
+//     |--------------------------------------------------------------------------
+//     */
+
+//     $typedText = trim(
+//         (string) ($input['text'] ?? '')
+//     );
+
+//     if ($typedText !== '') {
+
+//         $validationMessage = $this->resolve(
+//             (string) (
+//                 $cfg['validation_message']
+//                 ?? $cfg['validationMessage']
+//                 ?? '⚠️ Please select one of the buttons above.'
+//             ),
+//             $session->variables ?? []
+//         );
+
+//         $output = $this->whatsapp->sendText(
+//             $session->user_identifier,
+//             $validationMessage
+//         );
+
+//         $this->saveOutbound(
+//             $session,
+//             'text',
+//             $validationMessage,
+//             $output
+//         );
+
+//         $session->update([
+//             'current_node_id' => $nodeId,
+//             'status' => 'waiting',
+//             'last_message_at' => now(),
+//         ]);
+
+//         return;
+//     }
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | FIRST VISIT: SEND BUTTONS ONCE
+//     |--------------------------------------------------------------------------
+//     */
+
+//     $this->sendButton(
+//         $workflow,
+//         $session,
+//         (string) $nodeId,
+//         $cfg
+//     );
+
+//     $session->update([
+//         'current_node_id' => $nodeId,
+//         'status' => 'waiting',
+//         'last_message_at' => now(),
+//     ]);
+
+//     return;
+// }
+
 elseif ($type === 'button') {
 
     /*
@@ -4941,7 +5224,14 @@ elseif ($type === 'button') {
 
         if ($next) {
 
-           $this->goToNode(
+            Log::info('BUTTON CLICK DEBUG', [
+                'node_id' => $nodeId,
+                'input' => $input,
+                'source_handle' => $sourceHandle,
+                'next_node' => $next,
+            ]);
+
+            $this->goToNode(
                 $workflow,
                 $session,
                 $next,
@@ -4951,12 +5241,17 @@ elseif ($type === 'button') {
             return;
         }
 
-        // Invalid button selection
+        /*
+        |--------------------------------------------------------------------------
+        | INVALID BUTTON SELECTION
+        |--------------------------------------------------------------------------
+        */
+
         $validationMessage = $this->resolve(
             (string) (
                 $cfg['validation_message']
                 ?? $cfg['validationMessage']
-                ?? '⚠️ This button is not available right now. Please select a valid option.'
+                ?? 'Please enter a valid response.'
             ),
             $session->variables ?? []
         );
@@ -4998,7 +5293,7 @@ elseif ($type === 'button') {
             (string) (
                 $cfg['validation_message']
                 ?? $cfg['validationMessage']
-                ?? '⚠️ Please select one of the buttons above.'
+                ?? 'Please select one of the buttons above.'
             ),
             $session->variables ?? []
         );
@@ -5026,7 +5321,7 @@ elseif ($type === 'button') {
 
     /*
     |--------------------------------------------------------------------------
-    | FIRST VISIT: SEND BUTTONS ONCE
+    | FIRST VISIT: SEND BUTTONS
     |--------------------------------------------------------------------------
     */
 
@@ -5036,6 +5331,104 @@ elseif ($type === 'button') {
         (string) $nodeId,
         $cfg
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK BUTTON TYPES
+    |--------------------------------------------------------------------------
+    */
+
+    $primaryButtonType = strtolower((string) (
+        $cfg['buttonType']
+        ?? $cfg['button_type']
+        ?? 'reply'
+    ));
+
+    $extraButtons = $cfg['extraButtons']
+        ?? $cfg['extra_buttons']
+        ?? [];
+
+    $hasUrlButton = $primaryButtonType === 'url';
+    $hasReplyButton = $primaryButtonType === 'reply';
+
+    foreach ($extraButtons as $extra) {
+
+        if (!is_array($extra)) {
+            continue;
+        }
+
+        $extraType = strtolower((string) (
+            $extra['type']
+            ?? $extra['buttonType']
+            ?? $extra['button_type']
+            ?? 'reply'
+        ));
+
+        if ($extraType === 'url') {
+            $hasUrlButton = true;
+        }
+
+        if ($extraType === 'reply') {
+            $hasReplyButton = true;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | URL ONLY: EXECUTE NEXT NODE AUTOMATICALLY
+    |--------------------------------------------------------------------------
+    */
+
+    if ($hasUrlButton && !$hasReplyButton) {
+
+        $edges = $workflow->edges()
+            ->where('source', $nodeId)
+            ->get();
+
+        Log::info('URL BUTTON NEXT NODE DEBUG', [
+            'node_id' => $nodeId,
+            'edges' => $edges->toArray(),
+        ]);
+
+        if ($edges->isNotEmpty()) {
+
+            $edge = $edges->first();
+
+            $next = $this->nextNode(
+                $workflow,
+                $nodeId,
+                (string) $edge->source_handle
+            );
+
+            if ($next) {
+
+                Log::info('URL BUTTON AUTO NEXT EXECUTED', [
+                    'node_id' => $nodeId,
+                    'source_handle' => $edge->source_handle,
+                    'next_node' => $next,
+                ]);
+
+                $this->goToNode(
+                    $workflow,
+                    $session,
+                    $next,
+                    []
+                );
+
+                return;
+            }
+        }
+
+        Log::warning('URL BUTTON NEXT NODE NOT FOUND', [
+            'node_id' => $nodeId,
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPLY BUTTON: WAIT FOR USER CLICK
+    |--------------------------------------------------------------------------
+    */
 
     $session->update([
         'current_node_id' => $nodeId,
@@ -10361,8 +10754,18 @@ private function sendButton(
     |--------------------------------------------------------------------------
     */
 
+    $messageId =
+        data_get($whatsappResponse, 'data.mid')
+        ?? data_get($whatsappResponse, 'mid');
+
+    $botId = $session->bot_id
+        ?? Workflow::where('id', $session->workflow_id)->value('bot_id');
+
     BotMessage::create([
         'bot_session_id' => $session->id,
+        'user_id' => $session->user_id,
+        'bot_id' => $botId,
+        'whatsapp_account_id' => $session->whatsapp_account_id,
         'direction' => 'outbound',
         'message_type' => 'button',
         'text' => $message,
@@ -10372,6 +10775,10 @@ private function sendButton(
             'buttons' => $buttonsToSend,
             'whatsapp_response' => $whatsappResponse,
         ],
+        'external_message_id' => $messageId,
+        'delivery_status' => $messageId ? 'sent' : 'pending',
+        'external_status' => $messageId ? 'sent' : 'pending',
+        'sent_at' => $messageId ? now() : null,
     ]);
 }
     /*

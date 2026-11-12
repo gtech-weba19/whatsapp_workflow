@@ -17,24 +17,36 @@ class WalletController extends Controller
     }
 
     /**
-     * Get logged-in user's wallet balance.
+     * Get logged-in user's wallet balance and plan breakdown.
      */
     public function balance(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
-
-            $wallet = $this->walletService->getWallet($user);
+            $summary = $this->walletService->getWalletSummary($user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Wallet balance fetched successfully.',
                 'data' => [
-                    'wallet_id' => $wallet->id,
-                    'user_id' => $user->id,
-                    'balance' => (float) $wallet->balance,
-                    'currency' => $wallet->currency ?? 'INR',
-                    'message_rate' => $this->walletService->getUserRate($user),
+                    'wallet_id' => $summary['wallet_id'],
+                    'user_id' => $summary['user_id'],
+                    'balance' => $summary['balance'],
+                    'remaining_balance' => $summary['remaining_balance'],
+                    'total_taken' => $summary['total_taken'],
+                    'total_used' => $summary['total_used'],
+                    'total_plan_amount' => $summary['total_plan_amount'],
+                    'active_plan_amount' => $summary['active_plan_amount'],
+                    'active_plan_credits' => $summary['active_plan_credits'],
+                    'usage_percentage' => $summary['usage_percentage'],
+                    'used_messages' => $summary['used_messages'],
+                    'estimated_messages' => $summary['estimated_messages'],
+                    'total_messages' => $summary['total_messages'],
+                    'currency' => $summary['currency'],
+                    'message_rate' => $summary['message_rate'],
+                    'has_active_plan' => $summary['has_active_plan'],
+                    'active_plan_id' => $summary['active_plan_id'],
+                    'active_plan_name' => $summary['active_plan_name'],
                 ],
             ]);
         } catch (\Throwable $e) {

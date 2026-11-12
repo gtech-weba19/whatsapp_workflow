@@ -380,7 +380,7 @@ export default function RolesPermissions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-100">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-green-700 text-white shadow-md shadow-indigo-100">
               <ShieldCheck size={22} />
             </div>
             <div>
@@ -399,7 +399,7 @@ export default function RolesPermissions() {
           <button
             type="button"
             onClick={handleOpenCreatePerm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-sm font-semibold text-indigo-700 transition-all hover:bg-indigo-100 focus:outline-none"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50/70 px-3.5 py-2.5 text-sm font-semibold text-green-700 transition-all hover:bg-green-100 focus:outline-none cursor-pointer"
           >
             <KeyRound size={17} />
             <span>Add Permission</span>
@@ -408,7 +408,7 @@ export default function RolesPermissions() {
           <button
             type="button"
             onClick={handleOpenCreateRole}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-200 transition-all hover:scale-[1.02] hover:shadow-lg focus:outline-none"
+            className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-200 transition-all hover:scale-[1.02] hover:shadow-lg focus:outline-none"
           >
             <Plus size={18} />
             <span>Create New Role</span>
@@ -453,8 +453,8 @@ export default function RolesPermissions() {
             type="text"
             placeholder={
               activeTab === "roles"
-                ? "Search roles by title, slug, or description..."
-                : "Search permissions by name, code, module..."
+                ? "Search roles..."
+                : "Search permissions..."
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -905,7 +905,7 @@ export default function RolesPermissions() {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
                   <KeyRound size={22} />
                 </div>
                 <div>
@@ -1047,7 +1047,7 @@ export default function RolesPermissions() {
                 <button
                   type="submit"
                   disabled={savingPerm}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 disabled:opacity-50"
+                  className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-green-700 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-green-200 transition hover:bg-green-700 disabled:opacity-50"
                 >
                   {savingPerm && <Loader2 size={16} className="animate-spin" />}
                   <span>{editingPerm ? "Update Permission" : "Save Permission"}</span>

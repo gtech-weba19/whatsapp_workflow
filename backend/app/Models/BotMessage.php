@@ -16,6 +16,12 @@ class BotMessage extends Model
         'text',
         'payload',
         'external_message_id',
+        'delivery_status',
+        'external_status',
+        'sent_at',
+        'delivered_at',
+        'read_at',
+        'failed_at',
     ];
 
     protected $casts = [
@@ -23,6 +29,10 @@ class BotMessage extends Model
         'bot_id' => 'integer',
         'whatsapp_account_id' => 'integer',
         'payload' => 'array',
+        'sent_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'read_at' => 'datetime',
+        'failed_at' => 'datetime',
     ];
 
     /**

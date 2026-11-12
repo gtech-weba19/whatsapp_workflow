@@ -6,15 +6,13 @@ use Illuminate\Http\Request;
 
 class AdminAuditLogController extends Controller
 {
-
+    /**
+     * Apply access scope based on authenticated user.
+     */
     private function applyAccessScope($query, $user)
     {
         if ($user->role === 'super_admin') {
             return $query;
-        }
-
-        if ($user->tenant_id !== null) {
-            return $query->where('tenant_id', $user->tenant_id);
         }
 
         return $query->where('user_id', $user->id);
@@ -41,14 +39,13 @@ class AdminAuditLogController extends Controller
 
         $query = AuditLog::query()->with([
             'user:id,name,email',
-            'tenant:id,name',
         ]);
 
-        // Restrict records according to the authenticated user.
+        // Restrict records according to authenticated user.
         $this->applyAccessScope($query, $user);
 
         // Search by action, entity type, entity ID or IP address.
-        if (! empty($validated['search'])) {
+        if (!empty($validated['search'])) {
             $search = $validated['search'];
 
             $query->where(function ($q) use ($search) {
@@ -60,27 +57,20 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by action.
-        if (! empty($validated['action'])) {
+        if (!empty($validated['action'])) {
             $query->where('action', $validated['action']);
         }
 
         // Filter by entity type.
-        if (! empty($validated['entity_type'])) {
-            $query->where(
-                'entity_type',
-                $validated['entity_type']
-            );
+        if (!empty($validated['entity_type'])) {
+            $query->where('entity_type', $validated['entity_type']);
         }
 
-        // Only super admins can filter across different users.
-        if (! empty($validated['user_id'])) {
+        // Only super admin can filter across different users.
+        if (!empty($validated['user_id'])) {
             if ($user->role === 'super_admin') {
                 $query->where('user_id', $validated['user_id']);
-            } elseif ($user->tenant_id !== null) {
-                // A tenant user can filter only users in their tenant.
-                $query->where('user_id', $validated['user_id']);
             } else {
-                // A user without a tenant can see only their own logs.
                 abort_if(
                     (int) $validated['user_id'] !== (int) $user->id,
                     403,
@@ -92,7 +82,7 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by starting date.
-        if (! empty($validated['from'])) {
+        if (!empty($validated['from'])) {
             $query->whereDate(
                 'created_at',
                 '>=',
@@ -101,7 +91,7 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by ending date.
-        if (! empty($validated['to'])) {
+        if (!empty($validated['to'])) {
             $query->whereDate(
                 'created_at',
                 '<=',
@@ -117,7 +107,7 @@ class AdminAuditLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Audit logs retrieved successfully.',
-            'data'    => $logs,
+            'data' => $logs,
         ]);
     }
 
@@ -130,7 +120,6 @@ class AdminAuditLogController extends Controller
 
         abort_unless($user, 401, 'Unauthenticated.');
 
-        // Apply the same access rules as the list endpoint.
         $allowedLog = $this->applyAccessScope(
             AuditLog::query(),
             $user
@@ -140,13 +129,12 @@ class AdminAuditLogController extends Controller
 
         $auditLog->load([
             'user:id,name,email',
-            'tenant:id,name',
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Audit log retrieved successfully.',
-            'data'    => $auditLog,
+            'data' => $auditLog,
         ]);
     }
 
@@ -183,16 +171,16 @@ class AdminAuditLogController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Audit log filters retrieved successfully.',
-            'data'    => [
-                'actions'      => $actions,
+            'data' => [
+                'actions' => $actions,
                 'entity_types' => $entityTypes,
             ],
         ]);
     }
 
-/**
- * Delete one audit log.
- */
+    /**
+     * Delete one audit log.
+     */
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
@@ -204,7 +192,7 @@ class AdminAuditLogController extends Controller
             $user
         )->whereKey($id)->first();
 
-        if (! $log) {
+        if (!$log) {
             return response()->json([
                 'success' => false,
                 'message' => 'Audit log not found or access denied.',
@@ -219,9 +207,9 @@ class AdminAuditLogController extends Controller
         ]);
     }
 
-/**
- * Delete multiple audit logs.
- */
+    /**
+     * Delete multiple audit logs.
+     */
     public function bulkDestroy(Request $request)
     {
         $user = $request->user();
@@ -229,7 +217,7 @@ class AdminAuditLogController extends Controller
         abort_unless($user, 401, 'Unauthenticated.');
 
         $validated = $request->validate([
-            'ids'   => ['required', 'array', 'min:1'],
+            'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['required', 'integer', 'distinct'],
         ]);
 
@@ -248,5 +236,4 @@ class AdminAuditLogController extends Controller
             'deleted_count' => $deletedCount,
         ]);
     }
-
 }

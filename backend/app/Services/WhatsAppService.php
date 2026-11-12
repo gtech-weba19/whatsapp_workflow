@@ -4,16 +4,13 @@
 
 namespace App\Services;
 
-
-
 use App\Models\WhatsAppAccount;
 
 use Illuminate\Support\Facades\Http;
-
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Contracts\Cache\LockTimeoutException;
-
+use App\Models\User;
 use RuntimeException;
 
 use Throwable;
@@ -360,6 +357,133 @@ public function useAccountById(
 
 
 
+    // private function sendRequest(
+
+    //     array $payload,
+
+    //     string $messageType,
+
+    //     string $originalTo
+
+    // ): array {
+
+    //     if (!$this->hasConfiguration()) {
+
+    //         return [
+
+    //             'success' => false,
+
+    //             'error' => true,
+
+    //             'message' => 'WhatsApp API configuration missing.',
+
+    //         ];
+
+    //     }
+
+
+
+    //     try {
+
+    //         $response = Http::timeout(30)
+
+    //             ->connectTimeout(10)
+
+    //             ->withHeaders([
+
+    //                 'Authentication' => 'Bearer ' . trim($this->token),
+
+    //                 'Content-Type' => 'application/json',
+
+    //                 'Accept' => 'application/json',
+
+    //             ])
+
+    //             ->post($this->apiUrl, $payload);
+
+
+
+    //         $body = $response->json();
+
+
+
+
+    //         // Some providers return HTTP 200 but an error in JSON.
+
+    //         $providerStatus = data_get($body, 'statusCode');
+
+
+
+    //         $providerFailed = is_numeric($providerStatus)
+
+    //             && (int) $providerStatus >= 400;
+
+
+
+    //         $success = $response->successful() && !$providerFailed;
+
+
+
+    //         return [
+
+    //             'success' => $success,
+
+    //             'error' => !$success,
+
+    //             'status' => $response->status(),
+
+    //             'data' => $body,
+
+    //             'body' => $response->body(),
+
+    //             'message' => $success
+
+    //                 ? 'WhatsApp request processed.'
+
+    //                 : (
+
+    //                     data_get($body, 'message')
+
+    //                     ?? data_get($body, 'error')
+
+    //                     ?? 'WhatsApp provider request failed.'
+
+    //                 ),
+
+    //         ];
+
+    //     } catch (Throwable $e) {
+
+    //         Log::error('WHATSAPP API EXCEPTION', [
+
+    //             'type' => $messageType,
+
+    //             'to' => $originalTo,
+
+    //             'account_id' => $this->account?->id,
+
+    //             'message' => $e->getMessage(),
+
+    //         ]);
+
+
+
+    //         return [
+
+    //             'success' => false,
+
+    //             'error' => true,
+
+    //             'message' => $e->getMessage(),
+
+    //         ];
+
+    //     }
+
+    // }
+
+
+
     private function sendRequest(
 
         array $payload,
@@ -383,6 +507,36 @@ public function useAccountById(
             ];
 
         }
+
+
+        // WALLET BALANCE VALIDATION
+
+            if (!$this->account) {
+                return $this->failure(
+                    'WhatsApp account not selected for wallet validation.'
+                );
+            }
+
+            $user = User::find($this->account->user_id);
+
+            if (!$user) {
+                return $this->failure('Wallet user not found.');
+            }
+
+            try {
+
+                app(WalletService::class)->validateMessageBalance($user);
+
+            } catch (RuntimeException $e) {
+
+                Log::warning('WHATSAPP MESSAGE BLOCKED - WALLET', [
+                    'user_id' => $user->id,
+                    'account_id' => $this->account->id,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return $this->failure($e->getMessage());
+            }
 
 
 
@@ -486,7 +640,6 @@ public function useAccountById(
     }
 
 
-
     /*
 
     |--------------------------------------------------------------------------
@@ -574,10 +727,47 @@ public function useAccountById(
     */
 
 
-    public function sendText(
+//     public function sendText(
+//     string $to,
+//     string $text,
+//     ?string $replyToMessageId = null
+// ): array {
+
+//     $originalTo = $to;
+
+//     $to = $this->normalizeMobile($to);
+
+//     if ($to === '') {
+//         return $this->failure('Invalid WhatsApp mobile number.');
+//     }
+
+//     if (!$this->hasConfiguration()) {
+//         return $this->failure('WhatsApp API configuration missing.');
+//     }
+
+//     $messageData = [
+//         'preview_url' => false,
+//         'shorten_url' => false,
+//         'type' => 'TEXT',
+//         'text' => $text,
+//     ];
+
+//     if (!empty($replyToMessageId)) {
+//         $messageData['reply_to_message_id'] = $replyToMessageId;
+//     }
+
+//     $payload = $this->buildPayload($messageData, $to);
+
+//     return $this->sendRequest($payload, 'TEXT', $originalTo);
+// }
+
+
+
+public function sendText(
     string $to,
     string $text,
-    ?string $replyToMessageId = null
+    ?string $replyToMessageId = null,
+    bool $skipWalletCheck = false
 ): array {
 
     $originalTo = $to;
@@ -605,9 +795,13 @@ public function useAccountById(
 
     $payload = $this->buildPayload($messageData, $to);
 
-    return $this->sendRequest($payload, 'TEXT', $originalTo);
+    return $this->sendRequest(
+        $payload,
+        'TEXT',
+        $originalTo,
+        $skipWalletCheck
+    );
 }
-
 
 
 

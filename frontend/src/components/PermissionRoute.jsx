@@ -1,9 +1,14 @@
 import { Outlet } from "react-router-dom";
-import { hasPermission } from "../utils/permission";
+import { hasAnyPermission, hasPermission } from "../utils/permission";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 
 const PermissionRoute = ({ permission }) => {
-  if (permission && !hasPermission(permission)) {
+  const allowed = Array.isArray(permission)
+    ? hasAnyPermission(permission)
+    : !permission || hasPermission(permission);
+
+  if (!allowed) {
+    const label = Array.isArray(permission) ? permission.join(", ") : permission;
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center min-h-[60vh]">
         <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 border border-amber-200">
@@ -11,7 +16,7 @@ const PermissionRoute = ({ permission }) => {
         </div>
         <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
         <p className="text-sm text-slate-500 max-w-md mt-1 mb-6">
-          Your account does not have permission to access this section ({permission}).
+          Your account does not have permission to access this section ({label}).
         </p>
         <a
           href="/dashboard"
