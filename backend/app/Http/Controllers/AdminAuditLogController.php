@@ -39,6 +39,11 @@ class AdminAuditLogController extends Controller
 
         $query = AuditLog::query()->with([
             'user:id,name,email',
+        ])->whereNotIn('entity_type', [
+            'PersonalAccessToken',
+            'BotMessage',
+            'AdminNotification',
+            'EmailVerification',
         ]);
 
         // Restrict records according to authenticated user.
@@ -82,20 +87,22 @@ class AdminAuditLogController extends Controller
         }
 
         // Filter by starting date.
-        if (!empty($validated['from'])) {
+        $from = $request->input('from', $request->input('from_date'));
+        if (!empty($from)) {
             $query->whereDate(
                 'created_at',
                 '>=',
-                $validated['from']
+                $from
             );
         }
 
         // Filter by ending date.
-        if (!empty($validated['to'])) {
+        $to = $request->input('to', $request->input('to_date'));
+        if (!empty($to)) {
             $query->whereDate(
                 'created_at',
                 '<=',
-                $validated['to']
+                $to
             );
         }
 
@@ -163,6 +170,12 @@ class AdminAuditLogController extends Controller
         $entityTypes = (clone $query)
             ->whereNotNull('entity_type')
             ->where('entity_type', '!=', '')
+            ->whereNotIn('entity_type', [
+                'PersonalAccessToken',
+                'BotMessage',
+                'AdminNotification',
+                'EmailVerification',
+            ])
             ->distinct()
             ->orderBy('entity_type')
             ->pluck('entity_type')

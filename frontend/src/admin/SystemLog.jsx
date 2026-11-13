@@ -399,10 +399,12 @@ const SystemLog = () => {
       }
 
       if (fromDate) {
+        params.from = fromDate;
         params.from_date = fromDate;
       }
 
       if (toDate) {
+        params.to = toDate;
         params.to_date = toDate;
       }
 
@@ -1340,7 +1342,9 @@ const SystemLog = () => {
                         IP Address
                       </th>
 
-             
+                      <th className="px-4 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Resource / Entity
+                      </th>
 
                       <th className="px-4 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                         Date & Time
@@ -1432,7 +1436,18 @@ const SystemLog = () => {
                             </span>
                           </td>
 
-                     
+                          <td className="px-4 py-4">
+                            <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                              <span className="font-bold text-emerald-700">
+                                {log.entity_type || "System"}
+                              </span>
+                              {log.entity_id ? (
+                                <span className="font-mono text-slate-400">
+                                  #{log.entity_id}
+                                </span>
+                              ) : null}
+                            </span>
+                          </td>
 
                           <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-600">
                             {formatDate(getLogDate(log))}

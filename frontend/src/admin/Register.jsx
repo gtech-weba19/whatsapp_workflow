@@ -1764,7 +1764,7 @@ case 4:
             >
               <MessageCircle size={21} className="text-emerald-600" />
               <div className="flex-1">
-                <p className="text-xs text-slate-500">Live Chat</p>
+                <p className="text-xs text-slate-500">Support Chat</p>
                 <p className="font-semibold text-slate-900">
                   Chat with Support
                 </p>
@@ -1988,7 +1988,7 @@ case 4:
       //               </div>
 
       //               <div className="min-w-0 flex-1">
-      //                 <p className="text-xs text-slate-500">Live Chat</p>
+      //                 <p className="text-xs text-slate-500">Support Chat</p>
       //                 <p className="font-semibold text-slate-900">
       //                   Chat with Support
       //                 </p>

@@ -79,7 +79,7 @@ const App = () => {
               <Route path="/usage" element={<Usage />} />
             </Route>
 
-            {/* MESSAGE LOGS & LIVE PREVIEW */}
+            {/* MESSAGE LOGS & PREVIEW */}
             <Route
               element={
                 <PermissionRoute

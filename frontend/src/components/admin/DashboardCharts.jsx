@@ -41,8 +41,10 @@ const DONUT_PALETTE = [
  */
 export function PastelKpiCard({
   title,
+  label,
   value,
   subtitle,
+  change,
   pill,
   icon: Icon,
   theme = "emerald",
@@ -50,6 +52,8 @@ export function PastelKpiCard({
   to,
   loading = false,
 }) {
+  const displayTitle = title || label || "";
+  const displaySubtitle = subtitle || change || "";
   const rawGradId = useId();
   const gradId = `kpi-grad-${rawGradId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
@@ -151,10 +155,14 @@ export function PastelKpiCard({
             <span
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md transition-transform duration-300 group-hover:scale-105 ${t.iconBox}`}
             >
-              <Icon size={16} strokeWidth={2.3} />
+              {Icon ? (
+                <Icon size={16} strokeWidth={2.3} />
+              ) : (
+                <Sparkles size={16} strokeWidth={2.3} />
+              )}
             </span>
             <span className="truncate text-xs font-bold text-slate-700">
-              {title}
+              {displayTitle}
             </span>
           </div>
 
@@ -171,11 +179,13 @@ export function PastelKpiCard({
             <div className="h-8 w-24 animate-pulse rounded-lg bg-slate-100" />
           ) : (
             <p className="text-2xl font-black tracking-tight tabular-nums text-slate-900 sm:text-[28px]">
-              {Number(value || 0).toLocaleString("en-IN")}
+              {typeof value === "number"
+                ? Number(value || 0).toLocaleString("en-IN")
+                : value || "0"}
             </p>
           )}
           <p className="mt-1 truncate text-[11px] font-medium text-slate-500">
-            {subtitle}
+            {displaySubtitle}
           </p>
         </div>
       </div>
@@ -768,7 +778,7 @@ export function WorkflowInteractionDonutCard({
             </span>
             <div>
               <p className="text-xs font-extrabold tracking-wide text-white">
-                Quick Insights · Live Mobile Replay
+                Quick Insights · Mobile Replay
               </p>
               <p className="text-[11px] text-emerald-100/85">
                 Inspect every workflow conversation inside our WhatsApp phone preview.

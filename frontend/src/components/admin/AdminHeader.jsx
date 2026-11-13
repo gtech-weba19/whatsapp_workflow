@@ -134,7 +134,7 @@ const getPageInfo = (pathname, user = {}) => {
       Icon: BarChart3,
     },
     "/message-logs": {
-      title: "Message Logs & Live Preview",
+      title: "Message Logs & Preview",
       subtitle: "Workflow-wise WhatsApp conversations & mobile preview",
       Icon: MessageCircle,
     },

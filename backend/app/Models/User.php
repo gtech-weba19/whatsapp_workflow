@@ -31,11 +31,35 @@ class User extends Authenticatable
 
     protected $guarded = [];
 
+    protected static function booted(): void
+    {
+        static::created(function (User $user) {
+            try {
+                app(\App\Services\WalletService::class)->initializeWallet($user, 100, 0.50);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Auto wallet initialization on User::created failed', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Existing Relationships
     |--------------------------------------------------------------------------
     */
+
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(\App\Models\Wallet::class, 'user_id');
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(\App\Models\WalletTransaction::class, 'user_id');
+    }
 
     public function user(): BelongsTo
     {

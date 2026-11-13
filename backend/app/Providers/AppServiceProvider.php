@@ -57,6 +57,15 @@ class AppServiceProvider extends ServiceProvider
 
         $modelsPath = app_path('Models');
 
+        $ignoredModels = [
+            AuditLog::class,
+            \App\Models\PersonalAccessToken::class,
+            \Laravel\Sanctum\PersonalAccessToken::class,
+            \App\Models\BotMessage::class,
+            \App\Models\AdminNotification::class,
+            \App\Models\EmailVerification::class,
+        ];
+
         foreach (File::allFiles($modelsPath) as $file) {
 
             $relativePath = str_replace(
@@ -69,7 +78,7 @@ class AppServiceProvider extends ServiceProvider
 
             if (
                 !class_exists($class)
-                || $class === AuditLog::class
+                || in_array($class, $ignoredModels, true)
                 || !is_subclass_of($class, Model::class)
             ) {
                 continue;

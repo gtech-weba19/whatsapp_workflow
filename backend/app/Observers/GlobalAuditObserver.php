@@ -37,7 +37,11 @@ class GlobalAuditObserver
     {
         $changes = $model->getChanges();
 
-        unset($changes['updated_at']);
+        unset(
+            $changes['updated_at'],
+            $changes['last_used_at'],
+            $changes['remember_token']
+        );
 
         if (empty($changes)) {
             return;
@@ -73,9 +77,20 @@ class GlobalAuditObserver
         array $oldValues,
         array $newValues
     ): void {
-        // Audit logs ko dobara audit nahi karna.
-        if ($model instanceof AuditLog) {
-            return;
+        // Exclude system/internal models that should never generate audit noise
+        $ignoredClasses = [
+            AuditLog::class,
+            \App\Models\PersonalAccessToken::class,
+            \Laravel\Sanctum\PersonalAccessToken::class,
+            \App\Models\BotMessage::class,
+            \App\Models\AdminNotification::class,
+            \App\Models\EmailVerification::class,
+        ];
+
+        foreach ($ignoredClasses as $ignored) {
+            if ($model instanceof $ignored) {
+                return;
+            }
         }
 
         $user = Auth::user();
@@ -83,14 +98,30 @@ class GlobalAuditObserver
         $tenantId = $model->getAttribute('tenant_id')
             ?? $user?->getAttribute('tenant_id');
 
+        $entityType = class_basename($model);
+        $entityId = is_numeric($model->getKey())
+            ? (int) $model->getKey()
+            : null;
+        $userId = $user?->getAuthIdentifier();
+
+        // Prevent duplicate audit logs created within 5 seconds for the same action/entity
+        $isDuplicate = AuditLog::where('entity_type', $entityType)
+            ->where('entity_id', $entityId)
+            ->where('action', $action)
+            ->where('user_id', $userId)
+            ->where('created_at', '>=', now()->subSeconds(5))
+            ->exists();
+
+        if ($isDuplicate) {
+            return;
+        }
+
         AuditLog::create([
             'tenant_id' => $tenantId,
-            'user_id' => $user?->getAuthIdentifier(),
+            'user_id' => $userId,
             'action' => $action,
-            'entity_type' => class_basename($model),
-            'entity_id' => is_numeric($model->getKey())
-                ? $model->getKey()
-                : null,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
             'old_values' => $this->filterValues($oldValues),
             'new_values' => $this->filterValues($newValues),
             'ip_address' => app()->runningInConsole()

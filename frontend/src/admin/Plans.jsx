@@ -851,9 +851,8 @@ export default function Plans() {
 
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-white/85 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-700 shadow-2xs backdrop-blur-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{isAdmin ? "Billing Control Center" : "Live Wallet & Plan Hub"}</span>
+            <div className="inline-flex items-center rounded-full border border-emerald-200/80 bg-white/85 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-700 shadow-2xs backdrop-blur-xs">
+              <span>{isAdmin ? "Billing Control Center" : "Wallet & Plan Hub"}</span>
             </div>
 
             <h1 className="mt-2.5 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -861,7 +860,7 @@ export default function Plans() {
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
               {isAdmin
-                ? "Manage client subscriptions, customize per-message rates, adjust credit balances, and review live purchase alerts."
+                ? "Manage client subscriptions, customize per-message rates, adjust credit balances, and review purchase alerts."
                 : "Inspect your plan credits, calculate campaign volume, compare tiers, and top-up your WhatsApp wallet instantly."}
             </p>
           </div>
@@ -972,7 +971,7 @@ export default function Plans() {
               value={adminMetrics.totalClients.toLocaleString("en-IN")}
               subtitle="Accounts on billing platform"
               pill="Clients"
-              metaRight="Live directory"
+              metaRight="Directory"
               icon={Users}
               theme="emerald"
               loading={loading}
@@ -1164,7 +1163,7 @@ export default function Plans() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
-                Live Plan Purchase & Subscription Alerts
+                Plan Purchase & Subscription Alerts
               </h2>
               <p className="text-xs text-slate-500">
                 Whenever any client activates a plan, it appears here so you can review or customize pricing.

@@ -296,7 +296,7 @@ export default function MessageLogsPhonePreview({
                 No Conversation Selected
               </p>
               <p className="mt-1 max-w-[215px] text-[10.5px] leading-4 text-slate-500">
-                Select any number from the left conversation list to view live
+                Select any number from the left conversation list to view
                 chat and messages.
               </p>
             </div>

@@ -528,11 +528,10 @@ export default function Dashboard() {
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 space-y-2.5">
-              {/* Live status & badge row */}
+              {/* Status & badge row */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-200 backdrop-blur-xs">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                  {superAdmin ? "Super Admin Console" : "Live Workspace"}
+                <span className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-200 backdrop-blur-xs">
+                  {superAdmin ? "Super Admin Console" : "Workspace"}
                 </span>
 
                 <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold italic text-emerald-100">
@@ -653,7 +652,7 @@ export default function Dashboard() {
             title="Active Workflows"
             value={stats.active_workflows}
             subtitle={`Out of ${numberFormat(stats.total_workflows || workflows.length)} total workflows`}
-            pill="Live"
+            pill="Active"
             icon={Workflow}
             theme="emerald"
             sparkline={[

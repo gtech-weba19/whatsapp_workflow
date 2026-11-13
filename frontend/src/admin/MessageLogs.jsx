@@ -12,14 +12,9 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  Layers,
-  Building2,
   AlertCircle,
   Loader2,
   X,
-  Zap,
 } from "lucide-react";
 
 import { getStoredUser, isSuperAdmin } from "../utils/permission";
@@ -140,8 +135,6 @@ export default function MessageLogs() {
   // Device preview & responsive mobile panel state
   const [device, setDevice] = useState("iphone");
   const [mobileShowPreview, setMobileShowPreview] = useState(false);
-  const [showAllWorkflows, setShowAllWorkflows] = useState(false);
-  const [onlyWithChats, setOnlyWithChats] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
 
@@ -216,6 +209,18 @@ export default function MessageLogs() {
       setClients(Array.isArray(data.clients) ? data.clients : []);
       const accountList = Array.isArray(data.accounts) ? data.accounts : [];
       setAccounts(accountList);
+
+      // Auto-select WhatsApp account when client logs in or when single account available
+      setAccountId((curr) => {
+        if (accountList.length === 0) return "";
+        const exists =
+          curr && accountList.some((a) => String(a.id) === String(curr));
+        if (exists) return curr;
+        if (!superAdmin || accountList.length === 1) {
+          return String(accountList[0].id);
+        }
+        return curr || "";
+      });
 
       const workflowList = Array.isArray(data.workflows) ? data.workflows : [];
       setWorkflows(workflowList);
@@ -539,47 +544,6 @@ export default function MessageLogs() {
     [workflows]
   );
 
-  const sortedWorkflows = useMemo(() => {
-    return [...workflows].sort((a, b) => {
-      const diff = Number(b.sessions_count || 0) - Number(a.sessions_count || 0);
-      if (diff !== 0) return diff;
-      return String(a.name || "").localeCompare(String(b.name || ""));
-    });
-  }, [workflows]);
-
-  const workflowsWithChatsCount = useMemo(
-    () => sortedWorkflows.filter((w) => Number(w.sessions_count || 0) > 0).length,
-    [sortedWorkflows]
-  );
-
-  const featuredWorkflows = useMemo(() => {
-    const topList = sortedWorkflows.slice(0, 7);
-    if (
-      workflowId &&
-      workflowId !== "all" &&
-      !topList.some((w) => String(w.id) === String(workflowId))
-    ) {
-      const activeObj = sortedWorkflows.find(
-        (w) => String(w.id) === String(workflowId)
-      );
-      if (activeObj) {
-        return [activeObj, ...topList.slice(0, 6)];
-      }
-    }
-    return topList;
-  }, [sortedWorkflows, workflowId]);
-
-  const drawerWorkflows = useMemo(() => {
-    if (onlyWithChats && workflowsWithChatsCount > 0) {
-      return sortedWorkflows.filter(
-        (w) =>
-          Number(w.sessions_count || 0) > 0 ||
-          String(w.id) === String(workflowId)
-      );
-    }
-    return sortedWorkflows;
-  }, [sortedWorkflows, onlyWithChats, workflowsWithChatsCount, workflowId]);
-
   return (
     <div className="mx-auto w-full max-w-[1640px] space-y-3.5">
       {/* EXECUTIVE EMERALD HERO HEADER & FILTERS DECK */}
@@ -595,17 +559,11 @@ export default function MessageLogs() {
               </div>
 
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-sm font-black tracking-tight text-white sm:text-base">
-                    {selectedWorkflowObj
-                      ? selectedWorkflowObj.name
-                      : "All Workflows · Conversation Inspector"}
-                  </h2>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-200">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                    Live Replay
-                  </span>
-                </div>
+                <h2 className="truncate text-sm font-black tracking-tight text-white sm:text-base">
+                  {selectedWorkflowObj
+                    ? selectedWorkflowObj.name
+                    : "All Workflows · Conversation Inspector"}
+                </h2>
                 <p className="truncate text-[11px] text-emerald-100/80">
                   {selectedWorkflowObj?.trigger_keyword
                     ? `Trigger keyword: "${selectedWorkflowObj.trigger_keyword}" · Real-time WhatsApp chat replay`
@@ -663,51 +621,32 @@ export default function MessageLogs() {
               onSubmit={handleSearchSubmit}
               className="flex flex-wrap items-center gap-2"
             >
-              {superAdmin && clients.length > 0 && (
+              {accounts.length > 0 && (
                 <div className="relative">
-                  <Building2
+                  <Smartphone
                     size={14}
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"
                   />
                   <select
-                    value={clientId}
+                    value={accountId}
                     onChange={(e) => {
-                      const nextClientId = e.target.value;
-                      setClientId(nextClientId);
-                      setAccountId("");
-                      handleWorkflowChange("all", nextClientId, "");
+                      const nextAccountId = e.target.value;
+                      setAccountId(nextAccountId);
+                      handleWorkflowChange("all", clientId, nextAccountId);
                     }}
-                    aria-label="Select client"
-                    className="h-9 rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-7 text-xs font-semibold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    aria-label="Select WhatsApp account"
+                    className="h-9 max-w-[220px] rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-7 text-xs font-semibold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
                   >
-                    <option value="">All Clients</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.business_name || c.name}
+                    {accounts.length > 1 && (
+                      <option value="">All WhatsApp Accounts</option>
+                    )}
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} {acc.waba_id ? `(${acc.waba_id})` : ""}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
-
-              {accounts.length > 0 && (
-                <select
-                  value={accountId}
-                  onChange={(e) => {
-                    const nextAccountId = e.target.value;
-                    setAccountId(nextAccountId);
-                    handleWorkflowChange("all", clientId, nextAccountId);
-                  }}
-                  aria-label="Select WhatsApp account"
-                  className="h-9 max-w-[210px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-xs font-semibold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
-                >
-                  <option value="">All WhatsApp Accounts</option>
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} {acc.waba_id ? `(${acc.waba_id})` : ""}
-                    </option>
-                  ))}
-                </select>
               )}
 
               {/* Select Workflow */}
@@ -825,197 +764,6 @@ export default function MessageLogs() {
                     className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   />
                 </div>
-              </div>
-            )}
-
-            {/* Organized Top Workflows Quick-Switch Bar + Expandable Directory */}
-            {sortedWorkflows.length > 0 && (
-              <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">
-                      <Layers size={11} />
-                      Top Workflows:
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleWorkflowChange("all")}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition ${
-                        workflowId === "all"
-                          ? "border-emerald-600 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs"
-                          : "border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/70 hover:text-emerald-800"
-                      }`}
-                    >
-                      <span>All Workflows</span>
-                      <span
-                        className={`rounded-full px-1.5 py-[1px] text-[10px] font-extrabold ${
-                          workflowId === "all"
-                            ? "bg-white/20 text-white"
-                            : "bg-white text-slate-700"
-                        }`}
-                      >
-                        {totalWorkflowSessions}
-                      </span>
-                    </button>
-
-                    {featuredWorkflows.map((wf) => {
-                      const active = String(workflowId) === String(wf.id);
-                      return (
-                        <button
-                          key={wf.id}
-                          type="button"
-                          onClick={() => handleWorkflowChange(String(wf.id))}
-                          title={
-                            wf.trigger_keyword
-                              ? `${wf.name} · Trigger: ${wf.trigger_keyword} (ID #${wf.id})`
-                              : `${wf.name} (ID #${wf.id})`
-                          }
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold transition ${
-                            active
-                              ? "border-emerald-600 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-900"
-                          }`}
-                        >
-                          {wf.trigger_keyword && (
-                            <Zap
-                              size={11}
-                              className={
-                                active ? "text-emerald-200" : "text-emerald-600"
-                              }
-                            />
-                          )}
-                          <span className="max-w-[140px] truncate">
-                            {wf.name}
-                          </span>
-                          <span
-                            className={`rounded-full px-1.5 py-[1px] text-[10px] font-extrabold ${
-                              active
-                                ? "bg-white/20 text-white"
-                                : "bg-emerald-50 text-emerald-700"
-                            }`}
-                          >
-                            {wf.sessions_count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {sortedWorkflows.length > featuredWorkflows.length && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllWorkflows((prev) => !prev)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50/80 px-2.5 py-1 text-[11px] font-extrabold text-emerald-800 transition hover:bg-emerald-100"
-                    >
-                      <span>
-                        {showAllWorkflows
-                          ? "Hide All"
-                          : `All Workflows (${sortedWorkflows.length})`}
-                      </span>
-                      {showAllWorkflows ? (
-                        <ChevronUp size={13} />
-                      ) : (
-                        <ChevronDown size={13} />
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {/* Expandable Structured Workflow Card Grid */}
-                {showAllWorkflows && (
-                  <div className="rounded-xl border border-emerald-200/80 bg-[#f6fbf8] p-3">
-                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] font-extrabold text-emerald-900">
-                        All Account Workflows ({drawerWorkflows.length} shown)
-                      </p>
-
-                      {workflowsWithChatsCount > 0 &&
-                        workflowsWithChatsCount < sortedWorkflows.length && (
-                          <div className="inline-flex rounded-lg border border-emerald-200/80 bg-white p-0.5 text-[10px] font-bold">
-                            <button
-                              type="button"
-                              onClick={() => setOnlyWithChats(true)}
-                              className={`rounded-md px-2 py-0.5 transition ${
-                                onlyWithChats
-                                  ? "bg-emerald-600 text-white"
-                                  : "text-slate-600 hover:text-emerald-800"
-                              }`}
-                            >
-                              With Chats ({workflowsWithChatsCount})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setOnlyWithChats(false)}
-                              className={`rounded-md px-2 py-0.5 transition ${
-                                !onlyWithChats
-                                  ? "bg-emerald-600 text-white"
-                                  : "text-slate-600 hover:text-emerald-800"
-                              }`}
-                            >
-                              Show All ({sortedWorkflows.length})
-                            </button>
-                          </div>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                      {drawerWorkflows.map((wf) => {
-                        const active = String(workflowId) === String(wf.id);
-                        return (
-                          <button
-                            key={wf.id}
-                            type="button"
-                            onClick={() => {
-                              handleWorkflowChange(String(wf.id));
-                              setShowAllWorkflows(false);
-                            }}
-                            title={`${wf.name} (ID #${wf.id})`}
-                            className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 text-left transition ${
-                              active
-                                ? "border-emerald-500 bg-emerald-600 text-white shadow-sm"
-                                : "border-slate-200/90 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40"
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-extrabold">
-                                {wf.name}
-                              </p>
-                              <p
-                                className={`mt-0.5 flex items-center gap-1 truncate text-[10px] ${
-                                  active ? "text-emerald-100" : "text-slate-400"
-                                }`}
-                              >
-                                {wf.trigger_keyword ? (
-                                  <>
-                                    <Zap size={9} />
-                                    <span className="truncate">
-                                      {wf.trigger_keyword}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span>ID #{wf.id}</span>
-                                )}
-                              </p>
-                            </div>
-
-                            <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black tabular-nums ${
-                                active
-                                  ? "bg-white/20 text-white"
-                                  : Number(wf.sessions_count || 0) > 0
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {wf.sessions_count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -1258,7 +1006,7 @@ export default function MessageLogs() {
             )}
           </section>
 
-          {/* COLUMN 2: LIVE MOBILE VIEW */}
+          {/* COLUMN 2: MOBILE VIEW */}
           <section
             className={`relative flex h-[630px] min-w-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-b from-emerald-50/45 via-white to-teal-50/25 px-3 pb-3.5 pt-3 shadow-sm shadow-emerald-950/[0.03] ${
               mobileShowPreview ? "flex" : "hidden lg:flex"

@@ -24,8 +24,15 @@ import {
   Check,
   Filter,
   Download,
-  Smartphone
+  Smartphone,
+  LayoutGrid,
+  List,
+  Zap,
+  Clock,
+  Sparkles,
+  ExternalLink,
 } from "lucide-react";
+import { PastelKpiCard } from "../components/admin/DashboardCharts";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000/api"
@@ -160,25 +167,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function SummaryCard({ icon: Icon, label, value, description, iconClass }) {
-  return (
-    <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-            {value}
-          </p>
-          <p className="mt-2 text-xs text-slate-400">{description}</p>
-        </div>
-
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconClass}`}>
-          <Icon size={21} strokeWidth={1.9} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AlertMessage({ type = "error", message, onClose }) {
   if (!message) return null;
@@ -245,6 +233,7 @@ function Bots() {
 
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [viewMode, setViewMode] = useState("grid");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState("");
@@ -710,6 +699,27 @@ const handleSubmit = async (event) => {
   const draftCount = bots.filter((bot) => bot.status === "draft").length;
   const inactiveCount = bots.filter((bot) => bot.status === "inactive").length;
 
+  const totalWorkflowsCount = useMemo(() => {
+    return bots.reduce((acc, bot) => {
+      const list = Array.isArray(bot.workflows) ? bot.workflows : [];
+      return acc + (bot.workflows_count ?? list.length);
+    }, 0);
+  }, [bots]);
+
+  const formatBotDate = (dateStr) => {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
 
     const handleExport = () => {
   if (!bots || bots.length === 0) {
@@ -765,38 +775,59 @@ const handleSubmit = async (event) => {
     <div className="min-h-screen bg-slate-50/80 px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px] space-y-6">
         {/* Page heading */}
-          <header className="relative isolate min-h-[120px] w-full rounded-2xl border border-emerald-100 bg-white shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20">
-              <Bot size={28} strokeWidth={1.8} />
-            </div>
-
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight text-emerald-950 sm:text-3xl">
-                  Bots
-                </h1>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                  Management
+        <header className="relative isolate overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/30 to-emerald-50/60 p-6 sm:p-7 shadow-sm">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-300/20 blur-3xl" />
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-xl shadow-emerald-600/25 ring-4 ring-emerald-50">
+                <Bot size={30} strokeWidth={1.9} />
+                <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
                 </span>
               </div>
-              <p className="mt-1 text-sm text-slate-500">
-                Manage bots, WhatsApp accounts and workflow assignments.
-              </p>
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-2xl font-black tracking-tight text-emerald-950 sm:text-3xl">
+                    WhatsApp Bots
+                  </h1>
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm backdrop-blur-sm">
+                    {activeCount} Active of {bots.length}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm text-slate-500 max-w-xl">
+                  Deploy, monitor and manage automated WhatsApp bot journeys, connected WABA accounts, and active workflow triggers.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setRefreshing(true);
+                  fetchBots({ quiet: true }).finally(() => setRefreshing(false));
+                }}
+                disabled={loading || refreshing}
+                title="Refresh bot list"
+                className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={refreshing ? "animate-spin text-emerald-600" : ""} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={loading || bots.length === 0}
+                className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-700 hover:to-teal-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download size={16} />
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-            type="button"
-            onClick={handleExport}
-            disabled={loading}
-            className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-            <Download size={17} />
-            Export
-        </button>
-        </div>
         </header>
 
         {/* Notifications */}
@@ -813,134 +844,170 @@ const handleSubmit = async (event) => {
           />
         </div>
 
-        {/* Summary cards */}
+        {/* Elevated Pastel KPI Cards */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            icon={Bot}
-            label="Total bots"
+          <PastelKpiCard
+            title="Total Bots"
             value={bots.length}
-            description="All configured bots"
-            iconClass="bg-emerald-50 text-emerald-700"
+            subtitle="Configured bot fleet"
+            pill="Bot Fleet"
+            icon={Bot}
+            theme="emerald"
+            sparkline={[Math.max(1, bots.length - 2), Math.max(1, bots.length - 1), Math.max(2, bots.length), Math.max(2, bots.length + 1), bots.length]}
+            loading={loading}
           />
-          <SummaryCard
-            icon={Power}
-            label="Active bots"
+          <PastelKpiCard
+            title="Active Bots"
             value={activeCount}
-            description="Currently marked active"
-            iconClass="bg-green-50 text-green-700"
+            subtitle={`${bots.length > 0 ? Math.round((activeCount / bots.length) * 100) : 0}% fleet active`}
+            pill="Operational"
+            icon={Zap}
+            theme="green"
+            sparkline={[Math.max(0, activeCount - 2), Math.max(0, activeCount - 1), Math.max(1, activeCount), activeCount]}
+            loading={loading}
           />
-          <SummaryCard
+          <PastelKpiCard
+            title="Assigned Workflows"
+            value={totalWorkflowsCount}
+            subtitle="Connected automations"
+            pill="Journeys"
             icon={Workflow}
-            label="Draft bots"
-            value={draftCount}
-            description="Still being configured"
-            iconClass="bg-amber-50 text-amber-700"
+            theme="cyan"
+            sparkline={[Math.max(1, totalWorkflowsCount - 3), Math.max(1, totalWorkflowsCount - 1), Math.max(2, totalWorkflowsCount), totalWorkflowsCount]}
+            loading={loading}
           />
-          <SummaryCard
-            icon={Users}
-            label="Inactive bots"
-            value={inactiveCount}
-            description="Not currently active"
-            iconClass="bg-slate-100 text-slate-600"
+          <PastelKpiCard
+            title="Inactive / Draft"
+            value={inactiveCount + draftCount}
+            subtitle={`${inactiveCount} paused · ${draftCount} draft`}
+            pill="Standby"
+            icon={Power}
+            theme="lime"
+            sparkline={[inactiveCount + draftCount + 1, inactiveCount + draftCount, inactiveCount + draftCount]}
+            loading={loading}
           />
         </section>
 
-        {/* Bots table */}
+        {/* Bots Fleet Display */}
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-            <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-
-            <div className="flex w-full items-center justify-between gap-4">
-
-                {/* Search */}
-                <div className="relative min-w-0 flex-1 sm:min-w-[300px] lg:w-80 lg:flex-none">
+          {/* Search, Filter & View Switcher Bar */}
+          <div className="flex flex-col gap-4 border-b border-slate-200/80 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            {/* Search + Filter */}
+            <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[240px]">
                 <Search
-                    size={18}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={17}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
-
                 <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search Bot..."
-                    aria-label="Search bots or users"
-                    className={`${inputClass} pl-10`}
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search bots by name, owner, description..."
+                  aria-label="Search bots"
+                  className={`${inputClass} pl-10 pr-9`}
                 />
-
                 {search && (
-                    <button
+                  <button
                     type="button"
                     onClick={() => setSearch("")}
                     aria-label="Clear search"
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                    >
+                  >
                     <X size={14} />
-                    </button>
+                  </button>
                 )}
-                </div>
+              </div>
 
-                {/* Status Filter */}
-                <div className="relative  sm:w-[170px] sm:flex-none">
+              {/* Status Filter */}
+              <div className="relative sm:w-48 shrink-0">
                 <Filter
-                    size={16}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={15}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
-
                 <select
-                    value={selectedStatus}
-                    onChange={(event) => setSelectedStatus(event.target.value)}
-                    aria-label="Filter bots by status"
-                    className={`${inputClass} appearance-none pl-9 pr-9`}
+                  value={selectedStatus}
+                  onChange={(event) => setSelectedStatus(event.target.value)}
+                  aria-label="Filter bots by status"
+                  className={`${inputClass} appearance-none pl-9 pr-9 font-medium`}
                 >
-                    {/* <option value="all">All</option> */}
-
-                    {STATUS_OPTIONS.map((status) => (
-                    <option key={status.value} value={status.value}>
-                        {status.label}
-                    </option>
-                    ))}
+                  <option value="all">All Statuses ({bots.length})</option>
+                  <option value="active">Active Only ({activeCount})</option>
+                  <option value="inactive">Inactive Only ({inactiveCount})</option>
+                  {draftCount > 0 && <option value="draft">Draft Only ({draftCount})</option>}
                 </select>
-
                 <ChevronDown
-                    size={15}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
-                </div>
-
+              </div>
             </div>
-            </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 px-5 py-3 sm:px-6">
 
-            {(search || selectedStatus !== "all") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  setSelectedStatus("all");
-                }}
-                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-              >
-                Clear filters
-              </button>
-            )}
+            {/* Right: View Switcher & Clear button */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 lg:pt-0 border-t border-slate-100 lg:border-t-0">
+              {(search || selectedStatus !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setSelectedStatus("all");
+                  }}
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 underline decoration-emerald-300 underline-offset-2"
+                >
+                  Clear filters
+                </button>
+              )}
+
+              {/* View Mode Switcher */}
+              <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  title="Grid Cards View"
+                  className={`cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    viewMode === "grid"
+                      ? "bg-white text-emerald-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <LayoutGrid size={15} />
+                  <span>Cards</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  title="Table View"
+                  className={`cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    viewMode === "table"
+                      ? "bg-white text-emerald-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <List size={15} />
+                  <span>Table</span>
+                </button>
+              </div>
+            </div>
           </div>
 
+          {/* Body Content */}
           {loading ? (
             <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-4 text-center">
-              <Loader2 size={28} className="animate-spin text-emerald-600" />
-              <p className="text-sm font-medium text-slate-600">Loading bots...</p>
+              <Loader2 size={32} className="animate-spin text-emerald-600" />
+              <p className="text-sm font-medium text-slate-600">Loading bot fleet...</p>
             </div>
           ) : filteredBots.length === 0 ? (
             <div className="flex min-h-80 flex-col items-center justify-center px-5 py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 shadow-sm">
                 {search || selectedStatus !== "all" ? <Search size={28} /> : <Bot size={30} />}
               </div>
               <h3 className="text-base font-bold text-slate-900">
-                {search || selectedStatus !== "all" ? "No matching bots" : "No bots yet"}
+                {search || selectedStatus !== "all" ? "No matching bots found" : "No bots yet"}
               </h3>
               <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
                 {search || selectedStatus !== "all"
-                  ? "Try changing your search term or clearing the selected filters."
+                  ? "Try changing your search term or clearing the active status filter."
                   : "Create your first bot, connect a WhatsApp account and assign existing workflows."}
               </p>
               {search || selectedStatus !== "all" ? (
@@ -958,18 +1025,253 @@ const handleSubmit = async (event) => {
                 <button
                   type="button"
                   onClick={openCreateModal}
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20"
                 >
                   <Plus size={17} />
                   Create your first bot
                 </button>
               )}
             </div>
+          ) : viewMode === "grid" ? (
+            /* ================= GRID CARDS VIEW ================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 p-5 sm:p-6 bg-slate-50/50">
+              {filteredBots.map((bot) => {
+                const assignedWorkflows = Array.isArray(bot.workflows) ? bot.workflows : [];
+                const ownerName =
+                  bot.user?.name ??
+                  bot.user?.email ??
+                  (bot.user_id ? `User #${bot.user_id}` : "Current user");
+                const isActive = bot.status === "active";
+                const isBusy = statusUpdatingId === bot.id;
+
+                return (
+                  <div
+                    key={bot.id}
+                    className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:shadow-xl hover:shadow-emerald-900/5"
+                  >
+                    {/* Top colored accent ribbon */}
+                    <div
+                      className={`absolute left-0 top-0 h-1.5 w-full bg-gradient-to-r ${
+                        isActive
+                          ? "from-emerald-500 via-teal-500 to-green-500"
+                          : bot.status === "draft"
+                          ? "from-amber-400 via-amber-500 to-orange-400"
+                          : "from-slate-300 via-slate-400 to-slate-300"
+                      }`}
+                    />
+
+                    {/* Ambient glow on hover */}
+                    <div
+                      className={`pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full blur-3xl transition duration-500 group-hover:scale-125 ${
+                        isActive ? "bg-emerald-300/25" : "bg-slate-200/40"
+                      }`}
+                    />
+
+                    {/* Card Content Top */}
+                    <div>
+                      {/* Avatar + Title + Status */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Bot Avatar */}
+                          <div className="relative shrink-0">
+                            <div
+                              className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md transition-transform duration-300 group-hover:scale-105 ${
+                                isActive
+                                  ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-600/25 ring-2 ring-emerald-100"
+                                  : "bg-gradient-to-br from-slate-600 to-slate-700 text-white shadow-slate-600/25 ring-2 ring-slate-100"
+                              }`}
+                            >
+                              <Bot size={22} strokeWidth={2} />
+                            </div>
+                            {isActive && (
+                              <span
+                                title="Bot is active and running"
+                                className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white ring-2 ring-white"
+                              >
+                                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Bot Name & Metadata */}
+                          <div className="min-w-0 flex-1">
+                            <h3
+                              title={bot.name}
+                              className="truncate text-base font-bold text-slate-900 group-hover:text-emerald-950 transition-colors"
+                            >
+                              {bot.name || "Untitled Bot"}
+                            </h3>
+                            <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                              <span className="font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                                #{bot.id}
+                              </span>
+                              <span>·</span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={12} />
+                                {formatBotDate(bot.created_at) || "Recently"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="shrink-0">
+                          <StatusBadge status={bot.status} />
+                        </div>
+                      </div>
+
+                      {/* Description if present */}
+                      {bot.description && (
+                        <p className="mt-3 text-xs text-slate-500 line-clamp-2">
+                          {bot.description}
+                        </p>
+                      )}
+
+                      {/* Divider */}
+                      <div className="my-4 border-t border-slate-100" />
+
+                      {/* Connected WhatsApp Account */}
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                            WhatsApp Account
+                          </p>
+                          {bot.whatsapp_account ? (
+                            <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/50 p-2.5 transition hover:bg-emerald-50">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm shadow-emerald-600/20">
+                                  <Smartphone size={16} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-bold text-slate-900">
+                                    {bot.whatsapp_account.name || "WhatsApp Business"}
+                                  </p>
+                                  <p className="font-mono text-[11px] text-emerald-700 truncate">
+                                    ID: {bot.whatsapp_account.waba_id || bot.whatsapp_account.id}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                                Linked
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-2.5 text-xs text-slate-400">
+                              <CircleHelp size={15} />
+                              <span>No WhatsApp account connected</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Assigned Workflows */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <Workflow size={12} className="text-emerald-600" />
+                              Assigned Workflows
+                            </p>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                              {assignedWorkflows.length}
+                            </span>
+                          </div>
+
+                          {assignedWorkflows.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {assignedWorkflows.slice(0, 3).map((wf) => (
+                                <span
+                                  key={wf.id}
+                                  title={wf.name}
+                                  className="inline-flex max-w-[180px] items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100"
+                                >
+                                  <Workflow size={12} className="shrink-0 text-emerald-600" />
+                                  <span className="truncate">{wf.name || `Workflow #${wf.id}`}</span>
+                                </span>
+                              ))}
+                              {assignedWorkflows.length > 3 && (
+                                <span
+                                  title={assignedWorkflows.slice(3).map((w) => w.name).join(", ")}
+                                  className="inline-flex items-center rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600"
+                                >
+                                  +{assignedWorkflows.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">
+                              No automated workflows connected yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Footer: Owner Info & Action Buttons */}
+                    <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                      {/* Owner row */}
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+                          <Building2 size={13} className="shrink-0 text-slate-400" />
+                          <span className="truncate font-medium text-slate-700">{ownerName}</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          v1.0
+                        </span>
+                      </div>
+
+                      {/* Quick Action buttons */}
+                      <div className="flex items-center gap-2 pt-1">
+                        {/* Toggle Status Button */}
+                        <button
+                          type="button"
+                          onClick={() => changeStatus(bot, isActive ? "inactive" : "active")}
+                          disabled={isBusy}
+                          className={`cursor-pointer flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition shadow-sm ${
+                            isActive
+                              ? "border border-slate-200 bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+                              : "bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-emerald-600/20 hover:from-emerald-700 hover:to-green-700"
+                          } disabled:opacity-50`}
+                        >
+                          {isBusy ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              <span>Updating...</span>
+                            </>
+                          ) : isActive ? (
+                            <>
+                              <Power size={13} />
+                              <span>Pause Bot</span>
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={13} />
+                              <span>Activate Bot</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Edit Name Button */}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(bot)}
+                          disabled={isBusy}
+                          title="Edit bot name"
+                          className="cursor-pointer inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 disabled:opacity-50"
+                        >
+                          <Pencil size={13} />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            /* ================= TABLE VIEW ================= */
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-white text-[11px] font-bold uppercase tracking-wider text-slate-500 ">
+                  <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                     <th scope="col" className="px-6 py-4">Bot details</th>
                     <th scope="col" className="px-5 py-4">User</th>
                     <th scope="col" className="px-5 py-4">WhatsApp ID</th>
@@ -994,16 +1296,16 @@ const handleSubmit = async (event) => {
                       <tr key={bot.id} className="group transition-colors hover:bg-emerald-50/30">
                         <td className="px-6 py-4">
                           <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 shadow-sm">
                               <Bot size={21} />
                             </div>
                             <div className="min-w-0">
                               <p className="max-w-[260px] truncate text-sm font-bold text-slate-900">
                                 {bot.name || "Untitled bot"}
                               </p>
-                              {/* <p className="mt-1 max-w-[280px] truncate text-xs text-slate-500">
-                                {bot.description || "No description added"}
-                              </p> */}
+                              <p className="mt-0.5 text-xs text-slate-400 font-mono">
+                                ID: #{bot.id}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -1013,22 +1315,20 @@ const handleSubmit = async (event) => {
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                               <Building2 size={17} />
                             </div>
-                              <div className="min-w-0">
+                            <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-slate-700">{ownerName}</p>
-                             
                             </div>
-                          
                           </div>
                         </td>
 
                         {/* WhatsApp Account ID */}
                         <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
                             <Smartphone size={16} className="shrink-0 text-emerald-600" />
                             <span className="text-sm font-medium text-slate-700">
-                            {bot.whatsapp_account?.waba_id || "—"}
+                              {bot.whatsapp_account?.waba_id || "—"}
                             </span>
-                        </div>
+                          </div>
                         </td>
 
                         <td className="px-5 py-4">
@@ -1041,7 +1341,7 @@ const handleSubmit = async (event) => {
                                     title={workflow.name}
                                     className="inline-flex max-w-[150px] items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-medium text-emerald-800"
                                   >
-                                    <Workflow size={13} className="shrink-0" />
+                                    <Workflow size={13} className="shrink-0 text-emerald-600" />
                                     <span className="truncate">{workflow.name || `Workflow ${workflow.id}`}</span>
                                   </span>
                                 ))}
@@ -1130,16 +1430,6 @@ const handleSubmit = async (event) => {
                                       Set {item.label}
                                     </button>
                                   ))}
-                                  <div className="my-1.5 border-t border-slate-100" />
-                                  {/* <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => deleteBot(bot)}
-                                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                                  >
-                                    <Trash2 size={15} />
-                                    Delete bot
-                                  </button> */}
                                 </div>
                               </>,
                               document.body
@@ -1156,119 +1446,127 @@ const handleSubmit = async (event) => {
           {!loading && filteredBots.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3.5 sm:px-6">
               <p className="text-xs text-slate-500">
-                {filteredBots.length} result{filteredBots.length === 1 ? "" : "s"}
+                Showing <span className="font-semibold text-slate-800">{filteredBots.length}</span> of {bots.length} bot{bots.length === 1 ? "" : "s"}
               </p>
               <p className="text-xs text-slate-400">
-                Bot status and assignments reflect the latest API response.
+                Bot status and assignments reflect API database state.
               </p>
             </div>
           )}
         </section>
 
-       {modalOpen &&
-            createPortal(
-                <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"
-                onClick={() => {
-                    if (!saving) {
-                    setModalOpen(false);
-                    }
-                }}
-                >
-                <div
-                    className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-900">
-                        Edit Bot Name
-                        </h2>
+        {/* Polished Edit Bot Name Modal */}
+        {modalOpen &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+              onClick={() => {
+                if (!saving) {
+                  setModalOpen(false);
+                }
+              }}
+            >
+              <div
+                className="w-full max-w-md overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-2xl transition-all"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Top accent ribbon */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500" />
 
-                        <p className="mt-1 text-sm text-slate-500">
-                        Update your bot name.
-                        </p>
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20">
+                      <Bot size={20} />
                     </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">
+                        Edit Bot Name
+                      </h2>
+                      <p className="text-xs text-slate-500">
+                        Update display name for Bot #{editingBot?.id}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    disabled={saving}
+                    className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="p-6">
+                  {error && (
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                      <AlertCircle size={17} />
+                      {error}
+                    </div>
+                  )}
+
+                  {success && (
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                      <CheckCircle2 size={17} />
+                      {success}
+                    </div>
+                  )}
+
+                  <div>
+                    <FieldLabel required>Bot Name</FieldLabel>
+
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={(event) =>
+                        updateForm("name", event.target.value)
+                      }
+                      placeholder="Enter bot name (e.g. Support Bot, Lead Gen Bot)"
+                      required
+                      maxLength={255}
+                      disabled={saving}
+                      autoFocus
+                      className={inputClass}
+                    />
+                  </div>
+
+                  {/* Footer Buttons */}
+                  <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      disabled={saving}
+                      className="cursor-pointer rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
 
                     <button
-                        type="button"
-                        onClick={() => setModalOpen(false)}
-                        disabled={saving}
-                        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      type="submit"
+                      disabled={saving || !form.name.trim()}
+                      className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-500/20 transition-all duration-200 hover:from-emerald-700 hover:to-green-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        <X size={20} />
+                      {saving ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={16} />
+                          Save Changes
+                        </>
+                      )}
                     </button>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="p-6">
-                    {error && (
-                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                        <AlertCircle size={17} />
-                        {error}
-                        </div>
-                    )}
-
-                    {success && (
-                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-                        <CheckCircle2 size={17} />
-                        {success}
-                        </div>
-                    )}
-
-                    <div>
-                        <FieldLabel required>Bot Name</FieldLabel>
-
-                        <input
-                        type="text"
-                        value={form.name}
-                        onChange={(event) =>
-                            updateForm("name", event.target.value)
-                        }
-                        placeholder="Enter bot name"
-                        required
-                        maxLength={255}
-                        disabled={saving}
-                        autoFocus
-                        className={inputClass}
-                        />
-                    </div>
-
-                    {/* Footer Buttons */}
-                    <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
-                        <button
-                        type="button"
-                        onClick={() => setModalOpen(false)}
-                        disabled={saving}
-                        className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                        >
-                        Cancel
-                        </button>
-
-                       <button
-                        type="submit"
-                        disabled={saving || !form.name.trim()}
-                        className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-500/20 transition-all duration-200 hover:from-emerald-600 hover:to-green-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                        {saving ? (
-                            <>
-                            <Loader2 size={16} className="animate-spin" />
-                            Updating...
-                            </>
-                        ) : (
-                            <>
-                            <Check size={16} />
-                            Update Bot
-                            </>
-                        )}
-                        </button>
-                    </div>
-                    </form>
-                </div>
-                </div>,
-                document.body
-            )}
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )}
       </div>
     </div>
   );

@@ -208,11 +208,6 @@ export default function MessageAnalyticsPanel({
             </p>
           </div>
         </div>
-
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-          Live Stats
-        </span>
       </div>
 
       {/* Scrollable Body (matches Mobile Preview height cleanly) */}
