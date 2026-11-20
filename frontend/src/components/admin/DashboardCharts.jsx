@@ -11,6 +11,8 @@ import {
   TrendingUp,
   Workflow as WorkflowIcon,
   Zap,
+  Smartphone,
+  X,
 } from "lucide-react";
 
 const EMERALD_BAR_GRADIENTS = [
@@ -192,12 +194,8 @@ export function PastelKpiCard({
 
       <div className="relative mt-3.5 flex items-end justify-between gap-2 border-t border-slate-100/80 pt-2.5">
         <span
-          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-bold shadow-2xs ${t.pill}`}
+          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold shadow-2xs ${t.pill}`}
         >
-          <span
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: t.stroke }}
-          />
           {pill}
         </span>
 
@@ -255,9 +253,6 @@ export function PastelKpiCard({
  */
 export function ThirtyDaysHitsChart({
   data = [],
-  workflows = [],
-  selectedWorkflowId = "all",
-  onWorkflowChange,
   loading = false,
 }) {
   const [metric, setMetric] = useState("messages");
@@ -265,10 +260,6 @@ export function ThirtyDaysHitsChart({
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
   const safeData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
-  const safeWorkflows = useMemo(
-    () => (Array.isArray(workflows) ? workflows : []),
-    [workflows]
-  );
 
   const visibleData = useMemo(() => {
     if (windowRange === "14d" && safeData.length > 14) {
@@ -331,12 +322,12 @@ export function ThirtyDaysHitsChart({
               <h2 className="text-base font-extrabold tracking-tight text-slate-900">
                 {windowRange === "14d" ? "14 Days" : "30 Days"} Activity Pulse
               </h2>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
                 {totalHits.toLocaleString("en-IN")}{" "}
                 {metric === "sessions" ? "Conversations" : "Messages"}
               </span>
               {visibleData.length > 0 && (
-                <span className="hidden items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 sm:inline-flex">
+                <span className="hidden items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 sm:inline-flex">
                   Avg {avgHits.toFixed(1)}/day
                 </span>
               )}
@@ -347,9 +338,8 @@ export function ThirtyDaysHitsChart({
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Daily WhatsApp interaction volume — hover any bar to inspect
-              message &amp; chat breakdown
+            <p className="mt-1 text-xs text-slate-500">
+              Daily WhatsApp interaction volume — hover any bar to inspect message &amp; chat breakdown
             </p>
           </div>
         </div>
@@ -406,27 +396,6 @@ export function ThirtyDaysHitsChart({
               Conversations
             </button>
           </div>
-
-          {/* Workflow dropdown */}
-          <div className="relative">
-            <WorkflowIcon
-              size={13}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"
-            />
-            <select
-              value={selectedWorkflowId}
-              onChange={(e) => onWorkflowChange?.(e.target.value)}
-              aria-label="Filter 30 days hits by workflow"
-              className="h-9 max-w-[220px] rounded-xl border border-slate-200 bg-white pl-8 pr-7 text-xs font-semibold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            >
-              <option value="all">All Workflows</option>
-              {safeWorkflows.map((wf) => (
-                <option key={wf.id} value={String(wf.id)}>
-                  {wf.name}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -449,16 +418,16 @@ export function ThirtyDaysHitsChart({
       ) : (
         <div className="mt-5 flex gap-2">
           {/* Y-Axis scale labels */}
-          <div className="hidden h-60 flex-col justify-between pb-7 pt-7 text-right text-[10px] font-semibold tabular-nums text-slate-400 sm:flex">
+          <div className="hidden h-64 flex-col justify-between pb-8 pt-8 text-right text-[10px] font-semibold tabular-nums text-slate-400 sm:flex">
             <span>{maxValue.toLocaleString("en-IN")}</span>
             <span>{Math.round(maxValue / 2).toLocaleString("en-IN")}</span>
             <span>0</span>
           </div>
 
           <div className="flex-1 overflow-x-auto pb-1">
-            <div className="relative flex h-60 min-w-[660px] items-end gap-1.5 border-b border-slate-100 px-1 pb-1 pt-8">
+            <div className="relative flex h-64 min-w-[660px] items-end gap-1.5 border-b border-slate-100 px-2 pb-2 pt-10">
               {/* Subtle horizontal guide lines */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-7 top-8 flex flex-col justify-between">
+              <div className="pointer-events-none absolute inset-x-0 bottom-8 top-10 flex flex-col justify-between">
                 {[0, 1, 2].map((line) => (
                   <div
                     key={line}
@@ -472,8 +441,9 @@ export function ThirtyDaysHitsChart({
                   metric === "sessions"
                     ? Number(day.sessions || 0)
                     : Number(day.messages || 0);
+                const maxBarHeight = 60;
                 const heightPct =
-                  val > 0 ? Math.max(9, (val / maxValue) * 100) : 3;
+                  val > 0 ? Math.max(8, (val / maxValue) * maxBarHeight) : 3;
                 const palette =
                   EMERALD_BAR_GRADIENTS[index % EMERALD_BAR_GRADIENTS.length];
                 const isHovered = hoveredIdx === index;
@@ -481,6 +451,8 @@ export function ThirtyDaysHitsChart({
                 const isPeak = peakInfo && peakInfo.idx === index && val > 0;
                 const shareOfPeak =
                   maxValue > 0 ? Math.round((val / maxValue) * 100) : 0;
+                const isLeftEdge = index < 3;
+                const isRightEdge = index > visibleData.length - 4;
 
                 return (
                   <div
@@ -491,23 +463,44 @@ export function ThirtyDaysHitsChart({
                       isDimmed ? "opacity-55" : "opacity-100"
                     }`}
                   >
-                    {/* Hover Popover Card */}
+                    {/* Hover Popover Card - Positioned safely above bar with zero top-clipping */}
                     {isHovered && (
-                      <div className="pointer-events-none absolute -top-2 z-30 -translate-y-full whitespace-nowrap rounded-xl border border-emerald-700/40 bg-slate-900 px-3 py-1.5 text-[10px] text-white shadow-xl">
-                        <p className="font-bold text-emerald-300">
+                      <div
+                        className={`pointer-events-none absolute z-40 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-[10px] text-white shadow-2xl backdrop-blur-xs transition-all ${
+                          isLeftEdge
+                            ? "left-0"
+                            : isRightEdge
+                            ? "right-0"
+                            : "left-1/2 -translate-x-1/2"
+                        }`}
+                        style={{
+                          bottom: `calc(${heightPct}% + 32px)`,
+                        }}
+                      >
+                        <p className="font-bold text-emerald-400">
                           {day.label}
                         </p>
-                        <p className="mt-0.5 font-semibold text-white">
+                        <p className="mt-0.5 font-semibold text-slate-100">
                           {Number(day.messages || 0).toLocaleString("en-IN")}{" "}
                           msgs ·{" "}
                           {Number(day.sessions || 0).toLocaleString("en-IN")}{" "}
                           chats
                         </p>
                         {val > 0 && (
-                          <p className="text-[9px] text-slate-300">
+                          <p className="mt-0.5 text-[9px] text-slate-400">
                             {shareOfPeak}% of period peak
                           </p>
                         )}
+                        {/* Caret pointing down */}
+                        <span
+                          className={`absolute -bottom-1 h-2 w-2 rotate-45 border-b border-r border-slate-700 bg-slate-900 ${
+                            isLeftEdge
+                              ? "left-4"
+                              : isRightEdge
+                              ? "right-4"
+                              : "left-1/2 -translate-x-1/2"
+                          }`}
+                        />
                       </div>
                     )}
 
@@ -516,17 +509,11 @@ export function ThirtyDaysHitsChart({
                       className={`mb-1 flex items-center gap-0.5 text-[9.5px] font-bold tabular-nums transition ${
                         val > 0
                           ? isPeak
-                            ? "text-emerald-700"
+                            ? "text-emerald-700 font-extrabold"
                             : "text-slate-600 group-hover:text-emerald-700"
                           : "text-slate-300"
                       }`}
                     >
-                      {isPeak && (
-                        <span
-                          className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"
-                          title="Peak day"
-                        />
-                      )}
                       {val > 0 ? val : ""}
                     </span>
 
@@ -569,6 +556,8 @@ export function ThirtyDaysHitsChart({
  */
 export function WorkflowInteractionDonutCard({
   breakdown = { total: 0, by_workflow: [], by_status: [] },
+  accountId = null,
+  period = null,
 }) {
   const [mode, setMode] = useState("workflow");
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -787,7 +776,16 @@ export function WorkflowInteractionDonutCard({
           </div>
 
           <Link
-            to="/message-logs"
+            to={(() => {
+              const p = new URLSearchParams();
+              if (accountId && accountId !== "all") {
+                p.set("whatsapp_account_id", accountId);
+                p.set("account_id", accountId);
+              }
+              if (period && period !== "all") p.set("period", period);
+              const qs = p.toString();
+              return qs ? `/message-logs?${qs}` : "/message-logs";
+            })()}
             className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-xs font-extrabold text-emerald-900 shadow-sm transition hover:bg-emerald-50"
           >
             View Details
@@ -802,7 +800,11 @@ export function WorkflowInteractionDonutCard({
 /**
  * Right Split Card: Ranked Horizontal Leaderboard for Workflows & Trigger Keywords (30 Days).
  */
-export function WorkflowTriggersSummaryCard({ items = [] }) {
+export function WorkflowTriggersSummaryCard({
+  items = [],
+  accountId = null,
+  period = null,
+}) {
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
   const maxHits = useMemo(
     () => Math.max(...safeItems.map((i) => Number(i?.hits || 0)), 1),
@@ -844,10 +846,21 @@ export function WorkflowTriggersSummaryCard({ items = [] }) {
               EMERALD_BAR_GRADIENTS[idx % EMERALD_BAR_GRADIENTS.length];
             const isTopThree = idx < 3;
 
+            const workflowLogsUrl = (() => {
+              const p = new URLSearchParams();
+              p.set("workflow_id", item.workflow_id);
+              if (accountId && accountId !== "all") {
+                p.set("whatsapp_account_id", accountId);
+                p.set("account_id", accountId);
+              }
+              if (period && period !== "all") p.set("period", period);
+              return `/message-logs?${p.toString()}`;
+            })();
+
             return (
               <Link
                 key={item.workflow_id}
-                to={`/message-logs?workflow_id=${item.workflow_id}`}
+                to={workflowLogsUrl}
                 title={`${item.name} — ${item.messages_count} messages, ${item.sessions_count} conversations`}
                 className="group grid grid-cols-[26px_130px_1fr_72px] items-center gap-2.5 rounded-xl border border-transparent px-2 py-2 transition hover:border-emerald-200 hover:bg-emerald-50/60 sm:grid-cols-[28px_165px_1fr_84px]"
               >

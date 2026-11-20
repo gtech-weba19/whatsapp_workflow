@@ -803,6 +803,45 @@ public function sendText(
     );
 }
 
+public function sendLocation(
+    string $to,
+    float $latitude,
+    float $longitude,
+    string $name = '',
+    string $address = '',
+    bool $skipWalletCheck = false
+): array {
+    $originalTo = $to;
+    $to = $this->normalizeMobile($to);
+
+    if ($to === '') {
+        return $this->failure('Invalid WhatsApp mobile number.');
+    }
+
+    if (!$this->hasConfiguration()) {
+        return $this->failure('WhatsApp API configuration missing.');
+    }
+
+    $messageData = [
+        'type' => 'LOCATION',
+        'location' => [
+            'latitude' => (float) $latitude,
+            'longitude' => (float) $longitude,
+            'name' => $name,
+            'address' => $address,
+        ],
+    ];
+
+    $payload = $this->buildPayload($messageData, $to);
+
+    return $this->sendRequest(
+        $payload,
+        'LOCATION',
+        $originalTo,
+        $skipWalletCheck
+    );
+}
+
 
 
 public function sendInteractive(

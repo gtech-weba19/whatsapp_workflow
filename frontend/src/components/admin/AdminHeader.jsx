@@ -23,6 +23,7 @@ import {
   Clock,
   ArrowUpRight,
   CheckCheck,
+  Smartphone,
 } from "lucide-react";
 
 
@@ -533,11 +534,15 @@ const handleMarkAllAsRead = async () => {
 
 const handleNotificationClick = async (notification) => {
   try {
-    if (!notification.read_at) {
+    if (!notification.read_at && !notification.is_read) {
       await handleMarkAsRead(notification.id);
     }
 
     setNotifOpen(false);
+
+    if (notification.action_url) {
+      navigate(notification.action_url);
+    }
   } catch (error) {
     console.error("Failed to mark notification as read:", error);
   }
@@ -772,12 +777,15 @@ const handleNotificationClick = async (notification) => {
                     <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700">
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          walletSummary.hasActivePlan
+                          walletSummary.hasActivePlan || Number(walletBalance ?? walletSummary.remainingBalance) > 0
                             ? "bg-emerald-500"
                             : "bg-amber-500"
                         }`}
                       />
-                      Wallet
+                      {walletSummary.activePlanName?.toLowerCase().includes("trial") ||
+                      Number(walletBalance ?? walletSummary.remainingBalance) === 100
+                        ? "Free Trial"
+                        : "Wallet"}
                     </span>
                     <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-slate-900">
                       ₹
@@ -830,8 +838,13 @@ const handleNotificationClick = async (notification) => {
                     </p>
                     <p className="mt-0.5 truncate text-sm font-extrabold text-white">
                       {walletSummary.hasActivePlan
-                        ? walletSummary.activePlanName || "Active Plan"
-                        : "No Active Plan"}
+                        ? (walletSummary.activePlanName === "Free Trial Pack" ||
+                           walletSummary.activePlanName?.toLowerCase().includes("trial")
+                            ? "100 for Free Trial"
+                            : walletSummary.activePlanName || "Active Plan")
+                        : (Number(walletBalance ?? walletSummary.remainingBalance) === 100
+                            ? "100 for Free Trial"
+                            : "No Active Plan")}
                     </p>
                   </div>
 
@@ -1056,34 +1069,46 @@ const handleNotificationClick = async (notification) => {
           </div>
         ) : (
           notifications.map((notification) => {
-            const isUnread = !notification.read_at;
+            const isUnread = !notification.read_at && !notification.is_read;
+            const notifType = String(notification.type || "").toLowerCase();
+
+            let iconBoxCls = "bg-blue-50 text-blue-700";
+            let IconComponent = Bell;
+
+            if (notifType.includes("whatsapp") || notifType.includes("account")) {
+              iconBoxCls = "bg-emerald-100 text-emerald-700";
+              IconComponent = notifType.includes("approved") ? Check : Smartphone;
+            } else if (
+              notifType.includes("plan") ||
+              notifType.includes("payment") ||
+              notifType.includes("recharge") ||
+              notifType.includes("subscription")
+            ) {
+              iconBoxCls = "bg-emerald-50 text-emerald-700";
+              IconComponent = CreditCard;
+            } else if (notifType.includes("trial")) {
+              iconBoxCls = "bg-amber-100 text-amber-700";
+              IconComponent = Sparkles;
+            }
 
             return (
               <button
                 key={notification.id}
                 type="button"
                 onClick={() => handleNotificationClick(notification)}
-                className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition hover:bg-slate-50 ${
-                  isUnread ? "bg-emerald-50/50" : "bg-white"
+                className={`group flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition hover:bg-slate-50 ${
+                  isUnread ? "bg-emerald-50/40" : "bg-white"
                 }`}
               >
                 <span
-                  className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    notification.type === "whatsapp_account_approved"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-blue-50 text-blue-700"
-                  }`}
+                  className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-2xs ${iconBoxCls}`}
                 >
-                  {notification.type === "whatsapp_account_approved" ? (
-                    <Check size={19} />
-                  ) : (
-                    <Bell size={19} />
-                  )}
+                  <IconComponent size={18} />
                 </span>
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold text-slate-900">
+                    <span className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition">
                       {notification.title || "Notification"}
                     </span>
 
@@ -1096,18 +1121,25 @@ const handleNotificationClick = async (notification) => {
                     {notification.message || "You have a new update."}
                   </span>
 
-                  {/* {notification.action_label && (
-                    <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
-                      {notification.action_label}
-                      <ArrowUpRight size={13} />
-                    </span>
-                  )} */}
+                  <span className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                    {notification.created_at ? (
+                      <span>
+                        {new Date(notification.created_at).toLocaleString("en-IN", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
 
-                  {notification.created_at && (
-                    <span className="mt-1.5 block text-[10px] text-slate-400">
-                      {new Date(notification.created_at).toLocaleString()}
-                    </span>
-                  )}
+                    {notification.action_url && (
+                      <span className="inline-flex items-center gap-0.5 font-bold text-emerald-700 group-hover:underline">
+                        <span>{notification.action_label || (user.isSuperAdmin ? "View alert" : "View")}</span>
+                        <ArrowUpRight size={11} />
+                      </span>
+                    )}
+                  </span>
                 </span>
               </button>
             );

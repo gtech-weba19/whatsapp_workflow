@@ -52,6 +52,22 @@ class AdminDashboardController extends Controller
                 ? (int) $request->input('workflow_id')
                 : null;
 
+        $rawAccount = $request->input('whatsapp_account_id', $request->input('account_id'));
+        $selectedAccountId = ($rawAccount !== null && strtolower((string) $rawAccount) !== 'all' && ctype_digit((string) $rawAccount))
+            ? (int) $rawAccount
+            : null;
+
+        if ($selectedAccountId !== null && !$isSuperAdmin) {
+            $ownsAccount = Schema::hasTable('whats_app_accounts')
+                && DB::table('whats_app_accounts')
+                    ->where('id', $selectedAccountId)
+                    ->where('user_id', $userId)
+                    ->exists();
+            if (!$ownsAccount) {
+                $selectedAccountId = null;
+            }
+        }
+
         if ($selectedWorkflowId !== null && !$isSuperAdmin) {
             $ownsSelected = Schema::hasTable('workflows')
                 && DB::table('workflows')
@@ -63,16 +79,51 @@ class AdminDashboardController extends Controller
             }
         }
 
+        $targetWorkflowIds = $this->resolveTargetWorkflowIds(
+            $userId,
+            $isSuperAdmin,
+            $selectedWorkflowId,
+            $selectedAccountId
+        );
+
+        $startDateParam = $request->input('start_date', $request->input('from'));
+        $endDateParam = $request->input('end_date', $request->input('to'));
+
+        $startDate = null;
+        $endDate = null;
+        if (!empty($startDateParam) && strtolower((string) $startDateParam) !== 'all') {
+            try {
+                $startDate = Carbon::parse($startDateParam)->startOfDay();
+            } catch (\Throwable $e) {}
+        }
+        if (!empty($endDateParam) && strtolower((string) $endDateParam) !== 'all') {
+            try {
+                $endDate = Carbon::parse($endDateParam)->endOfDay();
+            } catch (\Throwable $e) {}
+        }
+
+        if ($startDate !== null && $endDate === null) {
+            $endDate = $now->copy()->endOfDay();
+        }
+        if ($endDate !== null && $startDate === null) {
+            $startDate = $endDate->copy()->subDays(29)->startOfDay();
+        }
+        if ($startDate !== null && $endDate !== null && $startDate->gt($endDate)) {
+            $temp = $startDate;
+            $startDate = $endDate->copy()->startOfDay();
+            $endDate = $temp->copy()->endOfDay();
+        }
+
         // Contacts & unique engaged WhatsApp customers.
         $totalContacts = $canViewContacts
-            ? $this->countContacts($userId, $isSuperAdmin)
+            ? $this->countContacts($userId, $isSuperAdmin, $selectedAccountId)
             : 0;
 
         $canSeeConversations = $canViewBots || $canViewUsage || $canViewWorkflows;
 
         // Consolidated single-pass SQL aggregates (zero redundant table scans).
         $convMetrics = $canSeeConversations
-            ? $this->getConversationMetrics($userId, $isSuperAdmin)
+            ? $this->getConversationMetrics($userId, $isSuperAdmin, $targetWorkflowIds, $startDate, $endDate)
             : [
                 'total_conversations' => 0,
                 'active_conversations' => 0,
@@ -87,27 +138,31 @@ class AdminDashboardController extends Controller
 
         $thirtyDaysStart = $now->copy()->subDays(29)->startOfDay();
         $msgMetrics = ($canSeeConversations || $canViewBots || $canViewUsage)
-            ? $this->getMessageWindowMetrics($userId, $isSuperAdmin, $today, $thirtyDaysStart, $monthStart, $now)
-            : ['today' => 0, 'days_30' => 0, 'month' => 0];
+            ? $this->getMessageWindowMetrics($userId, $isSuperAdmin, $today, $thirtyDaysStart, $monthStart, $now, $targetWorkflowIds, $startDate, $endDate)
+            : ['today' => 0, 'days_30' => 0, 'month' => 0, 'range' => 0];
 
         $messagesToday = $canSeeConversations ? $msgMetrics['today'] : 0;
-        $totalMessages30d = $canSeeConversations ? $msgMetrics['days_30'] : 0;
+        $totalMessages30d = $canSeeConversations 
+            ? (($startDate !== null && $endDate !== null) ? $msgMetrics['range'] : $msgMetrics['days_30']) 
+            : 0;
         $monthlyMessages = ($canViewBots || $canViewUsage) ? $msgMetrics['month'] : 0;
 
         // Consolidated workflows & executions metrics.
         $wfMetrics = ($canViewWorkflows || $canViewBots)
-            ? $this->getWorkflowCountMetrics($userId, $isSuperAdmin)
+            ? $this->getWorkflowCountMetrics($userId, $isSuperAdmin, $targetWorkflowIds)
             : ['active' => 0, 'total' => 0];
 
         $activeWorkflows = $wfMetrics['active'];
         $totalWorkflows = $wfMetrics['total'];
 
         $totalBots = $canViewBots
-            ? $this->countTotalBots($userId, $isSuperAdmin)
+            ? $this->countTotalBots($userId, $isSuperAdmin, $selectedAccountId)
             : 0;
 
+        $execFrom = $startDate ?? $monthStart;
+        $execTo = $endDate ?? $now;
         $execMetrics = $canViewWorkflows
-            ? $this->getExecutionCountMetrics($userId, $isSuperAdmin, $monthStart, $now)
+            ? $this->getExecutionCountMetrics($userId, $isSuperAdmin, $execFrom, $execTo, $targetWorkflowIds)
             : ['total' => 0, 'success' => 0, 'failed' => 0];
 
         $totalExecutions = $execMetrics['total'];
@@ -138,25 +193,29 @@ class AdminDashboardController extends Controller
             ];
 
         $recentExecutions = $canViewWorkflows
-            ? $this->getRecentExecutions($userId, $isSuperAdmin)
+            ? $this->getRecentExecutions($userId, $isSuperAdmin, $targetWorkflowIds)
             : [];
 
         $dailyHits = $canSeeConversations
-            ? $this->getDailyHits30d($userId, $isSuperAdmin, $selectedWorkflowId)
+            ? $this->getDailyHitsSeries($userId, $isSuperAdmin, $targetWorkflowIds, $startDate, $endDate)
             : [];
 
         $workflowBreakdown = $canSeeConversations
-            ? $this->getWorkflowBreakdown30d($userId, $isSuperAdmin)
+            ? $this->getWorkflowBreakdownSeries($userId, $isSuperAdmin, $targetWorkflowIds, $startDate, $endDate)
             : ['total' => 0, 'by_workflow' => [], 'by_status' => []];
 
         $keywordsSummary = $canSeeConversations
-            ? $this->getWorkflowTriggersSummary30d($userId, $isSuperAdmin)
+            ? $this->getWorkflowTriggersSummarySeries($userId, $isSuperAdmin, $targetWorkflowIds, $startDate, $endDate)
             : [];
 
         $canSeeAccounts = $canViewWhatsApp || $canViewBots || $canViewWorkflows;
         $accountsOverview = $canSeeAccounts
             ? $this->getAccountsOverview($userId, $isSuperAdmin)
             : [];
+
+        $dateRangeLabel = ($startDate !== null && $endDate !== null)
+            ? ($startDate->format('d M Y') . ' – ' . $endDate->format('d M Y'))
+            : 'Last 30 Days';
 
         return response()->json([
             'success' => true,
@@ -198,6 +257,14 @@ class AdminDashboardController extends Controller
                     'email' => $user->email,
                     'role' => $user->role ?? null,
                 ],
+                'filter_meta' => [
+                    'account_id' => $selectedAccountId,
+                    'workflow_id' => $selectedWorkflowId,
+                    'start_date' => $startDate ? $startDate->toDateString() : null,
+                    'end_date' => $endDate ? $endDate->toDateString() : null,
+                    'date_range_label' => $dateRangeLabel,
+                    'is_filtered' => ($selectedAccountId !== null || $selectedWorkflowId !== null || $startDate !== null),
+                ],
                 'generated_at' => $now->toIso8601String(),
             ],
         ]);
@@ -226,7 +293,7 @@ class AdminDashboardController extends Controller
         return $query;
     }
 
-    private function countContacts(int $userId, bool $isSuperAdmin): int
+    private function countContacts(int $userId, bool $isSuperAdmin, ?int $accountId = null): int
     {
         if (!Schema::hasTable('contacts')) {
             return 0;
@@ -247,12 +314,17 @@ class AdminDashboardController extends Controller
             $query->where($ownerColumn, $userId);
         }
 
+        if ($accountId !== null && Schema::hasColumn('contacts', 'whatsapp_account_id')) {
+            $query->where('whatsapp_account_id', $accountId);
+        }
+
         return $query->count();
     }
 
     private function getWorkflowCountMetrics(
         int $userId,
-        bool $isSuperAdmin
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null
     ): array {
         if (!Schema::hasTable('workflows')) {
             return ['active' => 0, 'total' => 0];
@@ -265,6 +337,10 @@ class AdminDashboardController extends Controller
                 return ['active' => 0, 'total' => 0];
             }
             $query->where('user_id', $userId);
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $query->whereIn('id', $targetWorkflowIds);
         }
 
         $hasStatus = Schema::hasColumn('workflows', 'status');
@@ -284,7 +360,10 @@ class AdminDashboardController extends Controller
 
     private function getConversationMetrics(
         int $userId,
-        bool $isSuperAdmin
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
     ): array {
         $empty = [
             'total_conversations' => 0,
@@ -310,6 +389,17 @@ class AdminDashboardController extends Controller
 
             $query->join('workflows as w', 'w.id', '=', 's.workflow_id')
                 ->where('w.user_id', $userId);
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $query->whereIn('s.workflow_id', $targetWorkflowIds);
+        }
+
+        if ($startDate !== null) {
+            $query->where('s.created_at', '>=', $startDate);
+        }
+        if ($endDate !== null) {
+            $query->where('s.created_at', '<=', $endDate);
         }
 
         $hasStatus = Schema::hasColumn('bot_sessions', 'status');
@@ -343,9 +433,12 @@ class AdminDashboardController extends Controller
         Carbon $today,
         Carbon $thirtyDaysStart,
         Carbon $monthStart,
-        Carbon $now
+        Carbon $now,
+        ?array $targetWorkflowIds = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
     ): array {
-        $empty = ['today' => 0, 'days_30' => 0, 'month' => 0];
+        $empty = ['today' => 0, 'days_30' => 0, 'month' => 0, 'range' => 0];
 
         if (
             !Schema::hasTable('bot_messages')
@@ -356,35 +449,54 @@ class AdminDashboardController extends Controller
 
         $query = DB::table('bot_messages as m');
 
-        if (!$isSuperAdmin) {
+        if (!$isSuperAdmin || $targetWorkflowIds !== null) {
             if (
                 !Schema::hasColumn('bot_messages', 'bot_session_id')
                 || !Schema::hasTable('bot_sessions')
                 || !Schema::hasColumn('bot_sessions', 'workflow_id')
-                || !Schema::hasTable('workflows')
-                || !Schema::hasColumn('workflows', 'user_id')
             ) {
                 return $empty;
             }
 
-            $query->join('bot_sessions as s', 's.id', '=', 'm.bot_session_id')
-                ->join('workflows as w', 'w.id', '=', 's.workflow_id')
-                ->where('w.user_id', $userId);
+            $query->join('bot_sessions as s', 's.id', '=', 'm.bot_session_id');
+
+            if (!$isSuperAdmin) {
+                if (
+                    !Schema::hasTable('workflows')
+                    || !Schema::hasColumn('workflows', 'user_id')
+                ) {
+                    return $empty;
+                }
+                $query->join('workflows as w', 'w.id', '=', 's.workflow_id')
+                    ->where('w.user_id', $userId);
+            }
+
+            if ($targetWorkflowIds !== null) {
+                $query->whereIn('s.workflow_id', $targetWorkflowIds);
+            }
         }
 
         $earliest = $monthStart->lt($thirtyDaysStart) ? $monthStart : $thirtyDaysStart;
         if ($today->lt($earliest)) {
             $earliest = $today;
         }
+        if ($startDate !== null && $startDate->lt($earliest)) {
+            $earliest = $startDate;
+        }
+
+        $rangeStart = $startDate ?? $thirtyDaysStart;
+        $rangeEnd = $endDate ?? $now;
+        $queryMax = $rangeEnd->gt($now) ? $rangeEnd : $now;
 
         $row = $query
             ->where('m.created_at', '>=', $earliest)
-            ->where('m.created_at', '<=', $now)
+            ->where('m.created_at', '<=', $queryMax)
             ->selectRaw(
                 'SUM(CASE WHEN m.created_at >= ? THEN 1 ELSE 0 END) as today_count, '
                 . 'SUM(CASE WHEN m.created_at >= ? THEN 1 ELSE 0 END) as days30_count, '
-                . 'SUM(CASE WHEN m.created_at >= ? THEN 1 ELSE 0 END) as month_count',
-                [$today, $thirtyDaysStart, $monthStart]
+                . 'SUM(CASE WHEN m.created_at >= ? THEN 1 ELSE 0 END) as month_count, '
+                . 'SUM(CASE WHEN m.created_at >= ? AND m.created_at <= ? THEN 1 ELSE 0 END) as range_count',
+                [$today, $thirtyDaysStart, $monthStart, $rangeStart, $rangeEnd]
             )
             ->first();
 
@@ -392,6 +504,7 @@ class AdminDashboardController extends Controller
             'today' => (int) ($row->today_count ?? 0),
             'days_30' => (int) ($row->days30_count ?? 0),
             'month' => (int) ($row->month_count ?? 0),
+            'range' => (int) ($row->range_count ?? 0),
         ];
     }
 
@@ -399,7 +512,8 @@ class AdminDashboardController extends Controller
         int $userId,
         bool $isSuperAdmin,
         Carbon $from,
-        Carbon $now
+        Carbon $now,
+        ?array $targetWorkflowIds = null
     ): array {
         $empty = ['total' => 0, 'success' => 0, 'failed' => 0];
 
@@ -423,6 +537,10 @@ class AdminDashboardController extends Controller
 
             $query->join('workflows as w', 'w.id', '=', 'we.workflow_id')
                 ->where('w.user_id', $userId);
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $query->whereIn('we.workflow_id', $targetWorkflowIds);
         }
 
         $hasStatus = Schema::hasColumn('workflow_executions', 'status');
@@ -652,7 +770,8 @@ class AdminDashboardController extends Controller
 
     private function getRecentExecutions(
         int $userId,
-        bool $isSuperAdmin
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null
     ): array {
         $table = 'workflow_executions';
 
@@ -679,6 +798,10 @@ class AdminDashboardController extends Controller
                 'workflow_executions.workflow_id',
                 $this->workflowIds($userId, false)
             );
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $query->whereIn('workflow_executions.workflow_id', $targetWorkflowIds);
         }
 
         $sortColumn = 'workflow_executions.created_at';
@@ -765,7 +888,7 @@ class AdminDashboardController extends Controller
         return null;
     }
 
-    private function countTotalBots(int $userId, bool $isSuperAdmin): int
+    private function countTotalBots(int $userId, bool $isSuperAdmin, ?int $accountId = null): int
     {
         if (!Schema::hasTable('bots')) {
             return 0;
@@ -776,10 +899,48 @@ class AdminDashboardController extends Controller
             $query->where('user_id', $userId);
         }
 
+        if ($accountId !== null && Schema::hasColumn('bots', 'whatsapp_account_id')) {
+            $query->where('whatsapp_account_id', $accountId);
+        }
+
         return $query->count();
     }
 
-    private function scopedSessionQuery(int $userId, bool $isSuperAdmin, ?int $workflowId = null)
+    private function resolveTargetWorkflowIds(
+        int $userId,
+        bool $isSuperAdmin,
+        ?int $workflowId = null,
+        ?int $accountId = null
+    ): ?array {
+        if ($workflowId !== null) {
+            return [$workflowId];
+        }
+
+        if ($accountId !== null) {
+            $accountBotIds = Schema::hasTable('bots')
+                ? DB::table('bots')->where('whatsapp_account_id', $accountId)->pluck('id')->all()
+                : [];
+
+            $ids = Schema::hasTable('workflows')
+                ? DB::table('workflows')
+                    ->where(function ($q) use ($accountId, $accountBotIds) {
+                        $q->where('whatsapp_account_id', $accountId);
+                        if (!empty($accountBotIds)) {
+                            $q->orWhereIn('bot_id', $accountBotIds);
+                        }
+                    })
+                    ->when(!$isSuperAdmin && Schema::hasColumn('workflows', 'user_id'), fn ($q) => $q->where('user_id', $userId))
+                    ->pluck('id')
+                    ->all()
+                : [];
+
+            return !empty($ids) ? $ids : [-1];
+        }
+
+        return null;
+    }
+
+    private function scopedSessionQuery(int $userId, bool $isSuperAdmin, ?array $targetWorkflowIds = null)
     {
         $query = DB::table('bot_sessions');
 
@@ -790,18 +951,23 @@ class AdminDashboardController extends Controller
             );
         }
 
-        if ($workflowId !== null) {
-            $query->where('bot_sessions.workflow_id', $workflowId);
+        if ($targetWorkflowIds !== null) {
+            $query->whereIn('bot_sessions.workflow_id', $targetWorkflowIds);
         }
 
         return $query;
     }
 
     /**
-     * Build 30-day daily message and conversation hits series.
+     * Build daily message and conversation hits series supporting dynamic date ranges.
      */
-    private function getDailyHits30d(int $userId, bool $isSuperAdmin, ?int $workflowId = null): array
-    {
+    private function getDailyHitsSeries(
+        int $userId,
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
+    ): array {
         if (
             !Schema::hasTable('bot_messages')
             || !Schema::hasTable('bot_sessions')
@@ -810,64 +976,91 @@ class AdminDashboardController extends Controller
             return [];
         }
 
-        $start = now()->subDays(29)->startOfDay();
-        $end = now()->endOfDay();
+        $start = $startDate ? $startDate->copy()->startOfDay() : now()->subDays(29)->startOfDay();
+        $end = $endDate ? $endDate->copy()->endOfDay() : now()->endOfDay();
 
-        $sessionSubquery = $this->scopedSessionQuery($userId, $isSuperAdmin, $workflowId)
+        $sessionSubquery = $this->scopedSessionQuery($userId, $isSuperAdmin, $targetWorkflowIds)
             ->select('id');
 
         $messageCounts = DB::table('bot_messages')
             ->whereIn('bot_session_id', $sessionSubquery)
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as messages_count, COUNT(DISTINCT bot_session_id) as sessions_count')
+            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as messages_count')
             ->groupByRaw('DATE(created_at)')
             ->get()
             ->keyBy('day_key');
 
+        $sessionCounts = $this->scopedSessionQuery($userId, $isSuperAdmin, $targetWorkflowIds)
+            ->whereBetween('bot_sessions.created_at', [$start, $end])
+            ->selectRaw('DATE(bot_sessions.created_at) as day_key, COUNT(*) as sessions_count')
+            ->groupByRaw('DATE(bot_sessions.created_at)')
+            ->get()
+            ->keyBy('day_key');
+
         $series = [];
-        for ($i = 29; $i >= 0; $i--) {
-            $date = now()->subDays($i);
-            $key = $date->toDateString();
-            $row = $messageCounts->get($key);
-            $messages = (int) ($row->messages_count ?? 0);
-            $sessions = (int) ($row->sessions_count ?? 0);
+        $cursor = $start->copy();
+        $safetyCounter = 0;
+        while ($cursor->lte($end) && $safetyCounter < 120) {
+            $key = $cursor->toDateString();
+            $msgRow = $messageCounts->get($key);
+            $sessRow = $sessionCounts->get($key);
+            $messages = (int) ($msgRow->messages_count ?? 0);
+            $sessions = (int) ($sessRow->sessions_count ?? 0);
 
             $series[] = [
                 'date' => $key,
-                'label' => $date->format('d M'),
-                'short_label' => $date->format('d/m'),
+                'label' => $cursor->format('d M'),
+                'short_label' => $cursor->format('d/m'),
                 'hits' => $messages,
                 'messages' => $messages,
                 'sessions' => $sessions,
             ];
+
+            $cursor->addDay();
+            $safetyCounter++;
         }
 
         return $series;
     }
 
-    /**
-     * Build 30-day breakdown by workflow and by session status for the donut chart.
-     */
-    private function getWorkflowBreakdown30d(int $userId, bool $isSuperAdmin): array
+    private function getDailyHits30d(int $userId, bool $isSuperAdmin, ?array $targetWorkflowIds = null): array
     {
+        return $this->getDailyHitsSeries($userId, $isSuperAdmin, $targetWorkflowIds);
+    }
+
+    /**
+     * Build breakdown by workflow and by session status for the donut chart.
+     */
+    private function getWorkflowBreakdownSeries(
+        int $userId,
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
+    ): array {
         if (!Schema::hasTable('bot_sessions') || !Schema::hasTable('workflows')) {
             return ['total' => 0, 'by_workflow' => [], 'by_status' => []];
         }
 
-        $start = now()->subDays(29)->startOfDay();
+        $start = $startDate ? $startDate->copy()->startOfDay() : now()->subDays(29)->startOfDay();
+        $end = $endDate ? $endDate->copy()->endOfDay() : now()->endOfDay();
 
         $baseQuery = DB::table('bot_sessions as s')
             ->join('workflows as w', 'w.id', '=', 's.workflow_id')
-            ->where(function ($q) use ($start) {
-                $q->where('s.last_message_at', '>=', $start)
-                    ->orWhere(function ($sq) use ($start) {
-                        $sq->whereNull('s.last_message_at')
-                            ->where('s.created_at', '>=', $start);
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('s.created_at', [$start, $end])
+                    ->orWhere(function ($sq) use ($start, $end) {
+                        $sq->whereNotNull('s.last_message_at')
+                            ->whereBetween('s.last_message_at', [$start, $end]);
                     });
             });
 
         if (!$isSuperAdmin && Schema::hasColumn('workflows', 'user_id')) {
             $baseQuery->where('w.user_id', $userId);
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $baseQuery->whereIn('w.id', $targetWorkflowIds);
         }
 
         $workflowRows = (clone $baseQuery)
@@ -927,16 +1120,27 @@ class AdminDashboardController extends Controller
         ];
     }
 
-    /**
-     * Build 30-day ranked summary of workflows & their start trigger keywords.
-     */
-    private function getWorkflowTriggersSummary30d(int $userId, bool $isSuperAdmin): array
+    private function getWorkflowBreakdown30d(int $userId, bool $isSuperAdmin, ?array $targetWorkflowIds = null): array
     {
+        return $this->getWorkflowBreakdownSeries($userId, $isSuperAdmin, $targetWorkflowIds);
+    }
+
+    /**
+     * Build ranked summary of workflows & their start trigger keywords.
+     */
+    private function getWorkflowTriggersSummarySeries(
+        int $userId,
+        bool $isSuperAdmin,
+        ?array $targetWorkflowIds = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
+    ): array {
         if (!Schema::hasTable('workflows')) {
             return [];
         }
 
-        $start = now()->subDays(29)->startOfDay();
+        $start = $startDate ? $startDate->copy()->startOfDay() : now()->subDays(29)->startOfDay();
+        $end = $endDate ? $endDate->copy()->endOfDay() : now()->endOfDay();
 
         $workflowsQuery = DB::table('workflows')
             ->where('channel', 'whatsapp')
@@ -944,6 +1148,10 @@ class AdminDashboardController extends Controller
 
         if (!$isSuperAdmin && Schema::hasColumn('workflows', 'user_id')) {
             $workflowsQuery->where('user_id', $userId);
+        }
+
+        if ($targetWorkflowIds !== null) {
+            $workflowsQuery->whereIn('workflows.id', $targetWorkflowIds);
         }
 
         $workflows = $workflowsQuery->get();
@@ -964,11 +1172,11 @@ class AdminDashboardController extends Controller
         $sessionCounts = Schema::hasTable('bot_sessions')
             ? DB::table('bot_sessions')
                 ->whereIn('workflow_id', $wfIds)
-                ->where(function ($q) use ($start) {
-                    $q->where('last_message_at', '>=', $start)
-                        ->orWhere(function ($sq) use ($start) {
-                            $sq->whereNull('last_message_at')
-                                ->where('created_at', '>=', $start);
+                ->where(function ($q) use ($start, $end) {
+                    $q->whereBetween('created_at', [$start, $end])
+                        ->orWhere(function ($sq) use ($start, $end) {
+                            $sq->whereNotNull('last_message_at')
+                                ->whereBetween('last_message_at', [$start, $end]);
                         });
                 })
                 ->selectRaw('workflow_id, COUNT(*) as total')
@@ -980,7 +1188,7 @@ class AdminDashboardController extends Controller
             ? DB::table('bot_messages as m')
                 ->join('bot_sessions as s', 's.id', '=', 'm.bot_session_id')
                 ->whereIn('s.workflow_id', $wfIds)
-                ->where('m.created_at', '>=', $start)
+                ->whereBetween('m.created_at', [$start, $end])
                 ->selectRaw('s.workflow_id, COUNT(*) as total')
                 ->groupBy('s.workflow_id')
                 ->pluck('total', 'workflow_id')
@@ -1013,6 +1221,11 @@ class AdminDashboardController extends Controller
             ->take(10)
             ->values()
             ->all();
+    }
+
+    private function getWorkflowTriggersSummary30d(int $userId, bool $isSuperAdmin, ?array $targetWorkflowIds = null): array
+    {
+        return $this->getWorkflowTriggersSummarySeries($userId, $isSuperAdmin, $targetWorkflowIds);
     }
 
     /**

@@ -30,7 +30,7 @@ class AdminMessageLogController extends Controller
         $validated = $request->validate([
             'client_id' => ['nullable', 'integer'],
             'whatsapp_account_id' => ['nullable', 'integer'],
-            'period' => ['nullable', 'string', 'in:today,yesterday,7d,month,all,custom'],
+            'period' => ['nullable', 'string', 'in:today,yesterday,7d,30d,month,this_month,last_month,all,custom'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
@@ -84,7 +84,7 @@ class AdminMessageLogController extends Controller
             'client_id' => ['nullable', 'integer'],
             'whatsapp_account_id' => ['nullable', 'integer'],
             'workflow_id' => ['nullable', 'string', 'max:32'],
-            'period' => ['nullable', 'string', 'in:today,yesterday,7d,month,all,custom'],
+            'period' => ['nullable', 'string', 'in:today,yesterday,7d,30d,month,this_month,last_month,all,custom'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'status' => ['nullable', 'string', 'in:all,active,waiting,completed,dropped,error'],
@@ -310,7 +310,7 @@ class AdminMessageLogController extends Controller
             'client_id' => ['nullable', 'integer'],
             'whatsapp_account_id' => ['nullable', 'integer'],
             'workflow_id' => ['nullable', 'string', 'max:32'],
-            'period' => ['nullable', 'string', 'in:today,yesterday,7d,month,all,custom'],
+            'period' => ['nullable', 'string', 'in:today,yesterday,7d,30d,month,this_month,last_month,all,custom'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'status' => ['nullable', 'string', 'in:all,active,waiting,completed,dropped,error'],
@@ -828,7 +828,9 @@ class AdminMessageLogController extends Controller
             'today' => [now()->startOfDay(), now()->endOfDay()],
             'yesterday' => [now()->subDay()->startOfDay(), now()->subDay()->endOfDay()],
             '7d' => [now()->subDays(6)->startOfDay(), now()->endOfDay()],
-            'month' => [now()->startOfMonth(), now()->endOfDay()],
+            '30d' => [now()->subDays(29)->startOfDay(), now()->endOfDay()],
+            'month', 'this_month' => [now()->startOfMonth(), now()->endOfDay()],
+            'last_month' => [now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()],
             'custom' => [
                 $fromStr ? Carbon::parse($fromStr)->startOfDay() : null,
                 $toStr ? Carbon::parse($toStr)->endOfDay() : null,

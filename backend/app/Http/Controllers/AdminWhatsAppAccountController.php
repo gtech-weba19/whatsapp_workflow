@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WhatsAppAccount;
+use App\Models\AdminNotification;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -406,6 +407,30 @@ public function store(
                 'account_id' => $account->id,
             ]
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Send in-app notification to Admin
+    |--------------------------------------------------------------------------
+    */
+
+    try {
+        AdminNotification::create([
+            'user_id' => $account->user_id,
+            'type' => 'whatsapp_account_submitted',
+            'title' => "WhatsApp Verification Request: {$businessName}",
+            'message' => "Client " . ($owner?->name ?? 'User') . " (" . ($owner?->email ?? 'No email') . ") submitted WhatsApp account '{$businessName}' for verification.",
+            'data' => [
+                'account_id' => $account->id,
+                'user_id' => $account->user_id,
+                'user_name' => $owner?->name ?? 'User',
+                'business_name' => $businessName,
+                'action_url' => '/whatsapp-accounts',
+            ],
+        ]);
+    } catch (\Throwable $e) {
+        Log::warning('WhatsApp account admin notification error: ' . $e->getMessage());
     }
 
     /*

@@ -127,6 +127,7 @@ class RazorpayPaymentController extends Controller
             'razorpay_payment_id' => ['required', 'string'],
             'razorpay_signature' => ['required', 'string'],
             'amount' => ['required', 'numeric', 'min:0.01'],
+            'credits' => ['nullable', 'numeric', 'min:0'],
             'plan_id' => ['nullable'],
             'plan_name' => ['nullable', 'string'],
         ]);
@@ -139,6 +140,10 @@ class RazorpayPaymentController extends Controller
         $amount = (float) $validated['amount'];
         $planName = $validated['plan_name'] ?? 'Plan Recharge';
         $planId = $validated['plan_id'] ? (int) $validated['plan_id'] : null;
+
+        $creditsToGrant = !empty($validated['credits']) && (float) $validated['credits'] > 0
+            ? (float) $validated['credits']
+            : ($planId ? (float) (PackagePlan::where('id', $planId)->value('selling_price') ?? $amount) : $amount);
 
         // Verify HMAC-SHA256 signature
         $expectedSignature = hash_hmac('sha256', $orderId . '|' . $paymentId, $secret);
@@ -167,11 +172,11 @@ class RazorpayPaymentController extends Controller
         }
 
         try {
-            // 1. Add credits to user wallet
-            $description = "Plan Activated: {$planName} (Razorpay: {$paymentId})";
+            // 1. Add credits to user wallet (credits granted equals the base plan credit, while $amount was total paid including taxes)
+            $description = "Plan Activated: {$planName} (Paid: ₹" . number_format($amount, 2) . ", Razorpay: {$paymentId})";
             $walletTx = $this->walletService->addCredit(
                 user: $user,
-                amount: $amount,
+                amount: $creditsToGrant,
                 description: $description,
                 referenceId: $paymentId
             );
@@ -186,8 +191,8 @@ class RazorpayPaymentController extends Controller
                 'package_plan_id' => $planId ?? 2,
                 'amount_paid' => $amount,
                 'currency' => 'INR',
-                'credits_granted' => (int) $amount,
-                'credits_remaining' => (int) $amount,
+                'credits_granted' => (int) $creditsToGrant,
+                'credits_remaining' => (int) $creditsToGrant,
                 'starts_at' => now(),
                 'expires_at' => null,
                 'status' => 'active',
@@ -199,7 +204,7 @@ class RazorpayPaymentController extends Controller
                     'user_id' => $user->id,
                     'type' => 'plan_subscription',
                     'title' => "Payment Received: ₹" . number_format($amount, 2),
-                    'message' => "Client {$user->name} ({$user->email}) successfully paid ₹" . number_format($amount, 2) . " via Razorpay ({$paymentId}) for {$planName}.",
+                    'message' => "Client {$user->name} ({$user->email}) successfully paid ₹" . number_format($amount, 2) . " (Credits Granted: ₹" . number_format($creditsToGrant, 2) . ") via Razorpay ({$paymentId}) for {$planName}.",
                     'data' => [
                         'user_id' => $user->id,
                         'user_name' => $user->name,
@@ -207,6 +212,7 @@ class RazorpayPaymentController extends Controller
                         'payment_id' => $paymentId,
                         'order_id' => $orderId,
                         'amount' => $amount,
+                        'credits_granted' => $creditsToGrant,
                         'plan_id' => $planId,
                         'plan_name' => $planName,
                         'action_url' => '/plans?tab=alerts',

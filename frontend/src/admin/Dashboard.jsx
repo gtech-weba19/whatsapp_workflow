@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import {
@@ -18,6 +18,10 @@ import {
   Workflow,
   XCircle,
   Zap,
+  SlidersHorizontal,
+  Smartphone,
+  Calendar,
+  X,
 } from "lucide-react";
 
 import {
@@ -27,6 +31,7 @@ import {
 } from "../utils/permission";
 import WhatsAppConnectionStatus from "../components/admin/WhatsAppConnectionStatus";
 import AccountBotsExplorer from "../components/admin/AccountBotsExplorer";
+import ClientSetupActivationCard from "../components/admin/ClientSetupActivationCard";
 import {
   PastelKpiCard,
   ThirtyDaysHitsChart,
@@ -221,9 +226,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [chartAccountId, setChartAccountId] = useState("all");
   const [chartWorkflowId, setChartWorkflowId] = useState("all");
+  const [datePreset, setDatePreset] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const [whatsAppAccount, setWhatsAppAccount] = useState(null);
+  const [whatsAppAccountsList, setWhatsAppAccountsList] = useState([]);
   const [whatsAppLoading, setWhatsAppLoading] = useState(true);
   const [whatsAppError, setWhatsAppError] = useState("");
 
@@ -239,7 +249,13 @@ export default function Dashboard() {
     superAdmin || hasPermission("whatsapp_accounts.view", user);
 
   const fetchDashboard = useCallback(
-    async ({ silent = false, workflowId = chartWorkflowId } = {}) => {
+    async ({
+      silent = false,
+      accountId = chartAccountId,
+      workflowId = chartWorkflowId,
+      customStart = startDate,
+      customEnd = endDate,
+    } = {}) => {
       if (silent) {
         setRefreshing(true);
       } else {
@@ -250,11 +266,22 @@ export default function Dashboard() {
 
       try {
         const token = getAuthToken();
+        const params = {};
+        if (workflowId && workflowId !== "all") {
+          params.workflow_id = workflowId;
+        }
+        if (accountId && accountId !== "all") {
+          params.whatsapp_account_id = accountId;
+        }
+        if (customStart) {
+          params.start_date = customStart;
+        }
+        if (customEnd) {
+          params.end_date = customEnd;
+        }
+
         const response = await axios.get(`${API}/dashboard`, {
-          params:
-            workflowId && workflowId !== "all"
-              ? { workflow_id: workflowId }
-              : undefined,
+          params: Object.keys(params).length > 0 ? params : undefined,
           headers: {
             Accept: "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -313,7 +340,7 @@ export default function Dashboard() {
         setRefreshing(false);
       }
     },
-    [chartWorkflowId]
+    [chartAccountId, chartWorkflowId, startDate, endDate]
   );
 
   const fetchWorkflows = useCallback(async () => {
@@ -375,6 +402,8 @@ export default function Dashboard() {
         if (dateA !== dateB) return dateB - dateA;
         return Number(b.id || 0) - Number(a.id || 0);
       });
+
+      setWhatsAppAccountsList(sortedAccounts);
 
       const account = sortedAccounts[0] || null;
 
@@ -478,13 +507,199 @@ export default function Dashboard() {
     return () => window.clearInterval(timer);
   }, [whatsAppAccount?.status, fetchWhatsAppStatus]);
 
+  const chartAccounts = useMemo(() => {
+    if (
+      Array.isArray(dashboard.accounts_overview) &&
+      dashboard.accounts_overview.length > 0
+    ) {
+      return dashboard.accounts_overview;
+    }
+    return whatsAppAccountsList;
+  }, [dashboard.accounts_overview, whatsAppAccountsList]);
+
+  // Auto-select WhatsApp account for Client panel (!superAdmin)
+  const clientAutoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (!superAdmin && chartAccounts.length > 0 && !clientAutoSelectedRef.current) {
+      const defaultId = String(chartAccounts[0].id);
+      clientAutoSelectedRef.current = true;
+      setChartAccountId(defaultId);
+      if (chartAccounts.length > 1) {
+        fetchDashboard({
+          silent: true,
+          accountId: defaultId,
+          workflowId: "all",
+          customStart: startDate,
+          customEnd: endDate,
+        });
+      }
+    }
+  }, [superAdmin, chartAccounts, fetchDashboard, startDate, endDate]);
+
+  const availableWorkflows = useMemo(() => {
+    if (chartAccountId && chartAccountId !== "all") {
+      const targetAcc = chartAccounts.find(
+        (a) => String(a.id) === String(chartAccountId)
+      );
+
+      if (Array.isArray(targetAcc?.workflows) && targetAcc.workflows.length > 0) {
+        return targetAcc.workflows;
+      }
+
+      const accBotIds = Array.isArray(targetAcc?.bots)
+        ? targetAcc.bots.map((b) => b.id)
+        : [];
+
+      return workflows.filter((wf) => {
+        if (
+          wf.whatsapp_account_id !== undefined &&
+          wf.whatsapp_account_id !== null &&
+          String(wf.whatsapp_account_id) === String(chartAccountId)
+        ) {
+          return true;
+        }
+        if (wf.bot_id && accBotIds.includes(wf.bot_id)) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    return workflows;
+  }, [chartAccountId, chartAccounts, workflows]);
+
+  const handleChartAccountChange = (nextAccountId) => {
+    setChartAccountId(nextAccountId);
+    setChartWorkflowId("all");
+    fetchDashboard({
+      silent: true,
+      accountId: nextAccountId,
+      workflowId: "all",
+      customStart: startDate,
+      customEnd: endDate,
+    });
+  };
+
   const handleChartWorkflowChange = (nextWorkflowId) => {
     setChartWorkflowId(nextWorkflowId);
-    fetchDashboard({ silent: true, workflowId: nextWorkflowId });
+    fetchDashboard({
+      silent: true,
+      accountId: chartAccountId,
+      workflowId: nextWorkflowId,
+      customStart: startDate,
+      customEnd: endDate,
+    });
+  };
+
+  const handleDatePresetChange = (preset) => {
+    setDatePreset(preset);
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const toYMD = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    let start = "";
+    let end = "";
+
+    if (preset === "today") {
+      start = toYMD(today);
+      end = toYMD(today);
+    } else if (preset === "yesterday") {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      start = toYMD(y);
+      end = toYMD(y);
+    } else if (preset === "7d") {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 6);
+      start = toYMD(p);
+      end = toYMD(today);
+    } else if (preset === "30d") {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 29);
+      start = toYMD(p);
+      end = toYMD(today);
+    } else if (preset === "this_month") {
+      const m = new Date(today.getFullYear(), today.getMonth(), 1);
+      start = toYMD(m);
+      end = toYMD(today);
+    } else if (preset === "last_month") {
+      const startLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const endLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      start = toYMD(startLastMonth);
+      end = toYMD(endLastMonth);
+    } else if (preset === "all") {
+      start = "";
+      end = "";
+    }
+
+    if (preset !== "custom") {
+      setStartDate(start);
+      setEndDate(end);
+      fetchDashboard({
+        silent: true,
+        accountId: chartAccountId,
+        workflowId: chartWorkflowId,
+        customStart: start,
+        customEnd: end,
+      });
+    }
+  };
+
+  const handleStartDateChange = (val) => {
+    setStartDate(val);
+    setDatePreset("custom");
+    if (val && endDate) {
+      fetchDashboard({
+        silent: true,
+        accountId: chartAccountId,
+        workflowId: chartWorkflowId,
+        customStart: val,
+        customEnd: endDate,
+      });
+    }
+  };
+
+  const handleEndDateChange = (val) => {
+    setEndDate(val);
+    setDatePreset("custom");
+    if (startDate && val) {
+      fetchDashboard({
+        silent: true,
+        accountId: chartAccountId,
+        workflowId: chartWorkflowId,
+        customStart: startDate,
+        customEnd: val,
+      });
+    }
+  };
+
+  const handleResetChartFilters = () => {
+    const defaultAccountId =
+      !superAdmin && chartAccounts.length > 0
+        ? String(chartAccounts[0].id)
+        : "all";
+    setChartAccountId(defaultAccountId);
+    setChartWorkflowId("all");
+    setDatePreset("all");
+    setStartDate("");
+    setEndDate("");
+    fetchDashboard({
+      silent: true,
+      accountId: defaultAccountId,
+      workflowId: "all",
+      customStart: "",
+      customEnd: "",
+    });
   };
 
   const handleRefreshAll = () => {
-    fetchDashboard({ silent: true });
+    fetchDashboard({
+      silent: true,
+      accountId: chartAccountId,
+      workflowId: chartWorkflowId,
+      customStart: startDate,
+      customEnd: endDate,
+    });
     if (canViewWorkflows || canViewBots) fetchWorkflows();
     if (!superAdmin && canViewWhatsApp) fetchWhatsAppStatus({ silent: true });
   };
@@ -517,105 +732,196 @@ export default function Dashboard() {
   const showWhatsAppWidget = !superAdmin && canViewWhatsApp;
   const showQuotaWidget = canViewUsage || canViewWorkflows;
 
+  // Check if WhatsApp account is connected & approved
+  const hasApprovedWhatsApp = useMemo(() => {
+    if (superAdmin) return true;
+    const isApproved = (st) =>
+      ["approved", "connected", "active"].includes(
+        String(st || "").trim().toLowerCase()
+      );
+
+    if (whatsAppAccount && isApproved(whatsAppAccount.status)) {
+      return true;
+    }
+    if (
+      Array.isArray(whatsAppAccountsList) &&
+      whatsAppAccountsList.some((acc) => isApproved(acc?.status))
+    ) {
+      return true;
+    }
+    if (
+      Array.isArray(dashboard.accounts_overview) &&
+      dashboard.accounts_overview.some((acc) =>
+        isApproved(acc?.status || acc?.account_status)
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }, [
+    superAdmin,
+    whatsAppAccount,
+    whatsAppAccountsList,
+    dashboard.accounts_overview,
+  ]);
+
+  // Check if any workflows are created
+  const hasWorkflowsCreated = useMemo(() => {
+    if (superAdmin) return true;
+    return (
+      Number(stats.total_workflows || 0) > 0 ||
+      (Array.isArray(workflows) && workflows.length > 0) ||
+      (Array.isArray(dashboard.workflows) && dashboard.workflows.length > 0)
+    );
+  }, [superAdmin, stats.total_workflows, workflows, dashboard.workflows]);
+
+  // Check if message flow / conversations are active
+  const hasActiveTraffic = useMemo(() => {
+    if (superAdmin) return true;
+    const hasConvs = Number(stats.total_conversations || 0) > 0;
+    const hasMsgs =
+      Number(stats.total_messages_30d || 0) > 0 ||
+      Number(stats.messages_today || 0) > 0;
+    const hasExecs = Number(stats.workflow_executions || 0) > 0;
+    const hasHits =
+      Array.isArray(dashboard.daily_hits) &&
+      dashboard.daily_hits.some(
+        (d) =>
+          Number(d.total || d.count || d.messages || d.conversations || 0) > 0
+      );
+    const hasWorkflowHits =
+      Array.isArray(dashboard.workflow_breakdown) &&
+      dashboard.workflow_breakdown.some(
+        (w) => Number(w.hits || w.executions || w.count || 0) > 0
+      );
+
+    return hasConvs || hasMsgs || hasExecs || hasHits || hasWorkflowHits;
+  }, [
+    superAdmin,
+    stats.total_conversations,
+    stats.total_messages_30d,
+    stats.messages_today,
+    stats.workflow_executions,
+    dashboard.daily_hits,
+    dashboard.workflow_breakdown,
+  ]);
+
+  // New Client: Has not connected / approved WhatsApp account yet.
+  // When true, hide bot explorer, filter, KPI cards, quota, and only show "Connect Your WhatsApp" section!
+  const isNewClient = !superAdmin && !hasApprovedWhatsApp;
+
+  // Dashboard charts are only displayed when flow is active
+  const showDashboardCharts =
+    superAdmin ||
+    (hasApprovedWhatsApp && hasWorkflowsCreated && hasActiveTraffic);
+
+  const selectedAccountObj = useMemo(() => {
+    if (!chartAccountId || chartAccountId === "all") return null;
+    return (
+      chartAccounts.find((a) => String(a.id) === String(chartAccountId)) || null
+    );
+  }, [chartAccountId, chartAccounts]);
+
+  const selectedAccountLabel = useMemo(() => {
+    if (!selectedAccountObj) return "All WhatsApp Accounts";
+    return (
+      selectedAccountObj.name ||
+      selectedAccountObj.business_name ||
+      selectedAccountObj.sender_name ||
+      selectedAccountObj.account_name ||
+      `Account #${selectedAccountObj.id}`
+    );
+  }, [selectedAccountObj]);
+
+  const selectedWorkflowObj = useMemo(() => {
+    if (!chartWorkflowId || chartWorkflowId === "all") return null;
+    return (
+      workflows.find((w) => String(w.id) === String(chartWorkflowId)) || null
+    );
+  }, [chartWorkflowId, workflows]);
+
+  const selectedWorkflowLabel = useMemo(() => {
+    if (!selectedWorkflowObj) {
+      return chartAccountId !== "all"
+        ? "All Workflows in Account"
+        : "All Workflows";
+    }
+    return selectedWorkflowObj.name || `Workflow #${selectedWorkflowObj.id}`;
+  }, [selectedWorkflowObj, chartAccountId]);
+
+  const activeDateRangeText = useMemo(() => {
+    if (dashboard.filter_meta?.date_range_label) {
+      return dashboard.filter_meta.date_range_label;
+    }
+    if (startDate && endDate) {
+      return `${startDate} – ${endDate}`;
+    }
+    if (datePreset === "today") return "Today";
+    if (datePreset === "yesterday") return "Yesterday";
+    if (datePreset === "7d") return "Last 7 Days";
+    if (datePreset === "30d") return "Last 30 Days";
+    if (datePreset === "this_month") return "This Month";
+    if (datePreset === "last_month") return "Last Month";
+    return "Last 30 Days";
+  }, [dashboard.filter_meta, startDate, endDate, datePreset]);
+
+  const isAnyFilterActive = useMemo(() => {
+    if (superAdmin) {
+      return (
+        chartAccountId !== "all" ||
+        chartWorkflowId !== "all" ||
+        (datePreset !== "all" && datePreset !== "30d")
+      );
+    }
+    const defaultAccId =
+      chartAccounts.length > 0 ? String(chartAccounts[0].id) : "all";
+    const isAccFiltered =
+      chartAccounts.length > 1 && chartAccountId !== defaultAccId;
+    return (
+      isAccFiltered ||
+      chartWorkflowId !== "all" ||
+      (datePreset !== "all" && datePreset !== "30d")
+    );
+  }, [superAdmin, chartAccounts, chartAccountId, chartWorkflowId, datePreset]);
+
+  const buildFilterUrl = useCallback(
+    (basePath, extraParams = {}) => {
+      const params = new URLSearchParams();
+      if (chartAccountId && chartAccountId !== "all") {
+        params.set("whatsapp_account_id", chartAccountId);
+        params.set("account_id", chartAccountId);
+      }
+      if (chartWorkflowId && chartWorkflowId !== "all") {
+        params.set("workflow_id", chartWorkflowId);
+      }
+      if (datePreset && datePreset !== "all") {
+        params.set("period", datePreset);
+      }
+      if (startDate) {
+        params.set("from", startDate);
+        params.set("period", "custom");
+      }
+      if (endDate) {
+        params.set("to", endDate);
+        params.set("period", "custom");
+      }
+      Object.entries(extraParams).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") {
+          params.set(k, v);
+        }
+      });
+      const qs = params.toString();
+      return qs ? `${basePath}?${qs}` : basePath;
+    },
+    [chartAccountId, chartWorkflowId, datePreset, startDate, endDate]
+  );
+
   return (
-    <div className="mx-auto w-full max-w-[1640px] space-y-5 text-slate-900">
+    <div className="mx-auto flex min-h-[calc(100vh-130px)] w-full max-w-[1640px] flex-1 flex-col text-slate-900">
       <DashboardErrorBoundary>
-        {/* EXECUTIVE EMERALD HERO COMMAND BANNER */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 px-5 py-5 text-white shadow-xl shadow-emerald-950/15 ring-1 ring-emerald-400/20 sm:px-7 sm:py-6">
-          {/* Decorative ambient mesh & dot pattern */}
-          <span className="pointer-events-none absolute -right-14 -top-16 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
-          <span className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-teal-300/15 blur-3xl" />
-
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 space-y-2.5">
-              {/* Status & badge row */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-200 backdrop-blur-xs">
-                  {superAdmin ? "Super Admin Console" : "Workspace"}
-                </span>
-
-                <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold italic text-emerald-100">
-                  <Sparkles size={11} className="text-emerald-300" />
-                  Automate &amp; Grow
-                </span>
-              </div>
-
-              <div>
-                <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl lg:text-[26px]">
-                  Welcome back, {displayName}
-                  <span className="text-emerald-400">!</span>
-                </h1>
-                <p className="mt-0.5 text-xs text-emerald-100/80 sm:text-sm">
-                  Real-time overview across all WhatsApp accounts, active bots,
-                  workflows, and customer conversations.
-                </p>
-              </div>
-
-              {/* Compact inline snapshot pills */}
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
-                  <Building2 size={12} className="text-emerald-300" />
-                  {numberFormat(accountCount)} Account
-                  {accountCount === 1 ? "" : "s"}
-                </span>
-
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
-                  <Bot size={12} className="text-teal-300" />
-                  {numberFormat(stats.total_bots)} Bot
-                  {stats.total_bots === 1 ? "" : "s"}
-                </span>
-
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-xs">
-                  <Workflow size={12} className="text-emerald-300" />
-                  {numberFormat(stats.total_workflows || workflows.length)}{" "}
-                  Workflows
-                </span>
-
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/25 bg-emerald-500/20 px-3 py-1 text-[11px] font-bold text-emerald-100">
-                  <CheckCircle2 size={12} className="text-emerald-300" />
-                  {Number(summary.success_rate || 0).toFixed(1)}% Healthy
-                </span>
-              </div>
-            </div>
-
-            {/* Right Action Dock */}
-            <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
-              <button
-                type="button"
-                onClick={handleRefreshAll}
-                disabled={refreshing || loading}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-white/20 disabled:opacity-50"
-              >
-                <RefreshCw
-                  size={14}
-                  className={refreshing ? "animate-spin text-emerald-300" : ""}
-                />
-                Refresh
-              </button>
-
-              {canViewWorkflows && (
-                <Link
-                  to="/workflow-builder"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/30 bg-emerald-500/25 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-xs transition hover:bg-emerald-500/40"
-                >
-                  <Workflow size={14} />
-                  Workflow Builder
-                </Link>
-              )}
-
-              <Link
-                to="/message-logs"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-extrabold text-emerald-900 shadow-lg shadow-emerald-950/25 transition hover:bg-emerald-50"
-              >
-                <MessageCircle size={14} />
-                Message Logs
-                <ArrowRight size={13} />
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* ERROR ALERT */}
+        <div className="flex flex-1 flex-col justify-between space-y-6">
+          <div className="space-y-5">
+            {/* ERROR ALERT */}
         {error && (
           <div
             role="alert"
@@ -646,6 +952,253 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* If initial loading, show clean loading skeleton */}
+        {loading && whatsAppLoading ? (
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-100/80 bg-white p-8 shadow-sm">
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <RefreshCw className="mb-3 h-8 w-8 animate-spin text-emerald-600" />
+              <p className="text-sm font-bold text-slate-800">
+                Loading dashboard...
+              </p>
+            </div>
+          </div>
+        ) : isNewClient ? (
+          /* NEW CLIENT ONBOARDING: Keep ONLY the "Connect Your WhatsApp" section */
+          <section className="mt-2 space-y-6">
+            <WhatsAppConnectionStatus
+              status={whatsAppError ? "" : whatsAppAccount?.status || ""}
+              senderNumber={
+                whatsAppAccount?.sender_number ||
+                whatsAppAccount?.waba_id ||
+                null
+              }
+              loading={whatsAppLoading}
+              onRefresh={fetchWhatsAppStatus}
+              onConnectWhatsApp={handleConnectWhatsApp}
+            />
+
+            {/* Clean 3-Step Setup Roadmap */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-emerald-950/[0.02]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                  <Smartphone size={18} />
+                </div>
+                <div className="mt-3.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">
+                    Step 1
+                  </span>
+                  <h3 className="mt-0.5 text-sm font-bold text-slate-900">
+                    Connect WhatsApp Number
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Add your Meta Phone Number ID and WhatsApp Business Account (WABA) ID to connect your official sender number.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-emerald-950/[0.02]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                  <Bot size={18} />
+                </div>
+                <div className="mt-3.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700">
+                    Step 2
+                  </span>
+                  <h3 className="mt-0.5 text-sm font-bold text-slate-900">
+                    Design Bot Workflows
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Create conversational chatbot flows, keyword triggers, and interactive button menus in the visual builder.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-emerald-950/[0.02]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
+                  <Zap size={18} />
+                </div>
+                <div className="mt-3.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-700">
+                    Step 3
+                  </span>
+                  <h3 className="mt-0.5 text-sm font-bold text-slate-900">
+                    Unlock Live Analytics
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Once your bot processes incoming messages, 30-day activity pulse, trigger rankings, and conversation logs will appear.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : (
+          /* FULL DASHBOARD: For clients with connected WhatsApp and Super Admin */
+          <>
+            {/* GLOBAL DASHBOARD FILTER BAR */}
+        <section className="relative rounded-2xl border border-emerald-100/90 bg-white p-3.5 shadow-sm shadow-emerald-950/[0.03]">
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 opacity-90" />
+
+          {/* Top Row: Title on Left, Action Buttons on Right */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-700 shadow-2xs">
+                <SlidersHorizontal size={16} />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                    Global Dashboard Filter
+                  </h2>
+                  {isAnyFilterActive && (
+                    <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-extrabold text-emerald-700">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Filter dashboard metrics by WhatsApp account, workflow, and date range
+                </p>
+              </div>
+            </div>
+
+            {/* Right Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleRefreshAll}
+                disabled={refreshing || loading}
+                title="Refresh dashboard data"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={12}
+                  className={refreshing ? "animate-spin text-emerald-600" : ""}
+                />
+                Refresh
+              </button>
+
+              {canViewWorkflows && (
+                <Link
+                  to={buildFilterUrl("/workflow-builder", chartWorkflowId !== "all" ? { workflow_id: chartWorkflowId } : {})}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs transition hover:bg-emerald-100"
+                >
+                  <Workflow size={12} />
+                  Workflow Builder
+                </Link>
+              )}
+
+              <Link
+                to={buildFilterUrl("/message-logs")}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                <MessageCircle size={12} />
+                Message Logs
+                <ArrowRight size={11} />
+              </Link>
+            </div>
+          </div>
+
+          {/* Bottom Row: ALL THREE DROPDOWNS IN ONE CLEAN SINGLE HORIZONTAL LINE */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-3">
+            {/* WhatsApp Account Dropdown */}
+            <div className="relative flex-1 w-full sm:w-auto">
+              <Smartphone
+                size={13}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"
+              />
+              <select
+                value={chartAccountId}
+                onChange={(e) => handleChartAccountChange(e.target.value)}
+                aria-label="Filter dashboard by WhatsApp Account"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-7 text-xs font-bold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 shadow-2xs"
+              >
+                {(superAdmin || chartAccounts.length > 1) && (
+                  <option value="all">
+                    All WhatsApp Accounts {chartAccounts.length > 0 ? `(${chartAccounts.length})` : ""}
+                  </option>
+                )}
+                {chartAccounts.map((acc) => {
+                  const label =
+                    acc.name ||
+                    acc.business_name ||
+                    acc.sender_name ||
+                    acc.account_name ||
+                    `Account #${acc.id}`;
+                  const wfCount =
+                    acc.workflows_count ??
+                    (Array.isArray(acc.workflows) ? acc.workflows.length : null);
+                  return (
+                    <option key={acc.id} value={String(acc.id)}>
+                      {label} {wfCount !== null ? `(${wfCount} WF)` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Workflow Dropdown */}
+            <div className="relative flex-1 w-full sm:w-auto">
+              <Workflow
+                size={13}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"
+              />
+              <select
+                value={chartWorkflowId}
+                onChange={(e) => handleChartWorkflowChange(e.target.value)}
+                aria-label="Filter dashboard by Workflow"
+                disabled={availableWorkflows.length === 0 && chartAccountId !== "all"}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-7 text-xs font-bold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100 disabled:text-slate-400 shadow-2xs"
+              >
+                <option value="all">
+                  {chartAccountId !== "all"
+                    ? `All Workflows (${availableWorkflows.length})`
+                    : `All Workflows (${workflows.length})`}
+                </option>
+                {availableWorkflows.map((wf) => (
+                  <option key={wf.id} value={String(wf.id)}>
+                    {wf.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date Filter Dropdown */}
+            <div className="relative flex-1 w-full sm:w-auto">
+              <Calendar
+                size={13}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600"
+              />
+              <select
+                value={datePreset}
+                onChange={(e) => handleDatePresetChange(e.target.value)}
+                aria-label="Filter dashboard by Date"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-7 text-xs font-bold text-slate-700 outline-none transition hover:border-emerald-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 shadow-2xs"
+              >
+                <option value="all">All Time (Last 30D)</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="this_month">This Month</option>
+                <option value="last_month">Last Month</option>
+              </select>
+            </div>
+
+            {/* Reset All Button */}
+            {isAnyFilterActive && (
+              <button
+                type="button"
+                onClick={handleResetChartFilters}
+                title="Reset all filters"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100 hover:text-rose-800 shadow-2xs"
+              >
+                <X size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
+        </section>
+
         {/* ROW 1: 5 EMERALD-SPECTRUM KPI CARDS WITH AREA SPARKLINES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <PastelKpiCard
@@ -664,7 +1217,11 @@ export default function Dashboard() {
               8,
               Math.max(1, Number(stats.active_workflows || 1)),
             ]}
-            to={canViewWorkflows ? "/workflow-builder" : undefined}
+            to={
+              canViewWorkflows
+                ? buildFilterUrl("/workflow-builder", chartWorkflowId !== "all" ? { workflow_id: chartWorkflowId } : {})
+                : undefined
+            }
             loading={loading}
           />
 
@@ -672,23 +1229,27 @@ export default function Dashboard() {
             title="Total Conversations"
             value={stats.total_conversations}
             subtitle={`${numberFormat(stats.active_conversations)} active · ${numberFormat(stats.completed_conversations)} done`}
-            pill="All Sessions"
+            pill={datePreset !== "all" && datePreset !== "30d" ? "Filtered" : "All Sessions"}
             icon={MessageCircle}
             theme="teal"
             sparkline={sessionSparkline}
-            to="/message-logs"
+            to={buildFilterUrl("/message-logs")}
             loading={loading}
           />
 
           <PastelKpiCard
-            title="Messages Today"
-            value={stats.messages_today}
-            subtitle={`${numberFormat(stats.total_messages_30d)} in last 30 days`}
-            pill="Today"
+            title={datePreset !== "all" && datePreset !== "30d" ? "Messages" : "Messages Today"}
+            value={datePreset !== "all" && datePreset !== "30d" ? stats.total_messages_30d : stats.messages_today}
+            subtitle={
+              datePreset !== "all" && datePreset !== "30d"
+                ? `Messages for ${activeDateRangeText}`
+                : `${numberFormat(stats.total_messages_30d)} in last 30 days`
+            }
+            pill={datePreset !== "all" && datePreset !== "30d" ? "Filtered" : "Today"}
             icon={MessagesSquare}
             theme="green"
             sparkline={messageSparkline}
-            to="/message-logs"
+            to={buildFilterUrl("/message-logs", datePreset === "all" ? { period: "today" } : {})}
             loading={loading}
           />
 
@@ -700,6 +1261,7 @@ export default function Dashboard() {
             icon={Users}
             theme="cyan"
             sparkline={sessionSparkline}
+            to={buildFilterUrl("/message-logs")}
             loading={loading}
           />
 
@@ -707,31 +1269,49 @@ export default function Dashboard() {
             title="Workflow Executions"
             value={stats.workflow_executions}
             subtitle={`${Number(summary.success_rate || 0).toFixed(1)}% success rate`}
-            pill="This Month"
+            pill={datePreset !== "all" && datePreset !== "30d" ? "Filtered" : "This Month"}
             icon={Zap}
             theme="lime"
             sparkline={messageSparkline}
+            to={buildFilterUrl("/message-logs")}
             loading={loading}
           />
         </section>
 
-        {/* ROW 2: FULL-WIDTH 30 DAYS / 14 DAYS ACTIVITY PULSE CHART */}
-        <ThirtyDaysHitsChart
-          data={dashboard.daily_hits}
-          workflows={workflows}
-          selectedWorkflowId={chartWorkflowId}
-          onWorkflowChange={handleChartWorkflowChange}
-          loading={loading}
-        />
+            {/* ROW 2 & 3: CHARTS / ACTIVITY SECTION */}
+            {showDashboardCharts ? (
+              <>
+                {/* ROW 2: FULL-WIDTH 30 DAYS / 14 DAYS ACTIVITY PULSE CHART */}
+                <ThirtyDaysHitsChart
+                  data={dashboard.daily_hits}
+                  loading={loading}
+                />
 
-        {/* ROW 3: 2-COLUMN SPLIT ANALYTICS (INTERACTIVE DONUT + RANKED LEADERBOARD) */}
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <WorkflowInteractionDonutCard
-            breakdown={dashboard.workflow_breakdown}
-          />
+                {/* ROW 3: 2-COLUMN SPLIT ANALYTICS (INTERACTIVE DONUT + RANKED LEADERBOARD) */}
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                  <WorkflowInteractionDonutCard
+                    breakdown={dashboard.workflow_breakdown}
+                    accountId={chartAccountId}
+                    period={datePreset}
+                  />
 
-          <WorkflowTriggersSummaryCard items={dashboard.keywords_summary} />
-        </div>
+                  <WorkflowTriggersSummaryCard
+                    items={dashboard.keywords_summary}
+                    accountId={chartAccountId}
+                    period={datePreset}
+                  />
+                </div>
+              </>
+            ) : (
+              /* ONBOARDING & ACTIVATION HUB FOR APPROVED CLIENTS AWAITING FLOW */
+              <ClientSetupActivationCard
+                hasApprovedWhatsApp={hasApprovedWhatsApp}
+                hasWorkflowsCreated={hasWorkflowsCreated}
+                hasActiveTraffic={hasActiveTraffic}
+                whatsAppAccount={whatsAppAccount}
+                workflowCount={Number(stats.total_workflows || workflows.length || 0)}
+              />
+            )}
 
         {/* ROW 4: INTERACTIVE ACCOUNT → NUMBERED BOTS & WORKFLOWS EXPLORER */}
         {(canViewWhatsApp || canViewBots || canViewWorkflows) && (
@@ -969,22 +1549,26 @@ export default function Dashboard() {
             )}
           </div>
         )}
+      </>
+    )}
+          </div>
 
-        {/* FOOTER */}
-        <footer className="flex flex-col items-start justify-between gap-2 border-t border-emerald-100 pt-4 text-xs text-slate-400 sm:flex-row sm:items-center">
-          <p className="inline-flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-              <ShieldCheck size={14} />
-            </span>
-            <span>WABA Automation · Admin Console</span>
-          </p>
-
-          {dashboard.generated_at && (
-            <p className="font-medium text-slate-500">
-              Last synced: {formatDate(dashboard.generated_at)}
+          {/* FOOTER */}
+          <footer className="mt-auto flex flex-col items-start justify-between gap-2 border-t border-emerald-100 pt-6 text-xs text-slate-400 sm:flex-row sm:items-center">
+            <p className="inline-flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                <ShieldCheck size={14} />
+              </span>
+              <span>WABA Automation · Admin Console</span>
             </p>
-          )}
-        </footer>
+
+            {dashboard.generated_at && (
+              <p className="font-medium text-slate-500">
+                Last synced: {formatDate(dashboard.generated_at)}
+              </p>
+            )}
+          </footer>
+        </div>
       </DashboardErrorBoundary>
     </div>
   );

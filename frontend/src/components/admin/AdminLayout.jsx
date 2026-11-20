@@ -99,7 +99,7 @@ const AdminLayout = () => {
       </aside>
 
       {/* MAIN AREA */}
-      <div className="min-h-screen min-w-0 lg:ml-64">
+      <div className="flex min-h-screen min-w-0 flex-col lg:ml-64">
 
         {/* STICKY HEADER */}
         <div className="sticky top-0 z-30">
@@ -107,7 +107,7 @@ const AdminLayout = () => {
         </div>
 
         {/* PAGE CONTENT */}
-        <main className="min-w-0 p-3 sm:p-4 md:p-6">
+        <main className="flex flex-1 flex-col min-w-0 p-3 sm:p-4 md:p-6">
           <Outlet />
         </main>
 

@@ -81,8 +81,18 @@ function getStatusPillClass(status) {
 export default function MessageLogs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialClientParam = searchParams.get("client_id") || "";
-  const initialAccountParam = searchParams.get("account_id") || "";
+  const initialAccountParam =
+    searchParams.get("account_id") ||
+    searchParams.get("whatsapp_account_id") ||
+    "";
   const initialWorkflowParam = searchParams.get("workflow_id") || "all";
+  const initialPeriodParam =
+    searchParams.get("period") || searchParams.get("date_preset") || "all";
+  const initialFromParam =
+    searchParams.get("from") || searchParams.get("start_date") || "";
+  const initialToParam =
+    searchParams.get("to") || searchParams.get("end_date") || "";
+  const initialStatusParam = searchParams.get("status") || "all";
 
   const [currentUser] = useState(() => getStoredUser());
   const superAdmin = useMemo(() => isSuperAdmin(currentUser), [currentUser]);
@@ -97,10 +107,34 @@ export default function MessageLogs() {
   const [clientId, setClientId] = useState(initialClientParam);
   const [accountId, setAccountId] = useState(initialAccountParam);
   const [workflowId, setWorkflowId] = useState(initialWorkflowParam);
-  const [period, setPeriod] = useState("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [period, setPeriod] = useState(
+    initialFromParam && initialToParam ? "custom" : initialPeriodParam
+  );
+  const [fromDate, setFromDate] = useState(initialFromParam);
+  const [toDate, setToDate] = useState(initialToParam);
+  const [statusFilter, setStatusFilter] = useState(initialStatusParam);
+
+  // Sync state if URL search params change dynamically
+  useEffect(() => {
+    const acc =
+      searchParams.get("account_id") ||
+      searchParams.get("whatsapp_account_id");
+    const wf = searchParams.get("workflow_id");
+    const pr = searchParams.get("period") || searchParams.get("date_preset");
+    const from = searchParams.get("from") || searchParams.get("start_date");
+    const to = searchParams.get("to") || searchParams.get("end_date");
+    const st = searchParams.get("status");
+    const cl = searchParams.get("client_id");
+
+    if (acc !== null && acc !== undefined && acc !== "") setAccountId(acc);
+    if (wf !== null && wf !== undefined && wf !== "") setWorkflowId(wf);
+    if (pr !== null && pr !== undefined && pr !== "") setPeriod(pr);
+    if (from !== null && from !== undefined && from !== "") setFromDate(from);
+    if (to !== null && to !== undefined && to !== "") setToDate(to);
+    if (from && to && (!pr || pr === "all")) setPeriod("custom");
+    if (st !== null && st !== undefined && st !== "") setStatusFilter(st);
+    if (cl !== null && cl !== undefined && cl !== "") setClientId(cl);
+  }, [searchParams]);
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("");
@@ -690,7 +724,9 @@ export default function MessageLogs() {
                   <option value="today">Today</option>
                   <option value="yesterday">Yesterday</option>
                   <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
                   <option value="month">This Month</option>
+                  <option value="last_month">Last Month</option>
                   <option value="all">All Time</option>
                   <option value="custom">Custom Range</option>
                 </select>

@@ -27,6 +27,13 @@ import {
   Receipt,
   TrendingUp,
   Crown,
+  Phone,
+  MessageSquare,
+  HelpCircle,
+  Info,
+  Percent,
+  Calculator,
+  Rocket,
 } from "lucide-react";
 
 import { isSuperAdmin } from "../utils/permission";
@@ -38,11 +45,12 @@ const API = (
 const DEFAULT_PLANS = [
   {
     id: 1,
-    name: "Free Trial Pack",
+    name: "100 for Free Trial",
     slug: "trial-100",
     selling_price: 100,
     message_credits: 100,
     validity_days: null,
+    is_free: true,
     description: "Free ₹100 Welcome credits for testing WhatsApp workflows & messages.",
   },
   {
@@ -62,6 +70,15 @@ const DEFAULT_PLANS = [
     message_credits: 10000,
     validity_days: null,
     description: "Power pack for growing teams with higher message volumes.",
+  },
+  {
+    id: 5,
+    name: "Scale & Growth Pack",
+    slug: "scale-50000",
+    selling_price: 50000,
+    message_credits: 50000,
+    validity_days: null,
+    description: "High volume pack for scaling businesses with fast automation workflows and priority delivery.",
   },
   {
     id: 4,
@@ -125,9 +142,11 @@ const DASHBOARD_CARD_THEMES = {
 };
 
 const getPlanTierKey = (plan) => {
-  if (plan?.slug === "trial-100" || plan?.id === 1) return "trial";
-  if (plan?.slug === "business-10000" || plan?.id === 3) return "business";
-  if (plan?.slug === "enterprise-100000" || plan?.id === 4) return "enterprise";
+  if (plan?.slug === "trial-100" || plan?.id === 1 || Number(plan?.selling_price) === 100) return "trial";
+  if (plan?.slug === "starter-1000" || plan?.id === 2 || Number(plan?.selling_price) === 1000) return "starter";
+  if (plan?.slug === "business-10000" || plan?.id === 3 || Number(plan?.selling_price) === 10000) return "business";
+  if (plan?.slug === "scale-50000" || plan?.id === 5 || Number(plan?.selling_price) === 50000) return "scale";
+  if (plan?.slug === "enterprise-100000" || plan?.id === 4 || Number(plan?.selling_price) === 100000) return "enterprise";
   return "starter";
 };
 
@@ -135,6 +154,7 @@ const PLAN_TIER_META = {
   trial: { pillLabel: "Free Trial", themeKey: "teal", icon: Sparkles },
   starter: { pillLabel: "Starter", themeKey: "cyan", icon: Zap },
   business: { pillLabel: "Most Popular", themeKey: "emerald", icon: TrendingUp },
+  scale: { pillLabel: "Scale & Growth", themeKey: "green", icon: Rocket },
   enterprise: { pillLabel: "High Volume", themeKey: "lime", icon: Crown },
 };
 
@@ -291,6 +311,25 @@ export default function Plans() {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [recharging, setRecharging] = useState(false);
 
+  // Dynamic Pricing, Taxes & Universal WhatsApp Rates
+  const [pricingConfig, setPricingConfig] = useState({
+    platform_name: "G Tech Web Marketing",
+    platform_url: "https://www.gtechwebmarketing.com",
+    platform_fee_percent: 2.0,
+    platform_fee_fixed: 30.0,
+    gst_percent: 18.0,
+    support_phone: "+91 98765 43210",
+    support_email: "support@wababot.com",
+    rate_utility: 0.15,
+    rate_marketing: 0.95,
+    rate_service: 0.35,
+    rate_authentication: 0.15,
+  });
+
+  // Client Contact Support Modal
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactingPlan, setContactingPlan] = useState(null);
+
   // Admin Rate Setting Modal
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [targetClient, setTargetClient] = useState(null);
@@ -327,6 +366,7 @@ export default function Plans() {
         axios.get(`${API}/user-wallet`, headers).catch(() => ({ data: {} })),
         axios.get(`${API}/plans`, headers).catch(() => ({ data: {} })),
         axios.get(`${API}/user-wallet/transactions?per_page=20`, headers).catch(() => ({ data: {} })),
+        axios.get(`${API}/pricing-config`, headers).catch(() => ({ data: {} })),
       ];
 
       if (isAdmin) {
@@ -337,7 +377,7 @@ export default function Plans() {
       }
 
       const results = await Promise.all(promises);
-      const [walletRes, plansRes, txRes, clientsRes, notifRes] = results;
+      const [walletRes, plansRes, txRes, pricingRes, clientsRes, notifRes] = results;
       
       console.log("ACTIVE SUBSCRIPTION:", walletRes.data?.active_subscription);
       console.log("ACTIVE PLAN:", walletRes.data?.active_subscription?.plan);
@@ -347,6 +387,13 @@ export default function Plans() {
       }
       if (plansRes.data?.success && Array.isArray(plansRes.data.plans) && plansRes.data.plans.length > 0) {
         setPlans(plansRes.data.plans);
+      }
+      const pConfig = pricingRes?.data?.data || pricingRes?.data?.config;
+      if (pricingRes?.data?.success && pConfig) {
+        setPricingConfig((prev) => ({
+          ...prev,
+          ...pConfig,
+        }));
       }
       if (txRes.data?.success) {
         const txList = txRes.data.data?.data || txRes.data.data || [];
@@ -417,9 +464,32 @@ export default function Plans() {
     setFeedback(null);
   };
 
+  const handleOpenContact = (plan) => {
+    setContactingPlan(plan);
+    setContactModalOpen(true);
+  };
+
+  const getPlanPricing = useCallback((plan) => {
+    if (!plan) return { basePrice: 0, fee: 0, gst: 0, total: 0, feeFixed: 30, gstPct: 18, isFree: false };
+    const basePrice = Number(plan.selling_price) || 0;
+    const isFree = plan.id === 1 || basePrice === 0;
+    if (isFree) {
+      return { basePrice: 0, fee: 0, gst: 0, total: 0, feeFixed: 0, gstPct: 0, isFree: true };
+    }
+    // Fixed flat platform charge (default ₹30 flat regardless of plan size)
+    const feeFixed = Number(pricingConfig.platform_fee_fixed != null ? pricingConfig.platform_fee_fixed : 30.0);
+    const gstPct = Number(pricingConfig.gst_percent != null ? pricingConfig.gst_percent : 18.0);
+    const fee = Math.round(feeFixed * 100) / 100;
+    // GST (default 18%) applied on base plan recharge amount
+    const gst = Math.round((basePrice * gstPct / 100) * 100) / 100;
+    const total = Math.round((basePrice + fee + gst) * 100) / 100;
+    return { basePrice, fee, gst, total, feeFixed, gstPct, isFree: false };
+  }, [pricingConfig]);
+
   const handleConfirmRecharge = async () => {
     if (!selectedPlan) return;
 
+    const pricing = getPlanPricing(selectedPlan);
     const isFreeTrial = selectedPlan.id === 1 || Number(selectedPlan.selling_price) === 0;
 
     // A. FREE TRIAL ACTIVATION
@@ -463,19 +533,22 @@ export default function Plans() {
       setRecharging(true);
       setFeedback(null);
 
+      const totalPayable = pricing.total;
+      const basePrice = pricing.basePrice;
+
       // 1. Ensure Razorpay checkout script is loaded
       const isLoaded = await loadRazorpaySdk();
       if (!isLoaded && !window.Razorpay) {
         throw new Error("Unable to load Razorpay payment SDK. Please check your internet connection.");
       }
 
-      // 2. Create order on backend
+      // 2. Create order on backend for total amount (base + platform fee + GST)
       const orderRes = await axios.post(
         `${API}/razorpay/create-order`,
         {
           plan_id: selectedPlan.id,
           plan_name: selectedPlan.name,
-          amount: selectedPlan.selling_price,
+          amount: totalPayable,
         },
         getHeaders()
       );
@@ -496,7 +569,7 @@ export default function Plans() {
         amount: orderData.amount, // in paise
         currency: orderData.currency || "INR",
         name: "WABA Bot Platform",
-        description: `${selectedPlan.name} Subscription`,
+        description: `${selectedPlan.name} Subscription (Credits: ₹${basePrice})`,
         image: "/WABA favicon.png",
         order_id: orderData.order_id,
         handler: async function (paymentResponse) {
@@ -507,7 +580,7 @@ export default function Plans() {
               text: "Payment received! Verifying transaction signature with bank...",
             });
 
-            // 4. Verify payment on backend
+            // 4. Verify payment on backend, passing total amount and credits to grant
             const verifyRes = await axios.post(
               `${API}/razorpay/verify-payment`,
               {
@@ -516,7 +589,8 @@ export default function Plans() {
                 razorpay_signature: paymentResponse.razorpay_signature,
                 plan_id: selectedPlan.id,
                 plan_name: selectedPlan.name,
-                amount: selectedPlan.selling_price,
+                amount: totalPayable,
+                credits: basePrice,
               },
               getHeaders()
             );
@@ -526,7 +600,7 @@ export default function Plans() {
                 type: "success",
                 text:
                   verifyRes.data.message ||
-                  `Payment of ₹${Number(selectedPlan.selling_price).toLocaleString("en-IN")} Successful! ${selectedPlan.name} is now active.`,
+                  `Payment of ₹${Number(totalPayable).toLocaleString("en-IN")} Successful! ₹${Number(basePrice).toLocaleString("en-IN")} added to wallet. ${selectedPlan.name} is now active.`,
               });
               setRechargeModalOpen(false);
               fetchData();
@@ -722,20 +796,21 @@ export default function Plans() {
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;
       if (rechargeModalOpen && !recharging) setRechargeModalOpen(false);
+      if (contactModalOpen) setContactModalOpen(false);
       if (rateModalOpen && !savingRate) setRateModalOpen(false);
       if (adjustModalOpen && !savingAdjustment) setAdjustModalOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [rechargeModalOpen, recharging, rateModalOpen, savingRate, adjustModalOpen, savingAdjustment]);
+  }, [rechargeModalOpen, recharging, contactModalOpen, rateModalOpen, savingRate, adjustModalOpen, savingAdjustment]);
 
   const activeRate = Number(wallet.rate) > 0 ? Number(wallet.rate) : 0.5;
   const estimatedSpend = Math.round(estimatedMessages * activeRate * 100) / 100;
 
   const recommendedPlan = useMemo(() => {
-    const sorted = [...(plans || [])].sort(
-      (a, b) => Number(a.selling_price || 0) - Number(b.selling_price || 0)
-    );
+    const sorted = [...(plans || [])]
+      .filter((p) => p.id !== 1 && Number(p.selling_price || 0) >= 1000)
+      .sort((a, b) => Number(a.selling_price || 0) - Number(b.selling_price || 0));
     if (sorted.length === 0) return null;
     return (
       sorted.find((p) => Number(p.selling_price || 0) >= estimatedSpend) ||
@@ -1289,21 +1364,42 @@ export default function Plans() {
                 <DashboardMetricCard
                   title="Current Active Plan"
                   value={
-                    wallet?.active_subscription?.plan?.name ||
-                    wallet?.active_plan_name ||
-                    "No Active Plan"
+                    wallet?.active_subscription?.package_plan_id === 1 ||
+                    wallet?.active_plan_id === 1 ||
+                    wallet?.active_plan_name === "Free Trial Pack" ||
+                    wallet?.active_plan_name?.toLowerCase().includes("trial") ||
+                    (Number(wallet.remaining_balance ?? wallet.balance) === 100 && !wallet.active_subscription)
+                      ? "100 for Free Trial"
+                      : wallet?.active_subscription?.plan?.name ||
+                        wallet?.active_plan_name ||
+                        "No Active Plan"
                   }
                   subtitle={
-                    wallet.active_subscription
-                      ? wallet.active_subscription.expires_at
-                        ? `Valid until ${new Date(
-                            wallet.active_subscription.expires_at
-                          ).toLocaleDateString("en-IN")}`
-                        : "Lifetime validity · Per message"
-                      : "Select a plan below to activate"
+                    wallet?.active_subscription?.package_plan_id === 1 ||
+                    wallet?.active_plan_id === 1 ||
+                    wallet?.active_plan_name === "Free Trial Pack" ||
+                    wallet?.active_plan_name?.toLowerCase().includes("trial") ||
+                    Number(wallet.remaining_balance ?? wallet.balance) === 100
+                      ? "Welcome free trial credits active in wallet"
+                      : wallet.active_subscription
+                        ? wallet.active_subscription.expires_at
+                          ? `Valid until ${new Date(
+                              wallet.active_subscription.expires_at
+                            ).toLocaleDateString("en-IN")}`
+                          : "Lifetime validity · Per message"
+                        : "Select a plan below to activate"
                   }
-                  pill={wallet.active_subscription ? "Active" : "No Plan"}
-                  metaRight={wallet.active_subscription ? "Lifetime" : "Choose tier"}
+                  pill={
+                    wallet.active_subscription || Number(wallet.remaining_balance ?? wallet.balance) > 0
+                      ? "Active"
+                      : "No Plan"
+                  }
+                  metaRight={
+                    wallet?.active_subscription?.package_plan_id === 1 ||
+                    Number(wallet.remaining_balance ?? wallet.balance) === 100
+                      ? "Free Trial"
+                      : wallet.active_subscription ? "Lifetime" : "Choose tier"
+                  }
                   icon={Sparkles}
                   theme="green"
                   loading={loading}
@@ -1509,8 +1605,43 @@ export default function Plans() {
                   </div>
                 </div>
 
+                {/* Free Trial Banner for Clients without Trial */}
+                {!isAdmin && !wallet.has_used_trial && Number(wallet.balance ?? 0) === 0 && (
+                  <div className="mb-6 relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50/50 to-white p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-2xs">
+                        <Sparkles size={20} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-slate-900">100 for Free Trial</h4>
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">
+                            Welcome Gift
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          Claim ₹100 testing credits directly into your wallet to test WhatsApp workflows and automated messages without any payment.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRecharge(plans.find((p) => p.id === 1) || DEFAULT_PLANS[0])}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-600/20 hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition"
+                    >
+                      <Zap size={14} />
+                      <span>Claim ₹100 Free Trial</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {(plans || []).map((plan) => {
+                  {(plans || [])
+                    .filter((plan) => {
+                      if (isAdmin) return true;
+                      return plan.id !== 1 && plan.slug !== "trial-100" && Number(plan.selling_price) > 100;
+                    })
+                    .map((plan) => {
                     const tierKey = getPlanTierKey(plan);
                     const meta = PLAN_TIER_META[tierKey] || PLAN_TIER_META.starter;
                     const theme =
@@ -1730,33 +1861,35 @@ export default function Plans() {
                               <Users className="w-3.5 h-3.5" />
                               <span>View Subscribed Clients ({subCount})</span>
                             </button>
+                          ) : isTrialClaimed ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full rounded-xl py-2.5 px-4 text-center text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                            >
+                              <span>Trial Already Used</span>
+                            </button>
+                          ) : isTrial ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRecharge(plan)}
+                              className={`w-full cursor-pointer inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-4 text-center text-xs font-bold transition-all duration-200 shadow-sm ${theme.cta}`}
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                              <span>Claim Free Trial</span>
+                            </button>
                           ) : (
                             <button
                               type="button"
-                              disabled={isTrialClaimed}
                               onClick={() => handleOpenRecharge(plan)}
-                              className={`w-full inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-4 text-center text-xs font-bold transition-all duration-200 ${
-                                isTrialClaimed
-                                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-                                  : `cursor-pointer ${
-                                      isActivePlan || isBusiness
-                                        ? DASHBOARD_CARD_THEMES.emerald.cta
-                                        : theme.cta
-                                    }`
+                              className={`w-full cursor-pointer inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-4 text-center text-xs font-bold transition-all duration-200 shadow-sm ${
+                                isActivePlan || isBusiness
+                                  ? DASHBOARD_CARD_THEMES.emerald.cta
+                                  : theme.cta
                               }`}
                             >
-                              <span>
-                                {isTrialClaimed
-                                  ? "Trial Already Used"
-                                  : isActivePlan
-                                  ? "Top-up / Renew Plan"
-                                  : isTrial
-                                  ? "Claim ₹100 Free Trial"
-                                  : `Activate ₹${Number(plan.selling_price).toLocaleString("en-IN")} Plan`}
-                              </span>
-                              {!isTrialClaimed && (
-                                <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
-                              )}
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>Pay Now</span>
                             </button>
                           )}
                         </div>
@@ -1916,106 +2049,353 @@ export default function Plans() {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL 1: CONFIRM PLAN RECHARGE                            */}
+      {/* MODAL 1: RECHARGE ESTIMATE & TAX BREAKDOWN (RAZORPAY)     */}
       {/* ========================================================= */}
-      {rechargeModalOpen && selectedPlan && (
+      {rechargeModalOpen && selectedPlan && (() => {
+        const pricing = getPlanPricing(selectedPlan);
+        const isFree = pricing.isFree;
+        const todayFormatted = new Date().toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+        const estimateRef = `EST-${selectedPlan.id}-${Date.now().toString().slice(-5)}`;
+
+        return (
+          <div
+            onClick={() => !recharging && setRechargeModalOpen(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="modal-pop-in w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-slate-200 my-8"
+            >
+              {/* Header with official G Tech Logo & Proforma Estimate Badge */}
+              <div className="pb-4 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl p-1 bg-white border border-slate-100 shadow-2xs">
+                    <img
+                      src="/gtech-logo.png"
+                      alt={pricingConfig.platform_name || "G Tech Web Marketing"}
+                      className="h-10 w-auto max-w-[170px] object-contain"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src =
+                          "https://www.gtechwebmarketing.com/themes/apexa/images/logo/gtech-logo.png";
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                      Recharge Estimate
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {pricingConfig.platform_name || "G Tech Web Marketing"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-flex items-center rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                    Proforma Estimate
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Close modal"
+                    disabled={recharging}
+                    onClick={() => setRechargeModalOpen(false)}
+                    className="cursor-pointer rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition disabled:opacity-40"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {isFree ? (
+                /* Free Trial simple confirm */
+                <div className="mt-5 space-y-4">
+                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center">
+                    <Crown className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                    <h4 className="text-sm font-bold text-emerald-950">
+                      Activate ₹100 Free Welcome Credits
+                    </h4>
+                    <p className="text-xs text-emerald-800/80 mt-1">
+                      No card required. Instantly receive ₹100 credits in your wallet to explore chatbot workflows and automated messaging.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Paid Plan Itemized Estimate */
+                <div className="mt-4 space-y-3.5 text-xs">
+                  {/* Metadata Bar */}
+                  <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
+                    <div>
+                      <span className="text-slate-400">Estimate Ref: </span>
+                      <span className="font-mono font-bold text-slate-700">{estimateRef}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Date: </span>
+                      <span className="font-semibold text-slate-700">{todayFormatted}</span>
+                    </div>
+                  </div>
+
+                  {/* Itemized Invoice Box */}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
+                      <span className="font-bold uppercase tracking-wider text-[11px] text-slate-500">
+                        Invoice Item / Description
+                      </span>
+                      <span className="font-bold uppercase tracking-wider text-[11px] text-slate-500">
+                        Amount (₹)
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 text-slate-700">
+                      <div>
+                        <span className="font-bold text-slate-900">{selectedPlan.name} (Base Plan)</span>
+                        <p className="text-[11px] text-emerald-700 font-medium">100% credited directly into your wallet</p>
+                      </div>
+                      <span className="font-bold text-slate-900 text-sm tabular-nums">
+                        ₹{pricing.basePrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-0.5 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <span>Platform Charges</span>
+                        <span className="rounded-md bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                          Fixed
+                        </span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-slate-800">
+                        +₹{pricing.fee.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-0.5 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <span>GST Tax</span>
+                        <span className="rounded-md bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                          {pricing.gstPct}%
+                        </span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-slate-800">
+                        +₹{pricing.gst.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Total Highlight */}
+                    <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                          Total Payable Amount
+                        </span>
+                        <p className="text-[10px] text-slate-400">Inclusive of GST &amp; platform processing</p>
+                      </div>
+                      <span className="text-xl font-black text-emerald-700 tabular-nums">
+                        ₹{pricing.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Wallet Balance Impact */}
+                  <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-white p-3.5">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>Current Wallet Balance</span>
+                      <span className="font-bold tabular-nums">{formatCurrency(wallet.balance)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                      <span className="text-emerald-700 font-semibold">+ Net Recharge Credits Added</span>
+                      <span className="font-bold text-emerald-700 tabular-nums">
+                        +₹{pricing.basePrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 flex items-center justify-between text-sm text-emerald-950 font-bold">
+                      <span>New Estimated Balance</span>
+                      <span className="font-black text-emerald-800 tabular-nums">
+                        ₹{(Number(wallet.balance) + pricing.basePrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Support Contact Banner (From Admin Platform Settings) */}
+                  <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>
+                        Need help or custom invoice?{" "}
+                        <strong className="text-slate-800">
+                          {pricingConfig.support_phone || "+91 98765 43210"}
+                        </strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRechargeModalOpen(false);
+                        handleOpenContact(selectedPlan);
+                      }}
+                      className="font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                    >
+                      Contact Us
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-5 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={recharging}
+                  onClick={() => setRechargeModalOpen(false)}
+                  className="flex-1 cursor-pointer py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={recharging}
+                  onClick={handleConfirmRecharge}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold hover:from-emerald-700 hover:to-teal-700 transition shadow-md shadow-emerald-700/20 disabled:opacity-50 cursor-pointer"
+                >
+                  {recharging ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : isFree ? (
+                    <span>Claim Free Trial</span>
+                  ) : (
+                    <>
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Pay ₹{pricing.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-3.5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Secured by <strong>Razorpay</strong> · UPI, Cards &amp; NetBanking</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========================================================= */}
+      {/* MODAL: CONTACT SALES & SUPPORT                            */}
+      {/* ========================================================= */}
+      {contactModalOpen && contactingPlan && (
         <div
-          onClick={() => !recharging && setRechargeModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 backdrop-blur-xs p-4"
+          onClick={() => setContactModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className="modal-pop-in w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-slate-200"
           >
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
-                  <CreditCard className="w-4 h-4" />
-                </span>
-                Confirm Plan Activation
-              </h3>
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl p-1 bg-white border border-slate-100 shadow-2xs">
+                  <img
+                    src="/gtech-logo.png"
+                    alt={pricingConfig.platform_name || "G Tech Web Marketing"}
+                    className="h-8 w-auto max-w-[140px] object-contain"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src =
+                        "https://www.gtechwebmarketing.com/themes/apexa/images/logo/gtech-logo.png";
+                    }}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                    Contact Support &amp; Sales
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Assistance for {contactingPlan.name}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 aria-label="Close modal"
-                disabled={recharging}
-                onClick={() => setRechargeModalOpen(false)}
-                className="cursor-pointer rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition disabled:opacity-40"
+                onClick={() => setContactModalOpen(false)}
+                className="cursor-pointer rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Plan Selected</span>
-                <span className="font-extrabold text-slate-900">{selectedPlan.name}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Recharge Credits</span>
-                <span className="font-extrabold text-emerald-700 text-base tabular-nums">
-                  ₹{Number(selectedPlan.selling_price).toLocaleString("en-IN")}
-                </span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Est. Messages Added</span>
-                <span className="font-bold text-slate-800 tabular-nums">
-                  +{Math.floor(Number(selectedPlan.selling_price || 0) / activeRate).toLocaleString("en-IN")} msgs
-                </span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Usage Validity</span>
-                <span className="font-semibold text-emerald-700">
-                  Deducted per message (No expiry)
-                </span>
+            <div className="mt-5 space-y-4 text-xs">
+              <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 to-teal-50/30 p-4">
+                <p className="text-slate-600 leading-relaxed">
+                  Have questions about recharge billing, custom invoice requirements, or enterprise volume packages? Reach out directly to our support team.
+                </p>
               </div>
 
-              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 p-3.5 mt-2">
-                <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span>Current Balance</span>
-                  <span className="font-bold tabular-nums">{formatCurrency(wallet.balance)}</span>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-sm text-emerald-900">
-                  <span className="font-bold">New Estimated Balance</span>
-                  <span className="font-extrabold tabular-nums">
-                    {formatCurrency(Number(wallet.balance) + Number(selectedPlan.selling_price))}
+              {/* Phone display */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Support Hotline
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                    Direct Line
                   </span>
                 </div>
+                <p className="text-xl font-black text-slate-900 tracking-wide">
+                  {pricingConfig.support_phone || "+91 98765 43210"}
+                </p>
+                {pricingConfig.support_email && (
+                  <p className="text-xs text-slate-500">
+                    Email: <span className="font-semibold text-slate-700">{pricingConfig.support_email}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Quick Actions */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {(() => {
+                  const rawPhone = (pricingConfig.support_phone || "+91 98765 43210").replace(/[^0-9]/g, "");
+                  const waText = encodeURIComponent(`Hello, I need assistance with ${contactingPlan.name} (Plan ID: ${contactingPlan.id})`);
+                  const waUrl = `https://wa.me/${rawPhone}?text=${waText}`;
+                  const telUrl = `tel:${rawPhone}`;
+
+                  return (
+                    <>
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-md shadow-emerald-700/20 cursor-pointer text-center"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Chat on WhatsApp</span>
+                      </a>
+                      <a
+                        href={telUrl}
+                        className="inline-flex items-center justify-center gap-2 py-3 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs transition shadow-2xs cursor-pointer text-center"
+                      >
+                        <Phone className="w-4 h-4 text-emerald-600" />
+                        <span>Call Support</span>
+                      </a>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-3">
+            <div className="mt-5 pt-3 border-t border-slate-100 text-center">
               <button
                 type="button"
-                disabled={recharging}
-                onClick={() => setRechargeModalOpen(false)}
-                className="flex-1 cursor-pointer py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                onClick={() => setContactModalOpen(false)}
+                className="w-full cursor-pointer py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
               >
-                Cancel
+                Close
               </button>
-              <button
-                type="button"
-                disabled={recharging}
-                onClick={handleConfirmRecharge}
-                className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold hover:from-emerald-700 hover:to-teal-700 transition shadow-md shadow-emerald-700/20 disabled:opacity-50 cursor-pointer"
-              >
-                {recharging ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Processing Payment...</span>
-                  </>
-                ) : selectedPlan.id === 1 || Number(selectedPlan.selling_price) === 0 ? (
-                  <span>Claim Free Trial</span>
-                ) : (
-                  <>
-                    <CreditCard className="w-3.5 h-3.5" />
-                    <span>Pay ₹{Number(selectedPlan.selling_price).toLocaleString("en-IN")}</span>
-                  </>
-                )}
-              </button>
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Secured by <strong>Razorpay</strong> · UPI, Cards & NetBanking</span>
             </div>
           </div>
         </div>

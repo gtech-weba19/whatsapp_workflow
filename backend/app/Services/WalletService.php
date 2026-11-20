@@ -146,9 +146,10 @@ class WalletService
             : null;
 
         $fallbackPlanNames = [
-            1 => 'Free Trial Pack',
+            1 => '100 for Free Trial',
             2 => 'Starter Pack',
             3 => 'Business Growth Pack',
+            5 => 'Scale & Growth Pack',
             4 => 'Enterprise Volume Pack',
         ];
 

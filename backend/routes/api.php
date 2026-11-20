@@ -95,12 +95,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user-wallet', [WalletBillingController::class, 'getWallet']);
     Route::get('/user-wallet/transactions', [WalletBillingController::class, 'getTransactions']);
     Route::get('/plans', [WalletBillingController::class, 'getPlans']);
+    Route::get('/pricing-config', [AdminPlatformSettingController::class, 'pricingConfig']);
     Route::post('/plans/recharge', [WalletBillingController::class, 'rechargePlan']);
     Route::get('/admin/client-subscriptions', [WalletBillingController::class, 'adminGetClients']);
     Route::post('/admin/set-user-rate', [WalletBillingController::class, 'adminSetUserRate']);
     Route::post('/admin/adjust-user-wallet', [WalletBillingController::class, 'adminAdjustUserWallet']);
     Route::get('/admin/notifications', [WalletBillingController::class, 'getAdminNotifications']);
-    Route::post('/admin/notifications/{id}/read', [WalletBillingController::class, 'markNotificationRead'])->whereNumber('id');
+    Route::post('/admin/notifications/{id}/read', [WalletBillingController::class, 'markNotificationRead']);
     Route::post('/admin/notifications/read-all', [WalletBillingController::class, 'markAllNotificationsRead']);
 
 

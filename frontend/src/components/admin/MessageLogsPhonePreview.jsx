@@ -19,6 +19,7 @@ import {
   Loader2,
   Download,
   ShieldCheck,
+  MapPin,
 } from "lucide-react";
 
 function getInitials(name, mobile) {
@@ -368,6 +369,23 @@ export default function MessageLogsPhonePreview({
 
                         {/* Media */}
                         <MediaAttachment media={msg.media} />
+
+                        {/* Location Pin */}
+                        {(msg.type === "location" || msg.message_type === "location") && (
+                          <div className="mb-1.5 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-2 text-slate-800">
+                            <MapPin size={18} className="mt-0.5 shrink-0 text-[#008069]" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-bold text-slate-900 truncate">
+                                {msg.location_name || msg.name || "Location"}
+                              </p>
+                              {(msg.address || msg.location_address) && (
+                                <p className="mt-0.5 text-[10px] text-slate-600 line-clamp-2">
+                                  {msg.address || msg.location_address}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Main Text */}
                         {msg.display_text && (

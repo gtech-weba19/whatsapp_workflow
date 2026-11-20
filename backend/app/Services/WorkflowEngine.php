@@ -2726,6 +2726,74 @@ if ($type === 'start') {
         }
     }
 }
+elseif ($type === 'location') {
+
+    $lat = (float) ($cfg['latitude'] ?? $cfg['lat'] ?? 0);
+    $lng = (float) ($cfg['longitude'] ?? $cfg['lng'] ?? 0);
+    $locName = $this->resolve(
+        (string) ($cfg['name'] ?? $cfg['locationName'] ?? 'Location'),
+        $session->variables ?? []
+    );
+    $locAddress = $this->resolve(
+        (string) ($cfg['address'] ?? ''),
+        $session->variables ?? []
+    );
+
+    $next = $this->nextNode($workflow, $nodeId);
+
+    if ($lat != 0.0 || $lng != 0.0) {
+
+        try {
+
+            $output = $this->whatsapp->sendLocation(
+                $session->user_identifier,
+                $lat,
+                $lng,
+                $locName,
+                $locAddress
+            );
+
+            $this->saveOutbound(
+                $session,
+                'location',
+                trim("$locName ($locAddress)"),
+                $output,
+                $next ? [
+                    'workflow_id' => $workflow->id,
+                    'next_node_id' => $next,
+                    'input' => $input,
+                ] : null
+            );
+
+            $session->update([
+                'current_node_id' => $nodeId,
+                'status' => $next ? 'waiting' : 'completed',
+                'last_message_at' => now(),
+            ]);
+
+        } catch (\Throwable $e) {
+
+            \Log::error('LOCATION NODE SEND FAILED', [
+                'workflow_id' => $workflow->id,
+                'node_id' => $nodeId,
+                'session_id' => $session->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    } else {
+        if ($next) {
+            $this->goToNode($workflow, $session, $next, $input);
+        } else {
+            $session->update([
+                'current_node_id' => $nodeId,
+                'status' => 'completed',
+                'last_message_at' => now(),
+            ]);
+        }
+    }
+}
 elseif ($type === 'menu') {
 
     /*

@@ -35,8 +35,7 @@ import {
   Scissors,
     PanelRightClose,
   PanelRightOpen,
-  
-
+  MapPin,
 } from "lucide-react";
 
 import ReactFlow, {
@@ -166,6 +165,12 @@ function Node({
       icon: "bg-slate-100 text-slate-600",
       dot: "bg-slate-500",
     },
+
+    location: {
+      wrapper: "border-emerald-200 bg-white",
+      icon: "bg-emerald-100 text-emerald-600",
+      dot: "bg-emerald-500",
+    },
   };
 
   const style =
@@ -202,6 +207,14 @@ const buttonOptions = [
       : `${data.apiMethod || data.method || "GET"} • ${
           data.apiUrl || "API not configured"
         }`
+    : type === "location"
+    ? `${data.locationName || data.name || "Location"}${
+        data.address ? ` • ${data.address}` : ""
+      }${
+        data.latitude && data.longitude
+          ? ` (${data.latitude}, ${data.longitude})`
+          : ""
+      }`
     : data.message ||
       data.variable ||
       data.condition ||
@@ -379,6 +392,8 @@ const buttonOptions = [
       <Clock3 className="h-5 w-5" />
     ) : type === "end" ? (
       <Square className="h-5 w-5" />
+    ) : type === "location" ? (
+      <MapPin className="h-5 w-5" />
     ) : (
       <span className="text-sm font-bold uppercase">
         {type.slice(0, 2)}
@@ -414,6 +429,8 @@ const buttonOptions = [
         ? data.otpEnabled
           ? "API • OTP"
           : "API REQUEST"
+        : type === "location"
+        ? "SEND LOCATION"
         : type}
     </p>
   </div>
@@ -777,6 +794,10 @@ const ApiNode = (props) => (
   <Node {...props} type="api" />
 );
 
+const LocationNode = (props) => (
+  <Node {...props} type="location" />
+);
+
 
 /* =========================================================
    NODE TYPES
@@ -798,6 +819,7 @@ const nodeTypes = {
   delay: DelayNode,
   end: EndNode,
   api: ApiNode,
+  location: LocationNode,
 };
 /* =========================================================
    PALETTE
@@ -810,6 +832,7 @@ const palette = [
   ["menu", "Menu"],
   ["userInput", "User Input"],
   ["api", "API"],
+  ["location", "Send Location"],
   ["media", "Media"],
   // ["media_template", "Media Template"],
   // ["delay", "Delay"],
@@ -826,6 +849,7 @@ const paletteIcons = {
   condition: GitBranch,
   // API
   api: Plug,
+  location: MapPin,
   media: ImageIcon,
   // MEDIA
   media_template: ImageIcon,
@@ -856,6 +880,10 @@ const [form, setForm] = useState({
   label: "",
   message: "",
   variable: "",
+  locationName: "",
+  address: "",
+  latitude: "",
+  longitude: "",
 
 
   // =====================================================
@@ -1154,6 +1182,25 @@ cityValidation: "any",
 
       variable:
         node.data?.variable || "",
+
+      locationName:
+        node.data?.locationName ||
+        node.data?.name ||
+        "",
+
+      address:
+        node.data?.address ||
+        "",
+
+      latitude:
+        node.data?.latitude ??
+        node.data?.lat ??
+        "",
+
+      longitude:
+        node.data?.longitude ??
+        node.data?.lng ??
+        "",
 
       // ===================================================
 // BUTTON CONFIG
@@ -3255,6 +3302,69 @@ const update = () => {
           <p className="mt-2 text-[11px] text-slate-400">
             Message sent to the
             customer.
+          </p>
+        </div>
+      )}
+
+      {/* =====================================================
+          LOCATION NODE
+      ====================================================== */}
+      {node?.type === "location" && (
+        <div className="space-y-4">
+          <div>
+            <label className={labelClass}>Location Name / Title</label>
+            <input
+              type="text"
+              value={form.locationName || ""}
+              onChange={(e) => updateField("locationName", e.target.value)}
+              placeholder="e.g. Head Office or {{office_name}}"
+              className={inputClass}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Display name for this location pin (supports variables).
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>Address</label>
+            <textarea
+              value={form.address || ""}
+              onChange={(e) => updateField("address", e.target.value)}
+              rows={2}
+              placeholder="e.g. 123 Tech Park, Sector 62, Noida"
+              className={textareaClass}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Descriptive / postal address (supports variables).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Latitude</label>
+              <input
+                type="number"
+                step="any"
+                value={form.latitude ?? ""}
+                onChange={(e) => updateField("latitude", e.target.value)}
+                placeholder="28.6139"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Longitude</label>
+              <input
+                type="number"
+                step="any"
+                value={form.longitude ?? ""}
+                onChange={(e) => updateField("longitude", e.target.value)}
+                placeholder="77.2090"
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Meta WhatsApp Cloud API coordinates for map preview.
           </p>
         </div>
       )}
@@ -7869,6 +7979,29 @@ const onDrop = useCallback(
                         : [],
 
                 /* =============================================
+                   LOCATION
+                ============================================== */
+                locationName:
+                    type === "location"
+                        ? "Our Office"
+                        : "",
+
+                address:
+                    type === "location"
+                        ? "123 Business Park, City Center"
+                        : "",
+
+                latitude:
+                    type === "location"
+                        ? "28.6139"
+                        : "",
+
+                longitude:
+                    type === "location"
+                        ? "77.2090"
+                        : "",
+
+                /* =============================================
                    DELAY
                 ============================================== */
 
@@ -9124,6 +9257,29 @@ const addNode = (type) => {
       sendOtpPayload: {},
 
       verifyOtpPayload: {},
+
+      /* =================================================
+         LOCATION
+      ================================================= */
+      locationName:
+        type === "location"
+          ? "Our Office"
+          : "",
+
+      address:
+        type === "location"
+          ? "123 Business Park, City Center"
+          : "",
+
+      latitude:
+        type === "location"
+          ? "28.6139"
+          : "",
+
+      longitude:
+        type === "location"
+          ? "77.2090"
+          : "",
 
     },
   };

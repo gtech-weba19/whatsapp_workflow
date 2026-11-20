@@ -104,11 +104,12 @@ class WalletBillingController extends Controller
     $plansList = [
         [
             'id' => 1,
-            'name' => 'Free Trial Pack',
+            'name' => '100 for Free Trial',
             'slug' => 'trial-100',
             'selling_price' => 100,
             'message_credits' => 100,
             'validity_days' => null,
+            'is_free' => true,
             'description' => 'Free ₹100 Welcome credits for testing WhatsApp workflows & messages.',
         ],
         [
@@ -128,6 +129,15 @@ class WalletBillingController extends Controller
             'message_credits' => 10000,
             'validity_days' => null,
             'description' => 'Power pack for growing teams with higher message volumes.',
+        ],
+        [
+            'id' => 5,
+            'name' => 'Scale & Growth Pack',
+            'slug' => 'scale-50000',
+            'selling_price' => 50000,
+            'message_credits' => 50000,
+            'validity_days' => null,
+            'description' => 'High volume pack for scaling businesses with fast automation workflows and priority delivery.',
         ],
         [
             'id' => 4,
@@ -233,25 +243,24 @@ class WalletBillingController extends Controller
                 $this->walletService->addCredit($user, 100.00, 'Welcome Free Trial Pack', 'TRIAL-' . $user->id);
             }
 
-            // try {
-            //     AdminNotification::create([
-            //         'user_id' => $user->id,
-            //         'type' => 'free_trial_claimed',
-            //         'title' => "Free Trial Claimed: {$user->name}",
-            //         'message' => "Client {$user->name} ({$user->email}) claimed the ₹100 Free Trial Pack.",
-            //         'data' => [
-            //             'user_id' => $user->id,
-            //             'user_name' => $user->name,
-            //             'user_email' => $user->email,
-            //             'plan_id' => 1,
-            //             'plan_name' => 'Free Trial Pack',
-            //             'action_url' => '/plans?tab=alerts',
-            //         ],
-            //         'is_read' => false,
-            //     ]);
-            // } catch (\Throwable $e) {
-
-            // }
+            try {
+                AdminNotification::create([
+                    'user_id' => $user->id,
+                    'type' => 'free_trial_claimed',
+                    'title' => "Free Trial Claimed: {$user->name}",
+                    'message' => "Client {$user->name} ({$user->email}) claimed the ₹100 Free Trial Pack.",
+                    'data' => [
+                        'user_id' => $user->id,
+                        'user_name' => $user->name,
+                        'user_email' => $user->email,
+                        'plan_id' => 1,
+                        'plan_name' => 'Free Trial Pack',
+                        'action_url' => '/plans?tab=alerts',
+                    ],
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Free trial notification error: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -368,9 +377,10 @@ class WalletBillingController extends Controller
             ->get();
 
         $planNameMap = [
-            1 => 'Free Trial Pack (₹100)',
+            1 => '100 for Free Trial',
             2 => 'Starter Pack (₹1,000)',
             3 => 'Business Growth Pack (₹10,000)',
+            5 => 'Scale & Growth Pack (₹50,000)',
             4 => 'Enterprise Volume Pack (₹100,000)',
         ];
 
@@ -425,11 +435,32 @@ class WalletBillingController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        $notifications = AdminNotification::orderByDesc('id')
+        $notifications = AdminNotification::latest('created_at')
             ->take(30)
-            ->get();
+            ->get()
+            ->map(function ($n) {
+                $data = is_array($n->data)
+                    ? $n->data
+                    : (json_decode($n->data ?? '[]', true) ?: []);
 
-        $unreadCount = AdminNotification::where('read_at', false)->count();
+                return [
+                    'id' => (string) $n->id,
+                    'type' => $data['type'] ?? $n->type ?? 'admin_notification',
+                    'title' => $data['title'] ?? $n->title ?? 'Notification',
+                    'message' => $data['message'] ?? $n->message ?? '',
+                    'user_id' => $data['user_id'] ?? $n->user_id ?? null,
+                    'user_name' => $data['user_name'] ?? null,
+                    'amount' => $data['amount'] ?? null,
+                    'plan_name' => $data['plan_name'] ?? null,
+                    'action_label' => $data['action_label'] ?? 'View',
+                    'action_url' => $data['action_url'] ?? '/plans?tab=alerts',
+                    'read_at' => $n->read_at,
+                    'is_read' => !is_null($n->read_at),
+                    'created_at' => $n->created_at,
+                ];
+            });
+
+        $unreadCount = AdminNotification::whereNull('read_at')->count();
 
         return response()->json([
             'success' => true,
@@ -441,7 +472,7 @@ class WalletBillingController extends Controller
     /**
      * Admin: Mark single notification as read
      */
-    public function markNotificationRead(Request $request, int $id): JsonResponse
+    public function markNotificationRead(Request $request, string $id): JsonResponse
     {
         $admin = $request->user();
         if (!$admin->isSuperAdmin() && !$admin->hasPermission('users.manage')) {
@@ -449,7 +480,7 @@ class WalletBillingController extends Controller
         }
 
         AdminNotification::where('id', $id)->update([
-            'read_at' => true,
+            'read_at' => now(),
         ]);
 
         return response()->json([
@@ -468,8 +499,8 @@ class WalletBillingController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        AdminNotification::where('read_at', false)->update([
-            'read_at' => true,
+        AdminNotification::whereNull('read_at')->update([
+            'read_at' => now(),
         ]);
 
         return response()->json([

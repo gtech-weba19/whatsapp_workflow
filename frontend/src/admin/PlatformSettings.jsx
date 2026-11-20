@@ -27,6 +27,14 @@ import {
   Mail,
   Copy,
   Check,
+  Receipt,
+  Phone,
+  Percent,
+  IndianRupee,
+  CreditCard,
+  MessageSquare,
+  HelpCircle,
+  Calculator,
 } from "lucide-react";
 import { PastelKpiCard } from "../components/admin/DashboardCharts";
 
@@ -52,6 +60,15 @@ const DEFAULT_SETTINGS = {
   requestTimeout: String(REQUEST_TIMEOUT_DEFAULT),
   emailNotifications: true,
   webhookNotifications: true,
+  platformFeePercent: 2.0,
+  platformFeeFixed: 30.0,
+  gstPercent: 18.0,
+  supportPhone: "+91 98765 43210",
+  supportEmail: "support@wababot.com",
+  rateUtility: 0.15,
+  rateMarketing: 0.95,
+  rateService: 0.35,
+  rateAuthentication: 0.15,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -130,6 +147,33 @@ const FIELD_MAP = {
 
   webhook_notifications: "webhookNotifications",
   webhookNotifications: "webhookNotifications",
+
+  platform_fee_percent: "platformFeePercent",
+  platformFeePercent: "platformFeePercent",
+
+  platform_fee_fixed: "platformFeeFixed",
+  platformFeeFixed: "platformFeeFixed",
+
+  gst_percent: "gstPercent",
+  gstPercent: "gstPercent",
+
+  support_phone: "supportPhone",
+  supportPhone: "supportPhone",
+
+  support_email: "supportEmail",
+  supportEmail: "supportEmail",
+
+  rate_utility: "rateUtility",
+  rateUtility: "rateUtility",
+
+  rate_marketing: "rateMarketing",
+  rateMarketing: "rateMarketing",
+
+  rate_service: "rateService",
+  rateService: "rateService",
+
+  rate_authentication: "rateAuthentication",
+  rateAuthentication: "rateAuthentication",
 };
 
 const mapSettings = (data = {}) => {
@@ -159,6 +203,21 @@ const mapSettings = (data = {}) => {
         value === "1" ||
         value === "true";
 
+      return;
+    }
+
+    if (
+      [
+        "platformFeePercent",
+        "platformFeeFixed",
+        "gstPercent",
+        "rateUtility",
+        "rateMarketing",
+        "rateService",
+        "rateAuthentication",
+      ].includes(stateKey)
+    ) {
+      mapped[stateKey] = Number(value ?? 0);
       return;
     }
 
@@ -523,6 +582,15 @@ const handleSave = async () => {
       request_timeout: timeout,
       email_notifications: Boolean(settings.emailNotifications),
       webhook_notifications: Boolean(settings.webhookNotifications),
+      platform_fee_percent: Number(settings.platformFeePercent ?? 2.0),
+      platform_fee_fixed: Number(settings.platformFeeFixed ?? 30.0),
+      gst_percent: Number(settings.gstPercent ?? 18.0),
+      support_phone: String(settings.supportPhone || "").trim(),
+      support_email: String(settings.supportEmail || "").trim(),
+      rate_utility: Number(settings.rateUtility ?? 0.15),
+      rate_marketing: Number(settings.rateMarketing ?? 0.95),
+      rate_service: Number(settings.rateService ?? 0.35),
+      rate_authentication: Number(settings.rateAuthentication ?? 0.15),
     };
 
     const result = await request(PLATFORM_SETTINGS_URL, {
@@ -555,6 +623,12 @@ const handleSave = async () => {
       label: "General",
       description: "Platform identity and preferences",
       icon: Settings,
+    },
+    {
+      id: "billing",
+      label: "Taxes & WhatsApp Pricing",
+      description: "Platform fee, GST, and universal message rates",
+      icon: Receipt,
     },
     {
       id: "api",
@@ -986,6 +1060,217 @@ const handleSave = async () => {
                       />
                       <p className="text-xs leading-5 text-slate-600">
                         <strong className="text-slate-800 font-semibold">Domain Propagation:</strong> Ensure the platform URL matches your deployed domain and CORS configuration so bot webhooks route correctly.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Billing, Taxes & Universal WhatsApp Pricing */}
+              {activeTab === "billing" && (
+                <div>
+                  <div className="p-6 sm:p-8 space-y-6">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <Receipt className="text-emerald-600" size={20} />
+                        Recharge Billing, Taxes &amp; Universal WhatsApp Rates
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Configure dynamic platform fees, GST taxes, customer support contact, and wholesale WhatsApp message rates. These directly calculate client recharge invoices and message estimates.
+                      </p>
+                    </div>
+
+                    {/* Section 1: Platform Fee & Tax Settings */}
+                    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <Percent size={16} className="text-emerald-600" />
+                          Platform Charges &amp; GST Configuration
+                        </h4>
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                          Invoice Estimate Formula
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        These percentages are dynamically added when clients choose a package plan. The base plan amount is credited directly to their wallet balance, while taxes and platform charges are collected via Razorpay.
+                      </p>
+
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 pt-2">
+                        {renderInput(
+                          "Platform Charge (Flat ₹)",
+                          "platformFeeFixed",
+                          "30.00",
+                          "number",
+                          "Fixed platform service charge applied to all plan recharges (e.g. ₹30.00).",
+                          IndianRupee
+                        )}
+
+                        {renderInput(
+                          "GST Tax (%)",
+                          "gstPercent",
+                          "18.0",
+                          "number",
+                          "Government Goods and Services Tax percentage (e.g. 18%).",
+                          Percent
+                        )}
+
+                        {renderInput(
+                          "Recharge Support Phone Number",
+                          "supportPhone",
+                          "+91 98765 43210",
+                          "text",
+                          "Displayed on client plan cards under the 'Contact' button for direct WhatsApp/call.",
+                          Phone
+                        )}
+
+                        {renderInput(
+                          "Billing & Support Email",
+                          "supportEmail",
+                          "support@wababot.com",
+                          "email",
+                          "Billing notifications and customer assistance contact.",
+                          Mail
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 2: Universal WhatsApp Category Rates */}
+                    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <MessageSquare size={16} className="text-emerald-600" />
+                          Universal WhatsApp Message Rates (Meta Pricing)
+                        </h4>
+                        <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                          Per-Message Cost
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Universal WhatsApp Business API conversation prices. These rates are shown to clients in their estimate breakdown so they know exactly how many messages each plan delivers.
+                      </p>
+
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 pt-2">
+                        {renderInput(
+                          "Utility Message (₹)",
+                          "rateUtility",
+                          "0.1500",
+                          "number",
+                          "Order updates, transactional alerts, notifications.",
+                          IndianRupee
+                        )}
+
+                        {renderInput(
+                          "Marketing Message (₹)",
+                          "rateMarketing",
+                          "0.9500",
+                          "number",
+                          "Promotional broadcasts, campaigns, offers.",
+                          IndianRupee
+                        )}
+
+                        {renderInput(
+                          "Service Message (₹)",
+                          "rateService",
+                          "0.3500",
+                          "number",
+                          "Customer-initiated 24hr conversation window.",
+                          IndianRupee
+                        )}
+
+                        {renderInput(
+                          "Authentication / OTP (₹)",
+                          "rateAuthentication",
+                          "0.1500",
+                          "number",
+                          "User authentication codes and login OTPs.",
+                          IndianRupee
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 3: Live Recharge Calculation Preview */}
+                    <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-teal-50/30 to-white p-5 shadow-xs">
+                      <div className="flex items-center justify-between gap-3 pb-3 border-b border-emerald-100">
+                        <div className="flex items-center gap-2">
+                          <Calculator size={18} className="text-emerald-700" />
+                          <h4 className="text-sm font-extrabold text-emerald-950">
+                            Live Recharge Estimate Simulator (Client View)
+                          </h4>
+                        </div>
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-md">
+                          Base Plan: ₹1,000 Sample
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const samplePlan = 1000;
+                        const feeFixed = Number(settings.platformFeeFixed ?? 30.0);
+                        const gstPct = Number(settings.gstPercent ?? 18.0);
+                        const fee = feeFixed;
+                        const gst = (samplePlan * gstPct) / 100;
+                        const total = samplePlan + fee + gst;
+                        const utilRate = Number(settings.rateUtility) || 0.15;
+                        const mktRate = Number(settings.rateMarketing) || 0.95;
+                        const utilMsgs = Math.floor(samplePlan / (utilRate || 0.15));
+                        const mktMsgs = Math.floor(samplePlan / (mktRate || 0.95));
+
+                        return (
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div className="space-y-2 bg-white/80 p-3.5 rounded-xl border border-emerald-100">
+                              <p className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                                Invoice Breakdown
+                              </p>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>Plan Credit (Wallet Added)</span>
+                                <span className="font-extrabold text-emerald-700">₹{samplePlan.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>Platform Charge (Fixed)</span>
+                                <span className="font-semibold text-slate-800">₹{fee.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>GST ({gstPct}%)</span>
+                                <span className="font-semibold text-slate-800">₹{gst.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold text-slate-900">
+                                <span>Total Payable at Checkout</span>
+                                <span className="text-emerald-700">₹{total.toFixed(2)}</span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 bg-white/80 p-3.5 rounded-xl border border-emerald-100">
+                              <p className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                                Message Capacity at WhatsApp Rates
+                              </p>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>Utility Messages (@ ₹{utilRate})</span>
+                                <span className="font-bold text-slate-800">~{utilMsgs.toLocaleString("en-IN")} messages</span>
+                              </div>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>Marketing Messages (@ ₹{mktRate})</span>
+                                <span className="font-bold text-slate-800">~{mktMsgs.toLocaleString("en-IN")} messages</span>
+                              </div>
+                              <div className="flex justify-between py-0.5 text-slate-600">
+                                <span>Support Assistance Hotline</span>
+                                <span className="font-bold text-emerald-800">{settings.supportPhone || "Configured"}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                                Clients see these exact itemized figures in the &quot;Support for Recharge&quot; estimate modal.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 bg-slate-50/50 p-6">
+                    <div className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                      <div className="rounded-xl bg-slate-100 p-2 text-slate-600">
+                        <Info size={18} />
+                      </div>
+                      <p className="text-xs leading-5 text-slate-600">
+                        <strong className="text-slate-800 font-semibold">Instant Application:</strong> When you save these settings, they are immediately reflected on the client portal&apos;s recharge estimate breakdown and Razorpay payment gateway calculations without needing any code re-deployments.
                       </p>
                     </div>
                   </div>
