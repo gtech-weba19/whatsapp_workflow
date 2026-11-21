@@ -53,10 +53,19 @@ export default function AccountBotsExplorer({
   const [workflowFilter, setWorkflowFilter] = useState("all");
   const [workflowSearch, setWorkflowSearch] = useState("");
 
-  const safeAccounts = useMemo(
-    () => (Array.isArray(accounts) ? accounts : []),
-    [accounts]
-  );
+  const safeAccounts = useMemo(() => {
+    const list = Array.isArray(accounts) ? accounts : [];
+    // Only display accounts belonging to active users and where status is active, connected, approved, or pending
+    return list.filter((acc) => {
+      const uStatus = String(acc?.user_status || acc?.user?.status || "").toLowerCase();
+      if (uStatus === "inactive" || uStatus === "suspended" || uStatus === "disabled") {
+        return false;
+      }
+      const accStatus = String(acc?.status || "").toLowerCase();
+      const allowed = ["active", "connected", "approved", "verified", "pending"];
+      return !accStatus || allowed.includes(accStatus);
+    });
+  }, [accounts]);
 
   const totals = useMemo(
     () =>

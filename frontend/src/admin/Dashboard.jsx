@@ -388,7 +388,7 @@ export default function Dashboard() {
           Authorization: `Bearer ${token}`,
           "Cache-Control": "no-cache",
         },
-        params: { _t: Date.now() },
+        params: { _t: Date.now(), dashboard_only: 1 },
       });
 
       const accounts = response.data?.data;
@@ -508,13 +508,22 @@ export default function Dashboard() {
   }, [whatsAppAccount?.status, fetchWhatsAppStatus]);
 
   const chartAccounts = useMemo(() => {
-    if (
+    const rawList =
       Array.isArray(dashboard.accounts_overview) &&
       dashboard.accounts_overview.length > 0
-    ) {
-      return dashboard.accounts_overview;
-    }
-    return whatsAppAccountsList;
+        ? dashboard.accounts_overview
+        : whatsAppAccountsList;
+
+    // Filter out inactive users and only keep active, connected, approved, or pending WhatsApp accounts
+    return (rawList || []).filter((acc) => {
+      const uStatus = String(acc?.user_status || acc?.user?.status || "").toLowerCase();
+      if (uStatus === "inactive" || uStatus === "suspended" || uStatus === "disabled") {
+        return false;
+      }
+      const accStatus = String(acc?.status || acc?.account_status || "").toLowerCase();
+      const allowed = ["active", "connected", "approved", "verified", "pending"];
+      return !accStatus || allowed.includes(accStatus);
+    });
   }, [dashboard.accounts_overview, whatsAppAccountsList]);
 
   // Auto-select WhatsApp account for Client panel (!superAdmin)
