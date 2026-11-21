@@ -23,6 +23,15 @@ class AdminDashboardController extends Controller
             ], 401);
         }
 
+        // If client account is inactive or suspended, restrict dashboard access
+        if (!$user->isSuperAdmin() && in_array(strtolower((string) $user->status), ['inactive', 'suspended', 'disabled', 'blocked'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account is currently inactive. Please contact support.',
+                'account_inactive' => true,
+            ], 403);
+        }
+
         $isSuperAdmin = $user->isSuperAdmin();
         $userId = (int) $user->id;
 
@@ -612,6 +621,10 @@ class AdminDashboardController extends Controller
             ->where(function ($q) {
                 $q->whereNull('users.role')
                     ->orWhereRaw('LOWER(users.role) != ?', ['super_admin']);
+            })
+            ->where(function ($q) {
+                $q->whereNull('users.status')
+                    ->orWhere('users.status', 'active');
             });
 
         $hasRatesTable = Schema::hasTable('user_message_rates');
@@ -1249,6 +1262,19 @@ class AdminDashboardController extends Controller
                 'a.status',
                 'u.name as owner_name',
                 'u.email as owner_email',
+                'u.status as user_status',
+            ])
+            ->where(function ($q) {
+                // User must be active (exclude inactive/suspended/blocked users)
+                $q->whereNull('u.status')
+                  ->orWhere('u.status', 'active');
+            })
+            ->whereIn(DB::raw('LOWER(a.status)'), [
+                'active',
+                'connected',
+                'approved',
+                'verified',
+                'pending',
             ])
             ->orderByDesc('a.id');
 

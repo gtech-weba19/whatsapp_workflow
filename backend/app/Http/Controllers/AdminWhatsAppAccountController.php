@@ -25,12 +25,25 @@ class AdminWhatsAppAccountController extends Controller
         $user = $request->user();
         $isSuperAdmin = $user && $user->isSuperAdmin();
 
-        $query = WhatsAppAccount::with('user:id,name,email')->latest();
+        $query = WhatsAppAccount::with('user:id,name,email,status')->latest();
 
         if ($user && !$isSuperAdmin) {
             $query->where('user_id', $user->id);
         } elseif ($request->filled('user_id')) {
             $query->where('user_id', $request->integer('user_id'));
+        }
+
+        // When queried for dashboard or when dashboard_only is requested:
+        if ($request->boolean('dashboard_only') || $request->input('scope') === 'dashboard') {
+            // Exclude accounts belonging to inactive users
+            $query->whereHas('user', function ($uq) {
+                $uq->where('status', 'active');
+            });
+
+            // Only show active, connected, approved, verified, or pending WhatsApp accounts
+            if (!$request->filled('status')) {
+                $query->whereIn(DB::raw('LOWER(status)'), ['active', 'connected', 'approved', 'verified', 'pending']);
+            }
         }
 
         if ($request->filled('status')) {

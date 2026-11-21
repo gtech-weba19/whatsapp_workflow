@@ -52,7 +52,15 @@ public function login(Request $request)
         ], 401);
     }
 
-    // 2. Check email verification
+    // 2. Check if user is active
+    if (in_array(strtolower((string) $user->status), ['inactive', 'suspended', 'disabled', 'blocked'], true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Your account is currently inactive. Please contact the administrator.',
+        ], 403);
+    }
+
+    // 3. Check email verification
     if ($user->email_verified_at === null) {
         return response()->json([
             'success' => false,
