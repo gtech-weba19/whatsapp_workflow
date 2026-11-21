@@ -901,9 +901,60 @@ class AdminDashboardController extends Controller
         return null;
     }
 
+    /**
+     * Retrieve IDs of active, connected WhatsApp accounts belonging to active users.
+     */
+    private function getActiveWhatsAppAccountIds(int $userId, bool $isSuperAdmin): array
+    {
+        if (!Schema::hasTable('whatsapp_accounts')) {
+            return [];
+        }
+
+        $query = DB::table('whatsapp_accounts as a')
+            ->leftJoin('users as u', 'u.id', '=', 'a.user_id')
+            ->whereNotNull('u.id')
+            ->where(function ($q) {
+                $q->whereNull('u.status')
+                  ->orWhere('u.status', 'active');
+            })
+            ->whereNotIn(DB::raw("LOWER(COALESCE(u.status, 'active'))"), [
+                'inactive',
+                'suspended',
+                'blocked',
+                'disabled',
+                'banned',
+            ])
+            ->whereNotIn(DB::raw("LOWER(COALESCE(a.status, ''))"), [
+                'disconnected',
+                'inactive',
+                'blocked',
+                'rejected',
+                'failed',
+                'disabled',
+            ])
+            ->whereIn(DB::raw('LOWER(a.status)'), [
+                'active',
+                'connected',
+                'approved',
+                'verified',
+                'pending',
+            ]);
+
+        if (!$isSuperAdmin && Schema::hasColumn('whatsapp_accounts', 'user_id')) {
+            $query->where('a.user_id', $userId);
+        }
+
+        return $query->pluck('a.id')->all();
+    }
+
     private function countTotalBots(int $userId, bool $isSuperAdmin, ?int $accountId = null): int
     {
         if (!Schema::hasTable('bots')) {
+            return 0;
+        }
+
+        $activeAccountIds = $this->getActiveWhatsAppAccountIds($userId, $isSuperAdmin);
+        if (empty($activeAccountIds)) {
             return 0;
         }
 
@@ -913,7 +964,12 @@ class AdminDashboardController extends Controller
         }
 
         if ($accountId !== null && Schema::hasColumn('bots', 'whatsapp_account_id')) {
+            if (!in_array($accountId, $activeAccountIds, true)) {
+                return 0;
+            }
             $query->where('whatsapp_account_id', $accountId);
+        } elseif (Schema::hasColumn('bots', 'whatsapp_account_id')) {
+            $query->whereIn('whatsapp_account_id', $activeAccountIds);
         }
 
         return $query->count();
@@ -924,33 +980,54 @@ class AdminDashboardController extends Controller
         bool $isSuperAdmin,
         ?int $workflowId = null,
         ?int $accountId = null
-    ): ?array {
-        if ($workflowId !== null) {
-            return [$workflowId];
+    ): array {
+        if (!Schema::hasTable('workflows')) {
+            return [-1];
+        }
+
+        $activeAccountIds = $this->getActiveWhatsAppAccountIds($userId, $isSuperAdmin);
+        if (empty($activeAccountIds)) {
+            return [-1];
         }
 
         if ($accountId !== null) {
-            $accountBotIds = Schema::hasTable('bots')
-                ? DB::table('bots')->where('whatsapp_account_id', $accountId)->pluck('id')->all()
-                : [];
-
-            $ids = Schema::hasTable('workflows')
-                ? DB::table('workflows')
-                    ->where(function ($q) use ($accountId, $accountBotIds) {
-                        $q->where('whatsapp_account_id', $accountId);
-                        if (!empty($accountBotIds)) {
-                            $q->orWhereIn('bot_id', $accountBotIds);
-                        }
-                    })
-                    ->when(!$isSuperAdmin && Schema::hasColumn('workflows', 'user_id'), fn ($q) => $q->where('user_id', $userId))
-                    ->pluck('id')
-                    ->all()
-                : [];
-
-            return !empty($ids) ? $ids : [-1];
+            // Selected account must be active and allowed
+            if (!in_array($accountId, $activeAccountIds, true)) {
+                return [-1];
+            }
+            $targetAccountIds = [$accountId];
+        } else {
+            $targetAccountIds = $activeAccountIds;
         }
 
-        return null;
+        $accountBotIds = Schema::hasTable('bots')
+            ? DB::table('bots')
+                ->whereIn('whatsapp_account_id', $targetAccountIds)
+                ->when(!$isSuperAdmin && Schema::hasColumn('bots', 'user_id'), fn ($q) => $q->where('user_id', $userId))
+                ->pluck('id')
+                ->all()
+            : [];
+
+        $ids = DB::table('workflows')
+            ->where(function ($q) use ($targetAccountIds, $accountBotIds) {
+                $q->whereIn('whatsapp_account_id', $targetAccountIds);
+                if (!empty($accountBotIds)) {
+                    $q->orWhereIn('bot_id', $accountBotIds);
+                }
+            })
+            ->when(!$isSuperAdmin && Schema::hasColumn('workflows', 'user_id'), fn ($q) => $q->where('user_id', $userId))
+            ->pluck('id')
+            ->all();
+
+        if (empty($ids)) {
+            return [-1];
+        }
+
+        if ($workflowId !== null) {
+            return in_array($workflowId, $ids, true) ? [$workflowId] : [-1];
+        }
+
+        return $ids;
     }
 
     private function scopedSessionQuery(int $userId, bool $isSuperAdmin, ?array $targetWorkflowIds = null)

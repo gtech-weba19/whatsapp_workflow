@@ -351,6 +351,7 @@ export default function Dashboard() {
           Accept: "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        params: { dashboard_only: 1 },
       });
 
       const payload = response.data?.data;
@@ -546,6 +547,17 @@ export default function Dashboard() {
   }, [superAdmin, chartAccounts, fetchDashboard, startDate, endDate]);
 
   const availableWorkflows = useMemo(() => {
+    if (!Array.isArray(chartAccounts) || chartAccounts.length === 0) {
+      return [];
+    }
+
+    const activeAccIds = new Set(chartAccounts.map((a) => String(a.id)));
+    const activeBotIds = new Set(
+      chartAccounts.flatMap((a) =>
+        Array.isArray(a.bots) ? a.bots.map((b) => String(b.id)) : []
+      )
+    );
+
     if (chartAccountId && chartAccountId !== "all") {
       const targetAcc = chartAccounts.find(
         (a) => String(a.id) === String(chartAccountId)
@@ -556,25 +568,42 @@ export default function Dashboard() {
       }
 
       const accBotIds = Array.isArray(targetAcc?.bots)
-        ? targetAcc.bots.map((b) => b.id)
+        ? targetAcc.bots.map((b) => String(b.id))
         : [];
 
       return workflows.filter((wf) => {
-        if (
-          wf.whatsapp_account_id !== undefined &&
-          wf.whatsapp_account_id !== null &&
-          String(wf.whatsapp_account_id) === String(chartAccountId)
-        ) {
-          return true;
-        }
-        if (wf.bot_id && accBotIds.includes(wf.bot_id)) {
-          return true;
-        }
+        const wfAccId =
+          wf.whatsapp_account_id !== undefined && wf.whatsapp_account_id !== null
+            ? String(wf.whatsapp_account_id)
+            : null;
+        if (wfAccId && wfAccId === String(chartAccountId)) return true;
+        if (wf.bot_id && accBotIds.includes(String(wf.bot_id))) return true;
         return false;
       });
     }
 
-    return workflows;
+    // "All Accounts" view: only keep workflows that belong to active chartAccounts!
+    const embeddedWorkflows = chartAccounts.flatMap((a) =>
+      Array.isArray(a.workflows) ? a.workflows : []
+    );
+    if (embeddedWorkflows.length > 0) {
+      const seen = new Set();
+      return embeddedWorkflows.filter((wf) => {
+        if (!wf?.id || seen.has(wf.id)) return false;
+        seen.add(wf.id);
+        return true;
+      });
+    }
+
+    return workflows.filter((wf) => {
+      const wfAccId =
+        wf.whatsapp_account_id !== undefined && wf.whatsapp_account_id !== null
+          ? String(wf.whatsapp_account_id)
+          : null;
+      if (wfAccId && activeAccIds.has(wfAccId)) return true;
+      if (wf.bot_id && activeBotIds.has(String(wf.bot_id))) return true;
+      return false;
+    });
   }, [chartAccountId, chartAccounts, workflows]);
 
   const handleChartAccountChange = (nextAccountId) => {

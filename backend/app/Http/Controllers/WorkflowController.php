@@ -35,14 +35,61 @@ class WorkflowController extends Controller
         ->withCount('nodes')
         ->latest();
 
-        if (!$isSuperAdmin) {
-            $query->where('user_id', $user->id);
-        } elseif ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
+    if (!$isSuperAdmin) {
+        $query->where('user_id', $user->id);
+    } elseif ($request->filled('user_id')) {
+        $query->where('user_id', $request->user_id);
+    }
 
     if ($request->filled('bot_id')) {
         $query->where('bot_id', $request->bot_id);
+    }
+
+    // Filter workflows for dashboard: exclude workflows belonging to inactive users or inactive/disconnected WhatsApp accounts
+    if ($request->boolean('dashboard_only') || $request->input('scope') === 'dashboard') {
+        $query->whereHas('user', function ($uq) {
+            $uq->whereNotIn(\Illuminate\Support\Facades\DB::raw("LOWER(COALESCE(status, 'active'))"), [
+                'inactive',
+                'suspended',
+                'blocked',
+                'disabled',
+                'banned',
+            ]);
+        });
+
+        $query->where(function ($wq) {
+            $wq->whereHas('whatsappAccount', function ($aq) {
+                $aq->whereNotIn(\Illuminate\Support\Facades\DB::raw("LOWER(COALESCE(status, ''))"), [
+                    'disconnected',
+                    'inactive',
+                    'blocked',
+                    'rejected',
+                    'failed',
+                    'disabled',
+                ])->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), [
+                    'active',
+                    'connected',
+                    'approved',
+                    'verified',
+                    'pending',
+                ]);
+            })->orWhereHas('bot.whatsappAccount', function ($baq) {
+                $baq->whereNotIn(\Illuminate\Support\Facades\DB::raw("LOWER(COALESCE(status, ''))"), [
+                    'disconnected',
+                    'inactive',
+                    'blocked',
+                    'rejected',
+                    'failed',
+                    'disabled',
+                ])->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), [
+                    'active',
+                    'connected',
+                    'approved',
+                    'verified',
+                    'pending',
+                ]);
+            });
+        });
     }
 
     if ($request->filled('search')) {
